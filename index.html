@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Engineer's Hub - Tri Thức Kỹ Sư</title>
+    
+    <!-- SEO & Social Meta Tags (Vercel Prep) -->
+    <meta name="description" content="Ứng dụng ghi chú và học từ vựng chuyên ngành kỹ thuật">
+    <meta property="og:title" content="Engineer's Hub">
+    <meta property="og:description" content="Học từ vựng chuyên ngành kỹ thuật hiệu quả">
+    <meta property="og:type" content="website">
+    
+    <!-- PWA & Vercel Caching -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    
+    <link rel="stylesheet" href="styles.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <meta name="theme-color" content="#0f172a"> <!-- Lỗi 139 -->
+    <link rel="apple-touch-icon" href="icon.png"> <!-- Lỗi 139 -->
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+</head>
+<body>
+    <noscript>
+        <div style="padding: 20px; text-align: center; color: white; background: #ef4444; position: fixed; top: 0; left: 0; width: 100%; z-index: 99999;">
+            Ứng dụng yêu cầu bật JavaScript để hoạt động một cách bình thường. Vui lòng kiểm tra lại cài đặt trình duyệt.
+        </div>
+    </noscript>
+    <div class="app-container">
+        <!-- Sidebar Overlay (Mobile) -->
+        <div id="sidebar-overlay" class="sidebar-overlay mobile-only"></div>
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <a href="#" class="logo" aria-label="Về trang chủ">
+                <i class="ph ph-cpu" aria-hidden="true"></i>
+                <span>EngiHub</span>
+                <button id="close-sidebar-btn" class="mobile-only close-sidebar" type="button" aria-label="Đóng menu"><i class="ph ph-x" aria-hidden="true"></i></button>
+            </a>
+            
+            <nav class="nav-menu">
+                <div class="nav-section">
+                    <h3>TRẠM KIẾN THỨC</h3>
+                    <a href="#" class="nav-item active"><i class="ph ph-notebook" aria-hidden="true"></i> Ghi chú mới</a>
+                    <a href="#" class="nav-item"><i class="ph ph-graph" aria-hidden="true"></i> Mạng lưới (Graph)</a>
+                    <a href="#" class="nav-item"><i class="ph ph-folders" aria-hidden="true"></i> Tất cả ghi chú</a>
+                </div>
+
+                <div class="nav-section">
+                    <h3>TIẾNG ANH CHUYÊN NGÀNH</h3>
+                    <a href="#" class="nav-item"><i class="ph ph-cards" aria-hidden="true"></i> Flashcards Ôn Tập</a>
+                    <a href="#" class="nav-item"><i class="ph ph-translate" aria-hidden="true"></i> Kho Từ Vựng</a>
+                </div>
+            </nav>
+
+            <div class="user-profile">
+                <img src="https://ui-avatars.com/api/?name=Auto+Tester&background=0D8ABC&color=fff" alt="User Avatar">
+                <div class="user-info">
+                    <span class="user-name">Automotive Tester</span>
+                    <span class="user-role">Học việc ECU</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="top-bar">
+                <div class="title-container">
+                    <button id="mobile-menu-btn" class="mobile-only btn btn-secondary" type="button" aria-label="Mở menu" aria-expanded="false"><i class="ph ph-list" aria-hidden="true"></i></button>
+                    <input type="text" class="note-title" placeholder="Tiêu đề ghi chú... (VD: Giao thức CAN Bus)" maxlength="150" aria-label="Tiêu đề ghi chú">
+                </div>
+                <div class="top-actions">
+                    <button class="btn btn-secondary" type="button" id="add-tag-btn" title="Thêm nhãn cho ghi chú"><i class="ph ph-tag" aria-hidden="true"></i> Thêm Tag</button>
+                    <button class="btn btn-primary" type="button" id="save-note-btn" title="Lưu ghi chú hiện tại"><i class="ph ph-floppy-disk" aria-hidden="true"></i> Lưu Ghi Chú</button>
+                </div>
+            </header>
+
+            <div class="editor-container">
+                <!-- Tóm tắt ép buộc -->
+                <div class="tldr-box">
+                    <div class="tldr-header" id="tldr-label">
+                        <i class="ph ph-lightning" aria-hidden="true"></i>
+                        <span>TL;DR - Tóm lại trong 3 dòng</span>
+                    </div>
+                    <textarea class="tldr-input" aria-labelledby="tldr-label" placeholder="1. Ý chính thứ nhất là...&#10;2. Hệ thống này hoạt động bằng cách...&#10;3. Điểm cần lưu ý khi test là..."></textarea>
+                </div>
+
+                <!-- Vùng nhập nội dung chi tiết -->
+                <div class="content-box">
+                    <textarea id="main-editor" aria-label="Nội dung ghi chú chi tiết" class="content-input" placeholder="Viết chi tiết, dán tài liệu, dán code hoặc log lỗi vào đây... &#10;&#10;💡 Mẹo: Bôi đen một từ tiếng Anh bất kỳ (VD: Throttle) để thêm vào kho từ vựng."></textarea>
+                </div>
+            </div>
+        </main>
+
+        <!-- Tooltip nổi lên khi bôi đen -->
+        <div id="vocab-tooltip" class="vocab-tooltip hidden">
+            <button id="add-vocab-btn" type="button"><i class="ph ph-plus-circle" aria-hidden="true"></i> Thêm vào Từ Vựng</button>
+        </div>
+
+        <!-- Popup thêm từ vựng -->
+        <div id="vocab-modal" class="modal hidden">
+            <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+                <div class="modal-header">
+                    <h3 id="modal-title">Lưu từ vựng mới</h3>
+                    <button id="close-modal" type="button" class="close-btn" aria-label="Đóng" title="Đóng popup"><i class="ph ph-x" aria-hidden="true"></i></button>
+                </div>
+                <form id="vocab-form">
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label for="eng-word">Từ tiếng Anh</label>
+                            <input type="text" id="eng-word" class="glass-input" maxlength="100" lang="en" autocomplete="nope" spellcheck="false">
+                        </div>
+                        <div class="form-group">
+                            <label for="vn-meaning">Nghĩa tiếng Việt</label>
+                            <input type="text" id="vn-meaning" placeholder="Nhập nghĩa của từ..." class="glass-input" autofocus maxlength="200" autocomplete="nope" spellcheck="false" dir="auto">
+                        </div>
+                        <div class="form-group">
+                            <label for="context-note">Ngữ cảnh / Ghi chú thêm</label>
+                            <textarea id="context-note" placeholder="Dùng trong tài liệu ECU động cơ..." class="glass-input" maxlength="1000" spellcheck="false" dir="auto"></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="submit" class="btn btn-primary w-100" id="save-vocab-btn">Lưu vào Flashcard</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <script src="app.js"></script>
+</body>
+</html>
