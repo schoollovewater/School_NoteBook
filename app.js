@@ -292,7 +292,12 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     engWordInput.addEventListener('keydown', handleEnterToSave);
     vnMeaningInput.addEventListener('keydown', handleEnterToSave);
-    contextNoteInput.addEventListener('keydown', handleEn        vocabForm.addEventListener('submit', (e) => {
+    contextNoteInput.addEventListener('keydown', handleEnterToSave);
+
+    let isSaving = false;
+    const vocabForm = document.getElementById('vocab-form');
+    if (vocabForm) {
+        vocabForm.addEventListener('submit', (e) => {
             e.preventDefault();
             if (isSaving) return;
             
