@@ -1991,6 +1991,52 @@ body.is-dragging {
     text-transform: uppercase;
 }
 
+.nft-case-row {
+    display: flex;
+    gap: 6px;
+    padding: 2px 4px 6px;
+}
+
+.nft-case-btn {
+    flex: 1;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 6px 4px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+
+.nft-case-btn:hover {
+    background: var(--bg-sidebar-hover);
+    color: var(--text-primary);
+    border-color: var(--accent);
+}
+
+.nft-case-btn span {
+    font-weight: 700;
+    color: var(--accent);
+    font-size: 11px;
+}
+
+.nft-stats-footer {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-placeholder);
+    padding: 4px 8px 2px;
+    font-weight: 500;
+}
+
 .bubble-btn {
     background: transparent;
     border: none;

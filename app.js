@@ -1653,39 +1653,61 @@ function initFloatingToolbar() {
         });
     }
 
-    // 2. NOTION AI SUGGESTIONS (Improve, Proofread, Explain)
-    toolbar.querySelectorAll('.nft-action-item[data-ai]').forEach(item => {
-        item.addEventListener('click', (e) => {
+    // 2. WORD CASE CONVERTERS (UPPERCASE, lowercase, Title Case)
+    toolbar.querySelectorAll('.nft-case-btn[data-case]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
             e.preventDefault();
-            const aiType = item.getAttribute('data-ai');
+            const caseType = btn.getAttribute('data-case');
             const sel = window.getSelection();
-            const selectedText = sel ? sel.toString().trim() : '';
+            const selectedText = sel ? sel.toString() : '';
             if (!selectedText) return;
 
-            toolbar.style.display = 'none';
-
-            if (aiType === 'improve') {
-                // Improve phrasing: Capitalize first letter, clean up multiple spaces, trim
-                let improved = selectedText.replace(/\s+/g, ' ');
-                improved = improved.charAt(0).toUpperCase() + improved.slice(1);
-                document.execCommand('insertText', false, improved);
-                showToast('✨ Notion AI: Đã cải thiện hành văn và chuẩn hóa câu từ!');
-                triggerSave();
-            } else if (aiType === 'proofread') {
-                // Proofread: Fix punctuation spacing
-                let fixed = selectedText
-                    .replace(/\s+([.,!?:;])/g, '$1')
-                    .replace(/([.,!?:;])(?=[^\s0-9])/g, '$1 ')
-                    .replace(/\s+/g, ' ');
-                document.execCommand('insertText', false, fixed);
-                showToast('🔍 Notion AI: Đã kiểm tra & chuẩn hóa chính tả, dấu câu!');
-                triggerSave();
-            } else if (aiType === 'explain') {
-                // Explain / Quick definition
-                showToast(`💡 Giải thích cho "${selectedText.length > 25 ? selectedText.slice(0, 22) + '...' : selectedText}": Đoạn văn bản đang được chọn trong ngữ cảnh tài liệu.`);
+            let converted = selectedText;
+            if (caseType === 'upper') {
+                converted = selectedText.toUpperCase();
+            } else if (caseType === 'lower') {
+                converted = selectedText.toLowerCase();
+            } else if (caseType === 'title') {
+                converted = selectedText.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
             }
+
+            document.execCommand('insertText', false, converted);
+            showToast('Đã đổi kiểu chữ!');
+            triggerSave();
         });
     });
+
+    // 3. INSERT LINK
+    const linkBtn = document.getElementById('bubble-link-btn');
+    if (linkBtn) {
+        linkBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const sel = window.getSelection();
+            if (!sel || sel.isCollapsed) return;
+            const currentUrl = 'https://';
+            const url = window.prompt('Nhập địa chỉ liên kết (URL):', currentUrl);
+            if (url && url !== 'https://') {
+                document.execCommand('createLink', false, url);
+                showToast('Đã gắn liên kết!');
+                triggerSave();
+            }
+            toolbar.style.display = 'none';
+        });
+    }
+
+    // 4. GOOGLE SEARCH
+    const searchGoogleBtn = document.getElementById('bubble-search-google-btn');
+    if (searchGoogleBtn) {
+        searchGoogleBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const sel = window.getSelection();
+            const text = sel ? sel.toString().trim() : '';
+            if (text) {
+                window.open(`https://www.google.com/search?q=${encodeURIComponent(text)}`, '_blank');
+            }
+            toolbar.style.display = 'none';
+        });
+    }
 
     // Check Selection and Position Toolbar
     let selTimeout;
@@ -1715,6 +1737,14 @@ function initFloatingToolbar() {
             if (!inEditor) {
                 toolbar.style.display = 'none';
                 return;
+            }
+
+            // Update Word and Character Count Stats
+            const wordCount = text.split(/\s+/).filter(Boolean).length;
+            const charCount = text.length;
+            const statsEl = document.getElementById('nft-word-char-count');
+            if (statsEl) {
+                statsEl.textContent = `${wordCount} từ • ${charCount} ký tự`;
             }
 
             // Identify active block

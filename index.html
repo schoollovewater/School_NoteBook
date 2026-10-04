@@ -575,9 +575,9 @@
 
         <div class="nft-divider"></div>
 
-        <!-- Notion Style Quick Action List (1: Add Vocab, 2: Notion AI tasks) -->
+        <!-- Action List (Word & Notion Tools: 1. Add Vocab, 2. Text Tools) -->
         <div class="nft-actions-list">
-            <!-- 1. THÊM TỪ VỰNG (Highlighted Main Action) -->
+            <!-- 1. THÊM TỪ VỰNG (Main Action) -->
             <div class="nft-action-item nft-action-vocab" id="bubble-add-vocab-btn">
                 <div class="nft-action-icon"><i class="ri-book-mark-line"></i></div>
                 <div class="nft-action-text">
@@ -587,28 +587,39 @@
                 <span class="nft-badge">Sổ từ</span>
             </div>
 
-            <div class="nft-section-title">Gợi ý tác vụ văn bản (Notion AI)</div>
-            
-            <div class="nft-action-item" data-ai="improve">
-                <div class="nft-action-icon"><i class="ri-magic-line"></i></div>
+            <div class="nft-section-title">Đổi kiểu chữ (Word Case)</div>
+            <div class="nft-case-row">
+                <button class="nft-case-btn" data-case="upper" type="button" title="Chuyển thành chữ IN HOA">
+                    <span>AA</span> IN HOA
+                </button>
+                <button class="nft-case-btn" data-case="lower" type="button" title="Chuyển thành chữ in thường">
+                    <span>aa</span> in thường
+                </button>
+                <button class="nft-case-btn" data-case="title" type="button" title="Viết hoa chữ cái đầu mỗi từ">
+                    <span>Aa</span> Viết Hoa Đầu
+                </button>
+            </div>
+
+            <div class="nft-section-title">Tiện ích tra cứu & Liên kết</div>
+            <div class="nft-action-item" id="bubble-link-btn">
+                <div class="nft-action-icon"><i class="ri-link"></i></div>
                 <div class="nft-action-text">
-                    <span class="nft-action-title">Cải thiện câu từ (Improve writing)</span>
+                    <span class="nft-action-title">Chèn liên kết (Link)</span>
                 </div>
             </div>
 
-            <div class="nft-action-item" data-ai="proofread">
-                <div class="nft-action-icon"><i class="ri-spell-check"></i></div>
+            <div class="nft-action-item" id="bubble-search-google-btn">
+                <div class="nft-action-icon"><i class="ri-google-line"></i></div>
                 <div class="nft-action-text">
-                    <span class="nft-action-title">Kiểm tra chính tả (Proofread)</span>
+                    <span class="nft-action-title">Tra cứu nhanh trên Google</span>
                 </div>
+                <i class="ri-external-link-line" style="font-size: 12px; opacity: 0.5;"></i>
             </div>
+        </div>
 
-            <div class="nft-action-item" data-ai="explain">
-                <div class="nft-action-icon"><i class="ri-question-line"></i></div>
-                <div class="nft-action-text">
-                    <span class="nft-action-title">Giải thích nghĩa & ngữ cảnh (Explain)</span>
-                </div>
-            </div>
+        <div class="nft-divider"></div>
+        <div class="nft-stats-footer" id="nft-selection-stats">
+            <i class="ri-character-recognition-line"></i> <span id="nft-word-char-count">0 từ • 0 ký tự</span>
         </div>
     </div>
 
