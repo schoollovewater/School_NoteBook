@@ -1137,53 +1137,73 @@ window.addEventListener('DOMContentLoaded', initApp);
 const defaultVocabItems = [
     {
         id: 'v1',
-        word: 'Resilient',
-        phonetic: '/rɪˈzɪl.i.ənt/',
-        meaning: 'Kiên cường, có khả năng phục hồi nhanh sau khó khăn',
-        example: 'She is a resilient person who never gives up in adversity.',
-        tag: 'IELTS',
+        word: 'Microcontroller',
+        phonetic: '/ˌmaɪ.kroʊ.kənˈtroʊ.lɚ/',
+        meaning: 'Vi điều khiển: chip tích hợp bộ vi xử lý, bộ nhớ và các ngoại vi điều khiển phần cứng',
+        example: 'Modern automotive ECUs rely on a high-performance 32-bit microcontroller.',
+        tag: 'TechAdvanced',
         status: 'learning',
         createdAt: 1715000000000
     },
     {
         id: 'v2',
-        word: 'Breakthrough',
-        phonetic: '/ˈbreɪk.θruː/',
-        meaning: 'Bước đột phá, phát minh mang tính cách mạng',
-        example: 'Scientists made a major breakthrough in cancer treatment.',
-        tag: 'Tech',
+        word: 'Concurrency',
+        phonetic: '/kənˈkɝː.ən.si/',
+        meaning: 'Tính đồng thời: khả năng phân chia và xử lý nhiều tác vụ cùng lúc mà không xung đột tài nguyên',
+        example: 'Concurrency control is critical for high-throughput distributed systems.',
+        tag: 'TechAdvanced',
         status: 'mastered',
         createdAt: 1715001000000
     },
     {
         id: 'v3',
-        word: 'Ubiquitous',
-        phonetic: '/juːˈbɪk.wə.t̬əs/',
-        meaning: 'Phổ biến, có mặt ở khắp mọi nơi',
-        example: 'Smartphones have become ubiquitous in daily modern life.',
-        tag: 'IELTS',
-        status: 'learning',
+        word: 'Refactoring',
+        phonetic: '/riːˈfæk.tər.ɪŋ/',
+        meaning: 'Tái cấu trúc mã nguồn: cải thiện thiết kế cấu trúc code bên trong mà không làm đổi hành vi bên ngoài',
+        example: 'Regular code refactoring improves software maintainability and performance.',
+        tag: 'TechCommon',
+        status: 'mastered',
         createdAt: 1715002000000
     },
     {
         id: 'v4',
-        word: 'Pragmatic',
-        phonetic: '/præɡˈmæt̬.ɪk/',
-        meaning: 'Thực tế, thực dụng, chú trọng tính hiệu quả',
-        example: 'He took a pragmatic approach to solving the budget crisis.',
-        tag: 'TOEIC',
-        status: 'mastered',
+        word: 'Latency',
+        phonetic: '/ˈleɪ.tən.si/',
+        meaning: 'Độ trễ: khoảng thời gian trôi qua từ khi một gói dữ liệu được gửi đến khi nhận được phản hồi',
+        example: 'We optimized our network layer to achieve sub-millisecond API latency.',
+        tag: 'TechCommon',
+        status: 'learning',
         createdAt: 1715003000000
     },
     {
         id: 'v5',
+        word: 'Collaborate',
+        phonetic: '/kəˈlæb.ə.reɪt/',
+        meaning: 'Hợp tác, cộng tác cùng làm việc trong dự án hoặc đàm phán công việc',
+        example: 'Engineers collaborate with the product team to design better user experiences.',
+        tag: 'TOEIC',
+        status: 'mastered',
+        createdAt: 1715004000000
+    },
+    {
+        id: 'v6',
+        word: 'Negotiate',
+        phonetic: '/nəˈɡoʊ.ʃi.eɪt/',
+        meaning: 'Thương lượng, đàm phán để đạt được thỏa thuận hợp đồng',
+        example: 'The project manager will negotiate contract terms with key vendors next Monday.',
+        tag: 'TOEIC',
+        status: 'learning',
+        createdAt: 1715005000000
+    },
+    {
+        id: 'v7',
         word: 'Serendipity',
         phonetic: '/ˌser.ənˈdɪp.ə.t̬i/',
-        meaning: 'Sự tình cờ may mắn, duyên may bất ngờ',
-        example: 'Finding this cozy bookstore was pure serendipity.',
-        tag: 'Daily',
+        meaning: 'Sự tình cờ may mắn, sự khám phá ngẫu nhiên đầy giá trị',
+        example: 'Finding the optimal algorithm in an old school notebook was pure serendipity.',
+        tag: 'Other',
         status: 'learning',
-        createdAt: 1715004000000
+        createdAt: 1715006000000
     }
 ];
 
@@ -1195,11 +1215,31 @@ const vocab = {
     flashcardIndex: 0,
     flashcardDeck: [],
 
+    getTagInfo: (tag) => {
+        switch (tag) {
+            case 'TechAdvanced':
+                return { label: 'Kỹ thuật chuyên sâu', icon: '🔧', cls: 'tag-tech-adv' };
+            case 'TechCommon':
+                return { label: 'Kỹ thuật quen thuộc', icon: '💻', cls: 'tag-tech-com' };
+            case 'TOEIC':
+                return { label: 'Tiếng Anh TOEIC', icon: '🎯', cls: 'tag-toeic' };
+            case 'Other':
+            default:
+                return { label: 'Khác', icon: '📝', cls: 'tag-other' };
+        }
+    },
+
     initVocab: () => {
         const stored = localStorage.getItem('schooldb_vocab_items');
         if (stored) {
             try {
                 vocab.items = JSON.parse(stored);
+                // Migrate any old legacy tags
+                vocab.items.forEach(item => {
+                    if (item.tag === 'Tech') item.tag = 'TechCommon';
+                    else if (item.tag === 'IELTS') item.tag = 'TOEIC';
+                    else if (item.tag === 'Daily' || item.tag === 'General' || !item.tag) item.tag = 'Other';
+                });
             } catch (e) {
                 vocab.items = defaultVocabItems;
             }
@@ -1246,16 +1286,18 @@ const vocab = {
             grid.innerHTML = `
                 <div style="grid-column: 1 / -1; text-align: center; padding: 48px; color: var(--text-secondary);">
                     <i class="ri-inbox-line" style="font-size: 40px; opacity: 0.5;"></i>
-                    <p style="margin-top: 12px; font-size: 15px;">Chưa tìm thấy từ vựng nào.</p>
+                    <p style="margin-top: 12px; font-size: 15px;">Chưa tìm thấy từ vựng nào trong danh mục này.</p>
                     <button class="btn btn-primary" style="margin-top: 14px;" onclick="vocab.openAddModal()">
-                        <i class="ri-add-line"></i> Thêm từ đầu tiên
+                        <i class="ri-add-line"></i> Thêm từ mới
                     </button>
                 </div>
             `;
             return;
         }
 
-        grid.innerHTML = filtered.map(item => `
+        grid.innerHTML = filtered.map(item => {
+            const tagInfo = vocab.getTagInfo(item.tag);
+            return `
             <div class="vocab-card" data-id="${item.id}">
                 <div>
                     <div class="vocab-card-header">
@@ -1263,7 +1305,7 @@ const vocab = {
                             <span>${escapeHtml(item.word)}</span>
                             <i class="ri-volume-up-line vocab-audio-icon" onclick="event.stopPropagation(); vocab.speakWord('${escapeJs(item.word)}')" title="Nghe phát âm"></i>
                         </div>
-                        <span class="vocab-tag-badge">${escapeHtml(item.tag || 'General')}</span>
+                        <span class="vocab-tag-badge ${tagInfo.cls}">${tagInfo.icon} ${escapeHtml(tagInfo.label)}</span>
                     </div>
 
                     ${item.phonetic ? `<div class="vocab-card-phonetic">${escapeHtml(item.phonetic)}</div>` : ''}
@@ -1287,7 +1329,8 @@ const vocab = {
                     </div>
                 </div>
             </div>
-        `).join('');
+            `;
+        }).join('');
     },
 
     switchView: (view) => {
@@ -1344,7 +1387,7 @@ const vocab = {
         phoneticInput.value = '';
         meaningInput.value = '';
         exampleInput.value = '';
-        tagInput.value = 'IELTS';
+        tagInput.value = 'TechCommon';
 
         modal.style.display = 'flex';
         setTimeout(() => {
@@ -1375,7 +1418,7 @@ const vocab = {
         phoneticInput.value = item.phonetic || '';
         meaningInput.value = item.meaning;
         exampleInput.value = item.example || '';
-        tagInput.value = item.tag || 'General';
+        tagInput.value = item.tag || 'TechCommon';
 
         modal.style.display = 'flex';
         wordInput.focus();
@@ -1494,7 +1537,8 @@ const vocab = {
         const total = vocab.flashcardDeck.length;
         const current = vocab.flashcardIndex + 1;
 
-        document.getElementById('fc-front-tag').textContent = item.tag || 'General';
+        const tagInfo = vocab.getTagInfo(item.tag);
+        document.getElementById('fc-front-tag').textContent = `${tagInfo.icon} ${tagInfo.label}`;
         document.getElementById('fc-front-word').textContent = item.word;
         document.getElementById('fc-front-phonetic').textContent = item.phonetic || '';
         document.getElementById('fc-back-tag').textContent = (item.status === 'mastered' ? '✅ Đã thuộc' : '⏳ Cần ôn');

@@ -16,7 +16,7 @@
     <!-- Icons -->
     <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
     
-    <link rel="stylesheet" href="styles.css?v=2.5">
+    <link rel="stylesheet" href="styles.css?v=2.6">
 </head>
 <body>
     <div class="app-background">
@@ -188,10 +188,10 @@
                         </div>
                         <div class="vocab-tag-filters" id="vocab-tag-filters">
                             <button class="tag-filter-btn active" onclick="vocab.setTagFilter('all', this)">Tất cả</button>
-                            <button class="tag-filter-btn" onclick="vocab.setTagFilter('IELTS', this)">IELTS</button>
-                            <button class="tag-filter-btn" onclick="vocab.setTagFilter('TOEIC', this)">TOEIC</button>
-                            <button class="tag-filter-btn" onclick="vocab.setTagFilter('Daily', this)">Giao tiếp</button>
-                            <button class="tag-filter-btn" onclick="vocab.setTagFilter('Tech', this)">Công nghệ</button>
+                            <button class="tag-filter-btn" onclick="vocab.setTagFilter('TechAdvanced', this)">🔧 Kỹ thuật chuyên sâu</button>
+                            <button class="tag-filter-btn" onclick="vocab.setTagFilter('TechCommon', this)">💻 Kỹ thuật quen thuộc</button>
+                            <button class="tag-filter-btn" onclick="vocab.setTagFilter('TOEIC', this)">🎯 Tiếng Anh TOEIC</button>
+                            <button class="tag-filter-btn" onclick="vocab.setTagFilter('Other', this)">📝 Khác</button>
                         </div>
                     </div>
 
@@ -647,11 +647,10 @@
                     <div class="form-group" style="flex: 1;">
                         <label>Chủ đề / Phân loại</label>
                         <select id="vocab-input-tag">
-                            <option value="IELTS">IELTS</option>
-                            <option value="TOEIC">TOEIC</option>
-                            <option value="Daily">Giao tiếp</option>
-                            <option value="Tech">Công nghệ</option>
-                            <option value="General">Chung</option>
+                            <option value="TechAdvanced">🔧 Kỹ thuật chuyên sâu</option>
+                            <option value="TechCommon" selected>💻 Kỹ thuật quen thuộc</option>
+                            <option value="TOEIC">🎯 Tiếng Anh TOEIC</option>
+                            <option value="Other">📝 Khác</option>
                         </select>
                     </div>
                 </div>
@@ -685,6 +684,6 @@
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     
     <script src="firebase-config.js"></script>
-    <script src="app.js?v=2.5"></script>
+    <script src="app.js?v=2.6"></script>
 </body>
 </html>
