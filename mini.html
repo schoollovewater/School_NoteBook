@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mini Note</title>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#0f172a">
+    
+    <!-- PWA Manifest & App Icons -->
+    <link rel="manifest" href="manifest-mini.json">
+    <link rel="icon" type="image/jpeg" href="icon.jpg">
+    <link rel="apple-touch-icon" href="icon.jpg">
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <style>
+        body {
+            margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: #0f172a; color: #f8fafc;
+            height: 100vh; display: flex; overflow: hidden; /* Prevent body scroll */
+        }
+        
+        /* Layout container: left sidebar + right content */
+        .app-container {
+            flex: 1;
+            display: flex;
+            height: 100%;
+        }
+
+        /* Sidebar Tabs (Thang dọc bên trái) */
+        .sidebar {
+            width: 70px;
+            background: #1e293b;
+            border-right: 1px solid #334155;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 20px;
+            padding-bottom: 20px;
+            gap: 15px;
+            overflow-y: auto;
+        }
+
+        .tab-btn {
+            width: 44px; height: 44px;
+            border-radius: 12px;
+            background: transparent;
+            color: #64748b;
+            border: 2px solid transparent;
+            font-size: 16px; font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex; justify-content: center; align-items: center;
+            flex-shrink: 0;
+        }
+        .tab-btn:hover { background: #334155; color: #f8fafc; }
+        .tab-btn.active {
+            background: rgba(59, 130, 246, 0.2);
+            color: #3b82f6;
+            border-color: #3b82f6;
+        }
+        
+        .add-tab-btn {
+            width: 44px; height: 44px;
+            border-radius: 12px;
+            background: transparent;
+            color: #10b981;
+            border: 2px dashed #10b981;
+            font-size: 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex; justify-content: center; align-items: center;
+            flex-shrink: 0;
+        }
+        .add-tab-btn:hover { background: rgba(16, 185, 129, 0.1); }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            position: relative;
+        }
+
+        .header {
+            margin-bottom: 20px;
+        }
+        .header h1 { margin: 0; font-size: 22px; color: #3b82f6; display: flex; align-items: center; gap: 8px; }
+        .header p { margin: 5px 0 0 0; font-size: 14px; color: #94a3b8; }
+
+        .editor {
+            flex: 1;
+            background: #1e293b; border-radius: 12px; padding: 25px; border: 1px solid #334155;
+            display: flex; flex-direction: column; gap: 15px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+
+        input, textarea {
+            width: 100%; background: transparent; border: none; color: #f8fafc;
+            font-size: 16px; outline: none; resize: none; font-family: inherit;
+        }
+        input::placeholder, textarea::placeholder { color: #64748b; }
+        
+        .title-input { font-weight: bold; font-size: 24px; border-bottom: 1px solid #334155; padding-bottom: 15px; }
+        .content-input { flex: 1; line-height: 1.6; }
+        .tags-input { font-size: 14px; color: #3b82f6; border-top: 1px dashed #334155; padding-top: 15px; }
+
+        /* Floating Action Button */
+        .fab {
+            position: absolute; bottom: 30px; right: 30px;
+            width: 65px; height: 65px; border-radius: 50%;
+            background: #3b82f6; color: white; border: none;
+            display: flex; justify-content: center; align-items: center;
+            font-size: 28px; box-shadow: 0 4px 20px rgba(59,130,246,0.5);
+            cursor: pointer; transition: transform 0.2s, background 0.2s; z-index: 100;
+        }
+        .fab:hover { background: #60a5fa; transform: scale(1.05); }
+        .fab:active { transform: scale(0.95); background: #2563eb; }
+        .fab.loading { background: #94a3b8; pointer-events: none; }
+
+        .toast {
+            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+            background: #10b981; color: white; padding: 12px 24px;
+            border-radius: 30px; font-size: 15px; opacity: 0; pointer-events: none;
+            transition: 0.3s; z-index: 200; font-weight: bold; box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+        .toast.show { opacity: 1; transform: translateX(-50%) translateY(10px); }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar (Thang dọc bên trái) -->
+        <div class="sidebar" id="sidebar">
+            <!-- Render tabs here -->
+        </div>
+
+        <!-- Main Content (Khung nhập bên phải) -->
+        <div class="main-content">
+            <div class="header">
+                <h1><i class="ph ph-rocket-launch"></i> Mini Note</h1>
+                <p>Nhập liệu thần tốc - Tabs dọc bên trái</p>
+            </div>
+            
+            <div class="editor">
+                <input type="text" id="title-in" class="title-input" placeholder="Tiêu đề...">
+                <textarea id="content-in" class="content-input" placeholder="Nội dung..."></textarea>
+                <input type="text" id="tags-in" class="tags-input" placeholder="Gắn thẻ/tag (vd: work, ý tưởng)...">
+            </div>
+            
+            <!-- Nút gửi nhỏ gọn ở góc phải dưới -->
+            <button class="fab" id="send-all" title="Gửi tất cả các Tab lên Web Tổng">
+                <i class="ph ph-paper-plane-right"></i>
+            </button>
+        </div>
+    </div>
+    
+    <div id="toast" class="toast">✅ Đã gửi!</div>
+
+    <script>
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        db.enablePersistence().catch(err => console.warn(err));
+
+        // State quản lý các tab
+        let notes = [{ id: 1, title: '', content: '', tags: '' }];
+        let activeTabId = 1;
+        let nextId = 2;
+
+        const sidebar = document.getElementById('sidebar');
+        const titleIn = document.getElementById('title-in');
+        const contentIn = document.getElementById('content-in');
+        const tagsIn = document.getElementById('tags-in');
+        const sendBtn = document.getElementById('send-all');
+        const toast = document.getElementById('toast');
+
+        // Lấy dữ liệu từ ô nhập lưu vào biến JS ngầm
+        function saveCurrentInput() {
+            const note = notes.find(n => n.id === activeTabId);
+            if (note) {
+                note.title = titleIn.value;
+                note.content = contentIn.value;
+                note.tags = tagsIn.value;
+            }
+        }
+
+        titleIn.addEventListener('input', saveCurrentInput);
+        contentIn.addEventListener('input', saveCurrentInput);
+        tagsIn.addEventListener('input', saveCurrentInput);
+
+        // Vẽ lại thang dọc bên trái
+        function renderTabs() {
+            sidebar.innerHTML = '';
+            notes.forEach((note, index) => {
+                const btn = document.createElement('button');
+                btn.className = 'tab-btn' + (note.id === activeTabId ? ' active' : '');
+                btn.innerText = index + 1; // Hiển thị số 1, 2, 3...
+                btn.onclick = () => switchTab(note.id);
+                sidebar.appendChild(btn);
+            });
+
+            // Nút thêm tab
+            const addBtn = document.createElement('button');
+            addBtn.className = 'add-tab-btn';
+            addBtn.innerHTML = '<i class="ph ph-plus"></i>';
+            addBtn.onclick = () => {
+                const newId = nextId++;
+                notes.push({ id: newId, title: '', content: '', tags: '' });
+                switchTab(newId);
+                // Cuộn xuống tab mới nhất
+                sidebar.scrollTo({ top: sidebar.scrollHeight, behavior: 'smooth' });
+            };
+            sidebar.appendChild(addBtn);
+        }
+
+        // Đổi tab
+        function switchTab(id) {
+            saveCurrentInput();
+            activeTabId = id;
+            
+            const note = notes.find(n => n.id === activeTabId);
+            if (note) {
+                titleIn.value = note.title;
+                contentIn.value = note.content;
+                tagsIn.value = note.tags;
+            }
+            renderTabs();
+            contentIn.focus();
+        }
+
+        // Khởi tạo ban đầu
+        renderTabs();
+
+        // Gửi toàn bộ dữ liệu
+        sendBtn.addEventListener('click', async () => {
+            saveCurrentInput(); // Lưu note đang viết dở
+            
+            let promises = [];
+            let sentCount = 0;
+
+            notes.forEach((note, index) => {
+                const t = note.title.trim();
+                const c = note.content.trim();
+                const tags = note.tags.trim();
+
+                if (c) {
+                    promises.push(db.collection('notes').add({
+                        title: t || '📱 Ghi chú Mini (Tab ' + (index + 1) + ')',
+                        content: c,
+                        tldr: c.length > 40 ? c.substring(0, 40) + '...' : c,
+                        tags: tags,
+                        date: new Date().toISOString()
+                    }));
+                    sentCount++;
+                }
+            });
+
+            if (promises.length === 0) {
+                alert("Chưa có tab nào có nội dung để gửi!");
+                return;
+            }
+
+            sendBtn.classList.add('loading');
+            sendBtn.innerHTML = '<i class="ph ph-hourglass-high"></i>';
+
+            try {
+                await Promise.all(promises);
+                
+                // Xóa dữ liệu, reset về 1 tab duy nhất
+                notes = [{ id: 1, title: '', content: '', tags: '' }];
+                nextId = 2;
+                switchTab(1);
+                
+                toast.innerText = `✅ Đã gửi ${sentCount} ghi chú lên Web Tổng!`;
+                toast.classList.add('show');
+                setTimeout(() => toast.classList.remove('show'), 2500);
+            } catch (err) {
+                alert('Lỗi: ' + err.message);
+            } finally {
+                sendBtn.classList.remove('loading');
+                sendBtn.innerHTML = '<i class="ph ph-paper-plane-right"></i>';
+            }
+        });
+    </script>
+</body>
+</html>

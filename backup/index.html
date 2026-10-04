@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Engineer's Hub - Tri Thức Kỹ Sư</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo">
+                <i class="ph ph-cpu"></i>
+                <span>EngiHub</span>
+            </div>
+            
+            <nav class="nav-menu">
+                <div class="nav-section">
+                    <h3>TRẠM KIẾN THỨC</h3>
+                    <a href="#" class="nav-item active"><i class="ph ph-notebook"></i> Ghi chú mới</a>
+                    <a href="#" class="nav-item"><i class="ph ph-graph"></i> Mạng lưới (Graph)</a>
+                    <a href="#" class="nav-item"><i class="ph ph-folders"></i> Tất cả ghi chú</a>
+                </div>
+
+                <div class="nav-section">
+                    <h3>TIẾNG ANH CHUYÊN NGÀNH</h3>
+                    <a href="#" class="nav-item"><i class="ph ph-cards"></i> Flashcards Ôn Tập</a>
+                    <a href="#" class="nav-item"><i class="ph ph-translate"></i> Kho Từ Vựng</a>
+                </div>
+            </nav>
+
+            <div class="user-profile">
+                <img src="https://ui-avatars.com/api/?name=Auto+Tester&background=0D8ABC&color=fff" alt="User Avatar">
+                <div class="user-info">
+                    <span class="user-name">Automotive Tester</span>
+                    <span class="user-role">Học việc ECU</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="top-bar">
+                <input type="text" class="note-title" placeholder="Tiêu đề ghi chú... (VD: Giao thức CAN Bus)">
+                <div class="top-actions">
+                    <button class="btn btn-secondary"><i class="ph ph-tag"></i> Thêm Tag</button>
+                    <button class="btn btn-primary"><i class="ph ph-floppy-disk"></i> Lưu Ghi Chú</button>
+                </div>
+            </header>
+
+            <div class="editor-container">
+                <!-- Tóm tắt ép buộc -->
+                <div class="tldr-box">
+                    <div class="tldr-header">
+                        <i class="ph ph-lightning"></i>
+                        <span>TL;DR - Tóm lại trong 3 dòng</span>
+                    </div>
+                    <textarea class="tldr-input" placeholder="1. Ý chính thứ nhất là...&#10;2. Hệ thống này hoạt động bằng cách...&#10;3. Điểm cần lưu ý khi test là..."></textarea>
+                </div>
+
+                <!-- Vùng nhập nội dung chi tiết -->
+                <div class="content-box">
+                    <textarea id="main-editor" class="content-input" placeholder="Viết chi tiết, dán tài liệu, dán code hoặc log lỗi vào đây... &#10;&#10;💡 Mẹo: Bôi đen một từ tiếng Anh bất kỳ (VD: Throttle) để thêm vào kho từ vựng."></textarea>
+                </div>
+            </div>
+        </main>
+
+        <!-- Tooltip nổi lên khi bôi đen -->
+        <div id="vocab-tooltip" class="vocab-tooltip hidden">
+            <button id="add-vocab-btn"><i class="ph ph-plus-circle"></i> Thêm vào Từ Vựng</button>
+        </div>
+
+        <!-- Popup thêm từ vựng -->
+        <div id="vocab-modal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Lưu từ vựng mới</h3>
+                    <button id="close-modal" class="close-btn"><i class="ph ph-x"></i></button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Từ tiếng Anh</label>
+                        <input type="text" id="eng-word" readonly class="glass-input">
+                    </div>
+                    <div class="form-group">
+                        <label>Nghĩa tiếng Việt</label>
+                        <input type="text" id="vn-meaning" placeholder="Nhập nghĩa của từ..." class="glass-input" autofocus>
+                    </div>
+                    <div class="form-group">
+                        <label>Ngữ cảnh / Ghi chú thêm</label>
+                        <input type="text" id="context-note" placeholder="Dùng trong tài liệu ECU động cơ..." class="glass-input">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-primary w-100" id="save-vocab-btn">Lưu vào Flashcard</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="app.js"></script>
+</body>
+</html>
