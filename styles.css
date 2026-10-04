@@ -206,47 +206,6 @@ body {
     gap: 25px;
 }
 
-/* TL;DR Box */
-.tldr-box {
-    background: linear-gradient(145deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.8));
-    border: 1px solid var(--accent);
-    border-radius: 12px;
-    padding: 20px;
-    box-shadow: 0 0 20px var(--accent-glow);
-}
-
-.tldr-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    color: var(--accent);
-    font-weight: 600;
-    margin-bottom: 15px;
-    font-size: 14px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-}
-
-.tldr-header i {
-    font-size: 18px;
-}
-
-.tldr-input {
-    width: 100%;
-    background: transparent;
-    border: none;
-    color: var(--text-main);
-    font-size: 16px;
-    line-height: 1.6;
-    resize: none;
-    outline: none;
-    height: 80px;
-}
-
-.tldr-input::placeholder {
-    color: var(--text-muted);
-}
-
 /* Main Content Box */
 .content-box {
     flex: 1;
@@ -446,4 +405,115 @@ body {
     transform: rotateY(180deg);
     border-color: var(--accent);
 }
+
+/* Editor.js Dark Theme Overrides */
+.ce-block__content, .ce-toolbar__content {
+    max-width: 100% !important;
+}
+
+.ce-block {
+    color: var(--text-main);
+}
+
+.ce-toolbar__actions {
+    right: auto;
+    left: -60px;
+}
+
+.ce-toolbar__plus, .ce-toolbar__settings-btn {
+    color: var(--text-muted);
+}
+
+.ce-toolbar__plus:hover, .ce-toolbar__settings-btn:hover {
+    color: var(--primary);
+    background-color: var(--bg-panel-hover);
+}
+
+.cdx-block {
+    padding: 0.5em 0;
+}
+
+/* Toolboxes */
+.ce-popover {
+    background-color: var(--bg-panel);
+    border: 1px solid var(--border);
+    color: var(--text-main);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+}
+
+.ce-popover__item:hover {
+    background-color: var(--bg-panel-hover) !important;
+}
+
+.ce-popover__item-icon {
+    background-color: var(--bg-dark);
+    color: var(--primary);
+}
+
+/* Inline Toolbar */
+.ce-inline-toolbar {
+    background-color: var(--bg-panel);
+    border: 1px solid var(--border);
+    color: var(--text-main);
+}
+
+.ce-inline-tool {
+    color: var(--text-main);
+}
+
+.ce-inline-tool:hover {
+    background-color: var(--bg-panel-hover);
+}
+
+/* Toggle Plugin styling */
+.toggle-block__icon {
+    color: var(--primary);
+}
+
+.toggle-block__item {
+    margin-bottom: 0.5em;
+}
+
+/* edjsHTML rendered styles */
+#notes-list details {
+    background: rgba(0,0,0,0.2);
+    padding: 10px;
+    border-radius: 8px;
+    margin: 10px 0;
+}
+#notes-list summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--primary);
+    outline: none;
+}
+#notes-list details > div {
+    padding: 10px 0 0 15px;
+    border-left: 2px solid var(--border);
+    margin-top: 10px;
+}
+#notes-list ul, #notes-list ol {
+    padding-left: 20px;
+    margin: 10px 0;
+}
+
+/* Custom Tool Styles for Dark Theme */
+.ce-code__textarea {
+    background: #0f172a !important;
+    color: #f8fafc !important;
+    border: 1px solid var(--border) !important;
+}
+
+.cdx-simple-image__picture img {
+    border-radius: 8px;
+}
+
+.tc-cell {
+    border-color: var(--border) !important;
+}
+
+.tc-toolbox, .tc-add-column, .tc-add-row {
+    color: var(--primary) !important;
+}
+
 

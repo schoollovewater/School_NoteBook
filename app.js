@@ -1,5 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
-    const editor = document.getElementById('main-editor');
+    const editorElement = document.getElementById('main-editor');
     const tooltip = document.getElementById('vocab-tooltip');
     const addVocabBtn = document.getElementById('add-vocab-btn');
     const modal = document.getElementById('vocab-modal');
@@ -10,7 +10,64 @@ document.addEventListener('DOMContentLoaded', () => {
     // Header actions
     const saveNoteBtn = document.getElementById('save-note-btn');
     const titleInput = document.querySelector('.note-title');
-    const tldrInput = document.querySelector('.tldr-input');
+    
+    // Theme toggle logic
+const themeToggleBtn = document.getElementById('theme-toggle');
+if (themeToggleBtn) {
+    themeToggleBtn.addEventListener('click', () => {
+        document.body.classList.toggle('light-theme');
+        localStorage.setItem('theme', document.body.classList.contains('light-theme') ? 'light' : 'dark');
+    });
+}
+// Apply saved theme on load
+if (localStorage.getItem('theme') === 'light') {
+    document.body.classList.add('light-theme');
+}
+
+// Initialize Editor.js
+    let editor;
+    if (editorElement) {
+        editor = new EditorJS({
+            holder: 'main-editor',
+            placeholder: 'Viết ghi chú (gõ "/" để sử dụng tính năng mở rộng như Notion)...',
+            tools: {
+                header: Header,
+                list: typeof EditorjsList !== 'undefined' ? EditorjsList : (typeof List !== 'undefined' ? List : null),
+                toggle: {
+                    class: typeof ToggleBlock !== 'undefined' ? ToggleBlock : null,
+                    inlineToolbar: true,
+                },
+                image: typeof SimpleImage !== 'undefined' ? SimpleImage : null,
+                code: typeof CodeTool !== 'undefined' ? CodeTool : null,
+                checklist: typeof Checklist !== 'undefined' ? Checklist : null,
+                table: typeof Table !== 'undefined' ? Table : null
+            }
+        });
+    }
+
+    const edjsParser = typeof edjsHTML !== 'undefined' ? edjsHTML({
+        toggle: function(block) {
+            let itemsHtml = '';
+            if (block.data.items && Array.isArray(block.data.items)) {
+                itemsHtml = block.data.items.map(item => `<p>${item}</p>`).join('');
+            }
+            return `<details><summary>${block.data.text}</summary><div>${itemsHtml}</div></details>`;
+        },
+        checklist: function(block) {
+            let itemsHtml = '';
+            if (block.data.items && Array.isArray(block.data.items)) {
+                itemsHtml = block.data.items.map(item => `<div><input type="checkbox" disabled ${item.checked ? 'checked' : ''}> ${item.text}</div>`).join('');
+            }
+            return `<div>${itemsHtml}</div>`;
+        },
+        table: function(block) {
+            let rowsHtml = '';
+            if (block.data.content && Array.isArray(block.data.content)) {
+                rowsHtml = block.data.content.map(row => `<tr>${row.map(cell => `<td style="border: 1px solid #334155; padding: 4px;">${cell}</td>`).join('')}</tr>`).join('');
+            }
+            return `<table style="width: 100%; border-collapse: collapse; margin: 10px 0;">${rowsHtml}</table>`;
+        }
+    }) : null;
     
     // Tabs
     const navItems = document.querySelectorAll('.nav-item');
@@ -119,10 +176,16 @@ document.addEventListener('DOMContentLoaded', () => {
             <div style="background: rgba(30, 41, 59, 0.7); border: 1px solid #334155; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); position: relative;">
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
                     <h3 style="color: #3b82f6; font-size: 18px; margin: 0; word-break: break-word;">${note.title || 'Không tiêu đề'}</h3>
-                    <button class="delete-note-btn" data-index="${idx}" data-id="${note.id || ''}" style="background: none; border: none; color: #ef4444; cursor: pointer; padding: 4px; font-size: 16px;" title="Xóa ghi chú"><i class="ph ph-trash"></i></button>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="edit-note-btn" data-index="${idx}" data-id="${note.id || ''}" style="background: none; border: none; color: #10b981; cursor: pointer; padding: 4px; font-size: 16px;" title="Sửa ghi chú"><i class="ph ph-pencil-simple"></i></button>
+                        <button class="delete-note-btn" data-index="${idx}" data-id="${note.id || ''}" style="background: none; border: none; color: #ef4444; cursor: pointer; padding: 4px; font-size: 16px;" title="Xóa ghi chú"><i class="ph ph-trash"></i></button>
+                    </div>
                 </div>
-                <p style="color: #10b981; font-size: 14px; margin-bottom: 10px; word-break: break-word;"><i class="ph ph-lightning"></i> ${note.tldr ? (note.tldr.length > 80 ? note.tldr.substring(0, 80) + '...' : note.tldr) : 'Không có tóm tắt'}</p>
-                <p style="color: #94a3b8; font-size: 13px; line-height: 1.5; margin-bottom: 12px; word-break: break-word; white-space: pre-wrap;">${note.content ? (note.content.length > 140 ? note.content.substring(0, 140) + '...' : note.content) : ''}</p>
+                <div style="color: #94a3b8; font-size: 13px; line-height: 1.5; margin-bottom: 12px; word-break: break-word; overflow: hidden; max-height: 150px;">${
+                    (typeof note.content === 'object' && note.content !== null && edjsParser) 
+                    ? edjsParser.parse(note.content).join('') 
+                    : (note.content || '')
+                }</div>
                 <div style="display: flex; justify-content: space-between; align-items: center; color: #64748b; font-size: 12px; border-top: 1px solid #334155; padding-top: 10px;">
                     <span>${note.date ? new Date(note.date).toLocaleString('vi-VN') : 'Mới tạo'}</span>
                     ${note.id ? '<span style="color: #10b981;">☁️ Cloud</span>' : '<span style="color: #94a3b8;">💾 Local</span>'}
@@ -152,6 +215,49 @@ document.addEventListener('DOMContentLoaded', () => {
                     localStorage.setItem('notes', JSON.stringify(curNotes));
                     renderNotes();
                     showToast("Đã xóa ghi chú!");
+                }
+            });
+        });
+
+        // Gán sự kiện sửa
+        document.querySelectorAll('.edit-note-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const noteIndex = parseInt(btn.getAttribute('data-index'));
+                const noteId = btn.getAttribute('data-id');
+                const curNotes = JSON.parse(localStorage.getItem('notes') || '[]');
+                const note = curNotes[noteIndex];
+                
+                if (titleInput) titleInput.value = note.title !== 'Không tiêu đề' ? note.title : '';
+                
+                if (editor) {
+                    await editor.isReady;
+                    if (typeof note.content === 'object' && note.content !== null) {
+                        try {
+                            await editor.render(note.content);
+                        } catch (err) {
+                            console.error("Lỗi render note:", err);
+                        }
+                    } else if (typeof note.content === 'string') {
+                        // Khôi phục ghi chú cũ dạng string bằng cách nhét vào một block văn bản
+                        await editor.render({
+                            blocks: [{ type: "paragraph", data: { text: note.content } }]
+                        });
+                    }
+                }
+                
+                // Đổi tab sang Ghi chú mới
+                document.querySelectorAll('.view-section').forEach(sec => sec.classList.add('hidden'));
+                document.getElementById('view-new-note').classList.remove('hidden');
+                document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+                const newNoteTab = Array.from(document.querySelectorAll('.nav-item')).find(n => n.getAttribute('data-view') === 'view-new-note');
+                if (newNoteTab) newNoteTab.classList.add('active');
+                
+                // Lưu state đang edit
+                if (saveNoteBtn) {
+                    saveNoteBtn.setAttribute('data-editing-index', noteIndex);
+                    saveNoteBtn.setAttribute('data-editing-id', noteId || '');
+                    saveNoteBtn.innerHTML = '<i class="ph ph-floppy-disk"></i> Cập nhật Ghi Chú';
                 }
             });
         });
@@ -350,31 +456,38 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==========================================
     // 4. EDITOR & SELECTION TOOLTIP
     // ==========================================
-    if (editor) {
-        editor.addEventListener('mouseup', (e) => {
-            selectedText = editor.value.substring(editor.selectionStart, editor.selectionEnd).trim();
-            if (selectedText.length > 0 && selectedText.length < 50) {
-                tooltip.style.left = `${e.pageX + 10}px`;
-                tooltip.style.top = `${e.pageY - 40}px`;
-                tooltip.classList.remove('hidden');
-            } else {
+    document.addEventListener('selectionchange', () => {
+        if (!editorElement) return;
+        const selection = window.getSelection();
+        if (selection.rangeCount > 0 && !selection.isCollapsed) {
+            const range = selection.getRangeAt(0);
+            if (editorElement.contains(range.commonAncestorContainer)) {
+                selectedText = selection.toString().trim();
+                if (selectedText.length > 0 && selectedText.length < 50) {
+                    const rect = range.getBoundingClientRect();
+                    tooltip.style.left = `${rect.left + window.scrollX}px`;
+                    tooltip.style.top = `${rect.top + window.scrollY - 40}px`;
+                    tooltip.classList.remove('hidden');
+                } else {
+                    tooltip.classList.add('hidden');
+                }
+            } else if (!tooltip.contains(selection.anchorNode)) {
                 tooltip.classList.add('hidden');
             }
-        });
-
-        editor.addEventListener('keyup', () => {
+        } else {
             tooltip.classList.add('hidden');
-        });
-
-        editor.addEventListener('input', () => {
-            localStorage.setItem('temp_note', editor.value);
-            if (titleInput) localStorage.setItem('temp_title', titleInput.value);
-            if (tldrInput) localStorage.setItem('temp_tldr', tldrInput.value);
+        }
+    });
+    
+    // Autosave title draft
+    if (editorElement && titleInput) {
+        titleInput.addEventListener('input', () => {
+            localStorage.setItem('temp_title', titleInput.value);
         });
     }
 
     document.addEventListener('mousedown', (e) => {
-        if (!tooltip.contains(e.target) && e.target !== editor) {
+        if (!tooltip.contains(e.target) && (!editorElement || !editorElement.contains(e.target))) {
             tooltip.classList.add('hidden');
         }
     });
@@ -431,7 +544,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 modal.classList.add('hidden');
                 document.getElementById('vn-meaning').value = '';
                 document.getElementById('context-note').value = '';
-                if (editor) editor.selectionStart = editor.selectionEnd;
+                if (window.getSelection) { window.getSelection().removeAllRanges(); }
                 
                 renderVocab();
             } else {
@@ -443,46 +556,86 @@ document.addEventListener('DOMContentLoaded', () => {
     if (saveNoteBtn) {
         saveNoteBtn.addEventListener('click', async () => {
             const title = titleInput.value.trim();
-            const content = editor.value.trim();
-            const tldr = tldrInput.value.trim();
+            
+            let outputData = null;
+            if (editor) {
+                outputData = await editor.save();
+            }
 
-            if (!title && !content) {
+            if (!title && (!outputData || outputData.blocks.length === 0)) {
                 showToast('Ghi chú đang trống!', 'error');
                 return;
             }
 
+            const editingIndex = saveNoteBtn.getAttribute('data-editing-index');
+            const editingId = saveNoteBtn.getAttribute('data-editing-id');
+
             const newNote = {
                 title: title || 'Không tiêu đề',
-                content,
-                tldr,
+                content: outputData,
                 date: new Date().toISOString()
             };
 
             let notes = JSON.parse(localStorage.getItem('notes') || '[]');
-            notes.unshift(newNote);
-            localStorage.setItem('notes', JSON.stringify(notes));
 
-            if (isFirebaseReady && db) {
-                try {
-                    const docRef = await db.collection("notes").add(newNote);
-                    newNote.id = docRef.id;
-                    showToast('Đã lưu ghi chú lên Cloud!');
-                } catch (err) {
-                    console.error("Lỗi Cloud:", err);
-                    showToast('Đã lưu cục bộ (Chưa lên Cloud)', 'error');
+            if (editingIndex !== null && editingIndex !== '') {
+                const idx = parseInt(editingIndex);
+                newNote.id = editingId || notes[idx].id;
+                notes[idx] = newNote;
+                localStorage.setItem('notes', JSON.stringify(notes));
+
+                if (isFirebaseReady && db && newNote.id) {
+                    try {
+                        await db.collection("notes").doc(newNote.id).update({
+                            title: newNote.title,
+                            content: newNote.content,
+                            date: newNote.date
+                        });
+                        showToast('Đã cập nhật ghi chú lên Cloud!');
+                    } catch (err) {
+                        console.error("Lỗi Cloud:", err);
+                        showToast('Đã cập nhật cục bộ (Lỗi Cloud)', 'warning');
+                    }
+                } else {
+                    showToast('Đã cập nhật ghi chú cục bộ!');
                 }
+
+                saveNoteBtn.removeAttribute('data-editing-index');
+                saveNoteBtn.removeAttribute('data-editing-id');
+                saveNoteBtn.innerHTML = '<i class="ph ph-floppy-disk"></i> Lưu Ghi Chú';
             } else {
-                showToast('Đã lưu ghi chú thành công!');
+                notes.unshift(newNote);
+                localStorage.setItem('notes', JSON.stringify(notes));
+
+                if (isFirebaseReady && db) {
+                    try {
+                        const docRef = await db.collection("notes").add(newNote);
+                        newNote.id = docRef.id;
+                        notes[0] = newNote; // Cập nhật lại ID
+                        localStorage.setItem('notes', JSON.stringify(notes));
+                        showToast('Đã lưu ghi chú lên Cloud!');
+                    } catch (err) {
+                        console.error("Lỗi Cloud:", err);
+                        showToast('Đã lưu cục bộ (Chưa lên Cloud)', 'warning');
+                    }
+                } else {
+                    showToast('Đã lưu ghi chú thành công!');
+                }
             }
             
             // Xóa bản nháp
-            localStorage.removeItem('temp_note');
             localStorage.removeItem('temp_title');
-            localStorage.removeItem('temp_tldr');
 
             titleInput.value = '';
-            editor.value = '';
-            tldrInput.value = '';
+            if (editor) {
+                try {
+                    if (editor.blocks && editor.blocks.getBlocksCount() > 0) {
+                        editor.blocks.clear();
+                    } else if (typeof editor.clear === 'function') {
+                        editor.clear();
+                    }
+                } catch(e) {}
+            }
             
             renderNotes();
         });
@@ -519,14 +672,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Khôi phục nháp
     if (editor) {
-        const savedTemp = localStorage.getItem('temp_note');
-        if (savedTemp) editor.value = savedTemp;
-        
         const savedTitle = localStorage.getItem('temp_title');
         if (savedTitle && titleInput) titleInput.value = savedTitle;
-        
-        const savedTldr = localStorage.getItem('temp_tldr');
-        if (savedTldr && tldrInput) tldrInput.value = savedTldr;
     }
 
     // Bắt đầu đồng bộ

@@ -18,6 +18,16 @@
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <!-- Vis.js for Graph -->
     <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <!-- Editor.js Core and Plugins -->
+    <script src="https://cdn.jsdelivr.net/npm/@editorjs/editorjs@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@editorjs/header@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@editorjs/list@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/editorjs-toggle-block"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@editorjs/simple-image@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@editorjs/code@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@editorjs/checklist@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@editorjs/table@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/editorjs-html@3.4.0/build/edjsHTML.browser.js"></script>
 </head>
 <body>
     <div class="app-container">
@@ -67,20 +77,14 @@
                     <div class="top-actions">
                         <button class="btn btn-secondary"><i class="ph ph-tag"></i> Thêm Tag</button>
                         <button class="btn btn-primary" id="save-note-btn"><i class="ph ph-floppy-disk"></i> Lưu Ghi Chú</button>
+                    <button class="btn btn-secondary" id="theme-toggle" title="Chế độ sáng / tối"><i class="ph ph-sun dim"></i><i class="ph ph-moon bright"></i></button>
                     </div>
                 </header>
 
-                <div class="editor-container">
-                    <div class="tldr-box">
-                        <div class="tldr-header">
-                            <i class="ph ph-lightning"></i>
-                            <span>TL;DR - Tóm lại trong 3 dòng</span>
-                        </div>
-                        <textarea class="tldr-input" placeholder="1. Ý chính thứ nhất là...&#10;2. Hệ thống này hoạt động bằng cách...&#10;3. Điểm cần lưu ý khi test là..."></textarea>
-                    </div>
-
-                    <div class="content-box">
-                        <textarea id="main-editor" class="content-input" placeholder="Viết chi tiết, dán tài liệu, dán code hoặc log lỗi vào đây... &#10;&#10;💡 Mẹo: Bôi đen một từ tiếng Anh bất kỳ (VD: Throttle) để thêm vào kho từ vựng."></textarea>
+                <div class="editor-container" style="flex: 1; display: flex; flex-direction: column;">
+                    <div class="content-box" style="flex: 1; display: flex; flex-direction: column; overflow-y: auto; background: var(--bg-panel); border-radius: 8px; border: 1px solid var(--border); padding: 20px;">
+                        <!-- Editor.js container -->
+                        <div id="main-editor" style="width: 100%;"></div>
                     </div>
                 </div>
             </div>
