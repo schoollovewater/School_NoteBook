@@ -1,209 +1,679 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Engineer's Hub - Tri Thức Kỹ Sư</title>
+    <title>School NoteBook</title>
     
     <!-- PWA Manifest & App Icons -->
     <link rel="manifest" href="manifest.json">
-    <link rel="icon" type="image/jpeg" href="icon.jpg">
+    <meta name="theme-color" content="#0f172a">
     <link rel="apple-touch-icon" href="icon.jpg">
-    <link rel="stylesheet" href="styles.css">
-    <!-- Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
-    <!-- Phosphor Icons -->
-    <script src="https://unpkg.com/@phosphor-icons/web"></script>
-    <!-- Vis.js for Graph -->
-    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
-    <!-- Editor.js Core and Plugins -->
-    <script src="https://cdn.jsdelivr.net/npm/@editorjs/editorjs@latest"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@editorjs/header@latest"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@editorjs/list@latest"></script>
-    <script src="https://cdn.jsdelivr.net/npm/editorjs-toggle-block"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@editorjs/simple-image@latest"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@editorjs/code@latest"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@editorjs/checklist@latest"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@editorjs/table@latest"></script>
-    <script src="https://cdn.jsdelivr.net/npm/editorjs-html@3.4.0/build/edjsHTML.browser.js"></script>
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Merriweather:ital,wght@0,300;0,400;0,700;1,300&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    
+    <!-- Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+    
+    <link rel="stylesheet" href="styles.css?v=2.2">
 </head>
 <body>
-    <div class="app-container">
+    <div class="app-background">
+        <div class="bokeh bokeh-1"></div>
+        <div class="bokeh bokeh-2"></div>
+        <div class="bokeh bokeh-3"></div>
+    </div>
+
+    <div class="app-container glass-panel">
         <!-- Sidebar -->
-        <aside class="sidebar">
-            <div class="logo">
-                <i class="ph ph-cpu"></i>
-                <span>EngiHub</span>
-            </div>
-            
-            <nav class="nav-menu">
-                <div class="nav-section">
-                    <h3>TRẠM KIẾN THỨC</h3>
-                    <a href="#" class="nav-item active" data-view="view-new-note"><i class="ph ph-notebook"></i> Ghi chú mới</a>
-                    <a href="#" class="nav-item" data-view="view-all-notes"><i class="ph ph-folders"></i> Tất cả ghi chú</a>
-                    <a href="#" class="nav-item" data-view="view-graph"><i class="ph ph-graph"></i> Mạng lưới (Graph)</a>
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="workspace-profile">
+                    <div class="workspace-avatar">
+                        <img src="icon.jpg" alt="Workspace">
+                    </div>
+                    <div class="workspace-info">
+                        <span class="workspace-name">School NoteBook</span>
+                        <span class="workspace-plan">Personal</span>
+                    </div>
+                    <i class="ri-expand-up-down-line text-muted"></i>
                 </div>
-
-                <div class="nav-section">
-                    <h3>TIẾNG ANH CHUYÊN NGÀNH</h3>
-                    <a href="#" class="nav-item" data-view="view-vocab"><i class="ph ph-translate"></i> Kho Từ Vựng</a>
-                    <a href="#" class="nav-item" data-view="view-flashcard"><i class="ph ph-cards"></i> Flashcards Ôn Tập</a>
-                </div>
-            </nav>
-
-            <div id="cloud-status" style="display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 8px 12px; border-radius: 20px; background: rgba(59, 130, 246, 0.1); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.2); margin-bottom: 12px;">
-                <span id="cloud-status-dot" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #3b82f6; box-shadow: 0 0 6px #3b82f6;"></span>
-                <span id="cloud-status-text">Khởi tạo Cloud...</span>
             </div>
 
-            <div class="user-profile">
-                <img src="https://ui-avatars.com/api/?name=Auto+Tester&background=0D8ABC&color=fff" alt="User Avatar">
-                <div class="user-info">
-                    <span class="user-name">Automotive Tester</span>
-                    <span class="user-role">Học việc ECU</span>
+            <div class="sidebar-actions">
+                <button class="sidebar-btn" id="search-btn">
+                    <i class="ri-search-line"></i> Search <kbd>Ctrl+K</kbd>
+                </button>
+                <button class="sidebar-btn" id="settings-btn">
+                    <i class="ri-settings-3-line"></i> Settings
+                </button>
+                <button class="sidebar-btn" id="new-page-btn">
+                    <i class="ri-add-circle-line"></i> New page
+                </button>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="section-title">
+                    <span>PRIVATE</span>
+                    <i class="ri-add-line add-icon" onclick="app.createNewPage()"></i>
                 </div>
+                <ul class="page-tree" id="page-list">
+                    <!-- Pages will be rendered here -->
+                </ul>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="section-title">
+                    <span>TOOLS</span>
+                </div>
+                <ul class="page-tree">
+                    <li class="page-item" onclick="app.showVocab()">
+                        <div class="page-item-content">
+                            <span class="page-icon">📚</span>
+                            <span class="page-title">Kho từ vựng</span>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="sidebar-footer">
+                <button class="new-page-pill-btn" id="sidebar-new-page-btn">
+                    <i class="ri-add-line"></i>
+                    <span>New page</span>
+                    <kbd>Ctrl+N</kbd>
+                </button>
             </div>
         </aside>
 
         <!-- Main Content -->
         <main class="main-content">
-            
-            <!-- VIEW 1: NEW NOTE -->
-            <div id="view-new-note" class="view-section active">
-                <header class="top-bar">
-                    <input type="text" class="note-title" placeholder="Tiêu đề ghi chú... (VD: Giao thức CAN Bus)">
-                    <div class="top-actions">
-                        <button class="btn btn-secondary"><i class="ph ph-tag"></i> Thêm Tag</button>
-                        <button class="btn btn-primary" id="save-note-btn"><i class="ph ph-floppy-disk"></i> Lưu Ghi Chú</button>
-                    <button class="btn btn-secondary" id="theme-toggle" title="Chế độ sáng / tối"><i class="ph ph-sun dim"></i><i class="ph ph-moon bright"></i></button>
-                    </div>
-                </header>
-
-                <div class="editor-container" style="flex: 1; display: flex; flex-direction: column;">
-                    <div class="content-box" style="flex: 1; display: flex; flex-direction: column; overflow-y: auto; background: var(--bg-panel); border-radius: 8px; border: 1px solid var(--border); padding: 20px;">
-                        <!-- Editor.js container -->
-                        <div id="main-editor" style="width: 100%;"></div>
+            <!-- Topbar -->
+            <header class="topbar">
+                <div class="topbar-left">
+                    <button class="icon-btn d-md-none" id="toggle-sidebar">
+                        <i class="ri-menu-line"></i>
+                    </button>
+                    <div class="breadcrumb" id="breadcrumb">
+                        <!-- Breadcrumb -->
+                        <span class="breadcrumb-item">School NoteBook</span>
                     </div>
                 </div>
-            </div>
-
-            <!-- VIEW 2: ALL NOTES -->
-            <div id="view-all-notes" class="view-section hidden">
-                <header class="top-bar">
-                    <h2 style="color: white; font-size: 24px;">Tất cả ghi chú</h2>
-                </header>
-                <div class="content-padding" style="padding: 30px;">
-                    <div id="notes-list" style="display: grid; gap: 20px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));">
-                        <!-- Danh sách ghi chú sẽ được tạo ra bằng Javascript -->
-                    </div>
+                <div class="topbar-right">
+                    <span class="save-status text-muted" id="save-status">Saved</span>
+                    <button class="icon-btn" id="theme-toggle" title="Toggle theme">
+                        <i class="ri-moon-line"></i>
+                    </button>
+                    <button class="icon-btn" title="Share">
+                        <i class="ri-share-forward-line"></i>
+                    </button>
+                    <button class="icon-btn" title="More">
+                        <i class="ri-more-fill"></i>
+                    </button>
                 </div>
-            </div>
+            </header>
 
-            <!-- VIEW 3: VOCABULARY -->
-            <div id="view-vocab" class="view-section hidden">
-                <header class="top-bar">
-                    <h2 style="color: white; font-size: 24px;">Kho Từ Vựng</h2>
-                </header>
-                <div class="content-padding" style="padding: 30px;">
-                    <table style="width: 100%; text-align: left; border-collapse: collapse; color: white;">
-                        <thead>
-                            <tr style="border-bottom: 1px solid var(--border); color: var(--primary);">
-                                <th style="padding: 15px 10px;">Từ vựng</th>
-                                <th style="padding: 15px 10px;">Nghĩa tiếng Việt</th>
-                                <th style="padding: 15px 10px;">Ngữ cảnh</th>
-                            </tr>
-                        </thead>
-                        <tbody id="vocab-table-body">
-                            <!-- Dữ liệu từ vựng -->
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- VIEW 4: GRAPH -->
-            <div id="view-graph" class="view-section hidden">
-                <header class="top-bar">
-                    <h2 style="color: white; font-size: 24px;">Mạng lưới Kiến thức</h2>
-                </header>
-                <div style="padding: 20px; height: calc(100vh - 100px);">
-                    <div id="mynetwork" style="width: 100%; height: 100%; background: var(--bg-panel); border-radius: 12px; border: 1px solid var(--border);"></div>
-                </div>
-            </div>
-            
-            <!-- VIEW 5: FLASHCARD -->
-            <div id="view-flashcard" class="view-section hidden">
-                <header class="top-bar">
-                    <h2 style="color: white; font-size: 24px;">Ôn tập Flashcard</h2>
-                </header>
-                <div class="flashcard-container">
-                    <div id="flashcard-empty" style="text-align: center; color: var(--text-muted); display: none; padding-top: 50px;">
-                        Chưa có từ vựng nào để ôn tập. Hãy thêm từ vựng nhé!
-                    </div>
-                    <div id="flashcard-area" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 60vh;">
-                        <div class="flashcard-count" style="margin-bottom: 20px; color: var(--primary); font-weight: 600;" id="fc-counter">0 / 0</div>
+            <!-- Editor Area -->
+            <div class="editor-scroll-area" id="editor-container">
+                <div class="page-content">
+                    <div class="page-header">
+                        <div class="page-cover" id="page-cover" style="display: none;">
+                            <img src="" alt="Cover">
+                            <button class="change-cover-btn">Change cover</button>
+                        </div>
                         
-                        <div class="flip-card" id="flip-card">
-                            <div class="flip-card-inner" id="flip-card-inner">
-                                <div class="flip-card-front">
-                                    <h1 id="fc-word">WORD</h1>
-                                    <p style="color: var(--text-muted); font-size: 14px; margin-top: 10px;">(Click để lật)</p>
+                        <div class="page-icon-wrapper" id="page-icon-wrapper">
+                            <div class="page-icon-display" id="page-icon">📄</div>
+                            <div class="page-header-actions">
+                                <button class="action-text-btn" id="add-icon-btn"><i class="ri-emoji-sticker-line"></i> Add icon</button>
+                                <button class="action-text-btn" id="add-cover-btn"><i class="ri-image-line"></i> Add cover</button>
+                            </div>
+                        </div>
+
+                        <input type="text" class="page-title-input" id="page-title" placeholder="Untitled" autocomplete="off">
+                    </div>
+
+                    <div class="block-editor" id="block-editor">
+                        <!-- Custom Blocks will be injected here -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Vocab & Flashcard Area -->
+            <div class="vocab-area" id="vocab-container" style="display: none;">
+                <div class="page-content vocab-page-content">
+                    <!-- Vocab Header -->
+                    <div class="vocab-header-card">
+                        <div class="vocab-header-info">
+                            <div class="vocab-badge"><i class="ri-book-open-line"></i> STUDY & FLASHCARDS</div>
+                            <h1 class="vocab-title">📚 Kho Từ Vựng & Flashcard</h1>
+                            <p class="vocab-subtitle">Ghi nhớ từ vựng thông minh, ôn luyện phản xạ với thẻ lật 3D tương tác.</p>
+                            
+                            <div class="vocab-stats-row">
+                                <div class="vocab-stat-pill">
+                                    <span class="stat-num" id="stat-total-words">0</span>
+                                    <span class="stat-lbl">Tổng số từ</span>
                                 </div>
-                                <div class="flip-card-back">
-                                    <h1 id="fc-meaning" style="color: var(--accent);">Ý nghĩa</h1>
-                                    <p id="fc-context" style="margin-top: 20px; font-size: 14px; font-style: italic;">Ngữ cảnh...</p>
+                                <div class="vocab-stat-pill success">
+                                    <span class="stat-num" id="stat-mastered-words">0</span>
+                                    <span class="stat-lbl">Đã nhớ</span>
+                                </div>
+                                <div class="vocab-stat-pill warning">
+                                    <span class="stat-num" id="stat-learning-words">0</span>
+                                    <span class="stat-lbl">Cần ôn</span>
                                 </div>
                             </div>
                         </div>
 
-                        <div class="flashcard-controls" style="margin-top: 30px; display: flex; gap: 20px;">
-                            <button class="btn btn-secondary" id="fc-prev"><i class="ph ph-arrow-left"></i> Trước</button>
-                            <button class="btn btn-primary" id="fc-next">Sau <i class="ph ph-arrow-right"></i></button>
+                        <div class="vocab-header-actions">
+                            <button class="btn btn-primary btn-add-vocab" onclick="vocab.openAddModal()">
+                                <i class="ri-add-circle-line"></i> Thêm từ mới
+                            </button>
+                            <div class="vocab-view-tabs">
+                                <button class="vocab-tab-btn active" id="tab-vocab-list" onclick="vocab.switchView('list')">
+                                    <i class="ri-grid-fill"></i> Danh sách
+                                </button>
+                                <button class="vocab-tab-btn" id="tab-vocab-flashcard" onclick="vocab.switchView('flashcard')">
+                                    <i class="ri-play-list-2-line"></i> Luyện Flashcard
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Search & Filter Bar (Only visible in list view) -->
+                    <div class="vocab-filter-bar" id="vocab-filter-bar">
+                        <div class="vocab-search-box">
+                            <i class="ri-search-line"></i>
+                            <input type="text" id="vocab-search-input" placeholder="Tìm kiếm từ tiếng Anh hoặc nghĩa..." oninput="vocab.filterWords()">
+                        </div>
+                        <div class="vocab-tag-filters" id="vocab-tag-filters">
+                            <button class="tag-filter-btn active" onclick="vocab.setTagFilter('all', this)">Tất cả</button>
+                            <button class="tag-filter-btn" onclick="vocab.setTagFilter('IELTS', this)">IELTS</button>
+                            <button class="tag-filter-btn" onclick="vocab.setTagFilter('TOEIC', this)">TOEIC</button>
+                            <button class="tag-filter-btn" onclick="vocab.setTagFilter('Daily', this)">Giao tiếp</button>
+                            <button class="tag-filter-btn" onclick="vocab.setTagFilter('Tech', this)">Công nghệ</button>
+                        </div>
+                    </div>
+
+                    <!-- 1. Grid List View -->
+                    <div class="vocab-grid-view" id="vocab-grid-view">
+                        <div class="vocab-grid" id="vocab-grid">
+                            <!-- Cards populated by JS -->
+                        </div>
+                    </div>
+
+                    <!-- 2. Flashcard View -->
+                    <div class="vocab-flashcard-view" id="vocab-flashcard-view" style="display: none;">
+                        <div class="flashcard-deck-container">
+                            <div class="flashcard-progress-wrapper">
+                                <div class="flashcard-counter" id="flashcard-counter">Thẻ 1 / 10</div>
+                                <div class="flashcard-progress-bar">
+                                    <div class="flashcard-progress-fill" id="flashcard-progress-fill" style="width: 10%;"></div>
+                                </div>
+                            </div>
+
+                            <!-- 3D Flip Card -->
+                            <div class="flashcard-scene" onclick="vocab.flipCurrentCard()">
+                                <div class="flashcard-card" id="flashcard-card">
+                                    <!-- Front -->
+                                    <div class="flashcard-face flashcard-front">
+                                        <div class="fc-tag" id="fc-front-tag">IELTS</div>
+                                        <div class="fc-word-group">
+                                            <div class="fc-word" id="fc-front-word">Resilient</div>
+                                            <div class="fc-phonetic-row">
+                                                <span class="fc-phonetic" id="fc-front-phonetic">/rɪˈzɪl.i.ənt/</span>
+                                                <button class="fc-audio-btn" onclick="event.stopPropagation(); vocab.speakWord()" title="Phát âm">
+                                                    <i class="ri-volume-up-line"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="fc-flip-hint">
+                                            <i class="ri-refresh-line"></i> Bấm thẻ để lật xem nghĩa
+                                        </div>
+                                    </div>
+
+                                    <!-- Back -->
+                                    <div class="flashcard-face flashcard-back">
+                                        <div class="fc-tag" id="fc-back-tag">Nghĩa & Ví dụ</div>
+                                        <div class="fc-meaning-group">
+                                            <div class="fc-meaning" id="fc-back-meaning">Kiên cường, phục hồi nhanh</div>
+                                            <div class="fc-example" id="fc-back-example">"She has a resilient personality in tough times."</div>
+                                        </div>
+                                        <div class="fc-flip-hint">
+                                            <i class="ri-refresh-line"></i> Bấm để lật lại mặt trước
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Flashcard Controls -->
+                            <div class="flashcard-controls">
+                                <button class="fc-nav-btn" onclick="vocab.prevCard()" title="Thẻ trước (Mũi tên trái)">
+                                    <i class="ri-arrow-left-s-line"></i> Trước
+                                </button>
+                                <button class="fc-action-btn btn-need-review" onclick="vocab.markCard(false)" title="Chưa thuộc">
+                                    <i class="ri-close-line"></i> Chưa nhớ
+                                </button>
+                                <button class="fc-action-btn btn-shuffle" onclick="vocab.shuffleDeck()" title="Xáo trộn thẻ">
+                                    <i class="ri-shuffle-line"></i>
+                                </button>
+                                <button class="fc-action-btn btn-mastered" onclick="vocab.markCard(true)" title="Đã thuộc">
+                                    <i class="ri-check-line"></i> Đã nhớ
+                                </button>
+                                <button class="fc-nav-btn" onclick="vocab.nextCard()" title="Thẻ tiếp (Mũi tên phải)">
+                                    Sau <i class="ri-arrow-right-s-line"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
-
         </main>
+    </div>
 
-        <!-- Tooltip nổi lên khi bôi đen -->
-        <div id="vocab-tooltip" class="vocab-tooltip hidden">
-            <button id="add-vocab-btn"><i class="ph ph-plus-circle"></i> Thêm vào Từ Vựng</button>
+    <!-- Slash Command Menu -->
+    <div class="slash-menu" id="slash-menu" style="display: none;">
+        <div class="slash-menu-header">Basic blocks</div>
+        <div class="slash-menu-item" data-type="text">
+            <div class="item-icon"><i class="ri-text"></i></div>
+            <div class="item-info">
+                <div class="item-title">Text</div>
+                <div class="item-desc">Just start writing with plain text.</div>
+            </div>
+        </div>
+        <div class="slash-menu-item" data-type="h1">
+            <div class="item-icon"><i class="ri-h-1"></i></div>
+            <div class="item-info">
+                <div class="item-title">Heading 1</div>
+                <div class="item-desc">Big section heading.</div>
+            </div>
+        </div>
+        <div class="slash-menu-item" data-type="h2">
+            <div class="item-icon"><i class="ri-h-2"></i></div>
+            <div class="item-info">
+                <div class="item-title">Heading 2</div>
+                <div class="item-desc">Medium section heading.</div>
+            </div>
+        </div>
+        <div class="slash-menu-item" data-type="h3">
+            <div class="item-icon"><i class="ri-h-3"></i></div>
+            <div class="item-info">
+                <div class="item-title">Heading 3</div>
+                <div class="item-desc">Small section heading.</div>
+            </div>
+        </div>
+        <div class="slash-menu-item" data-type="bullet">
+            <div class="item-icon"><i class="ri-list-unordered"></i></div>
+            <div class="item-info">
+                <div class="item-title">Bulleted list</div>
+                <div class="item-desc">Create a simple bulleted list.</div>
+            </div>
+        </div>
+        <div class="slash-menu-item" data-type="todo">
+            <div class="item-icon"><i class="ri-checkbox-line"></i></div>
+            <div class="item-info">
+                <div class="item-title">To-do list</div>
+                <div class="item-desc">Track tasks with a to-do list.</div>
+            </div>
+        </div>
+        <div class="slash-menu-item" data-type="toggle">
+            <div class="item-icon"><i class="ri-arrow-right-s-line"></i></div>
+            <div class="item-info">
+                <div class="item-title">Toggle list</div>
+                <div class="item-desc">Toggles can hide and show content inside.</div>
+            </div>
+        </div>
+        <div class="slash-menu-item" data-type="toggle-h1">
+            <div class="item-icon"><i class="ri-arrow-right-s-line"></i><span class="icon-subtext">H1</span></div>
+            <div class="item-info">
+                <div class="item-title">Toggle heading 1</div>
+                <div class="item-desc">Large section heading with toggle.</div>
+            </div>
+        </div>
+        <div class="slash-menu-item" data-type="toggle-h2">
+            <div class="item-icon"><i class="ri-arrow-right-s-line"></i><span class="icon-subtext">H2</span></div>
+            <div class="item-info">
+                <div class="item-title">Toggle heading 2</div>
+                <div class="item-desc">Medium section heading with toggle.</div>
+            </div>
+        </div>
+        <div class="slash-menu-item" data-type="toggle-h3">
+            <div class="item-icon"><i class="ri-arrow-right-s-line"></i><span class="icon-subtext">H3</span></div>
+            <div class="item-info">
+                <div class="item-title">Toggle heading 3</div>
+                <div class="item-desc">Small section heading with toggle.</div>
+            </div>
+        </div>
+        <div class="slash-menu-item" data-type="toc">
+            <div class="item-icon"><i class="ri-list-check-2"></i></div>
+            <div class="item-info">
+                <div class="item-title">Table of contents</div>
+                <div class="item-desc">Outline your page with clickable headings.</div>
+            </div>
+        </div>
+        <div class="slash-menu-item" data-type="image">
+            <div class="item-icon"><i class="ri-image-2-line"></i></div>
+            <div class="item-info">
+                <div class="item-title">Image</div>
+                <div class="item-desc">Upload or embed with a link.</div>
+            </div>
+        </div>
+        <div class="slash-menu-item" data-type="code">
+            <div class="item-icon"><i class="ri-code-box-line"></i></div>
+            <div class="item-info">
+                <div class="item-title">Code</div>
+                <div class="item-desc">Capture a code snippet.</div>
+            </div>
+        </div>
+        <div class="slash-menu-item" data-type="quote">
+            <div class="item-icon"><i class="ri-double-quotes-l"></i></div>
+            <div class="item-info">
+                <div class="item-title">Quote</div>
+                <div class="item-desc">Capture a quote.</div>
+            </div>
+        </div>
+        <div class="slash-menu-item" data-type="divider">
+            <div class="item-icon"><i class="ri-subtract-line"></i></div>
+            <div class="item-info">
+                <div class="item-title">Divider</div>
+                <div class="item-desc">Visually divide blocks.</div>
+            </div>
+        </div>
+        <div class="slash-menu-item" data-type="callout">
+            <div class="item-icon"><i class="ri-information-line"></i></div>
+            <div class="item-info">
+                <div class="item-title">Callout</div>
+                <div class="item-desc">Make writing stand out.</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Popovers -->
+    <div class="custom-popover" id="emoji-picker" style="display: none;">
+        <div class="popover-header">Choose an icon</div>
+        <div class="emoji-grid" id="emoji-grid">
+            <!-- Emojis populated by JS -->
+        </div>
+    </div>
+
+    <div class="custom-popover" id="cover-picker" style="display: none;">
+        <div class="popover-header">Gallery</div>
+        <div class="cover-grid" id="cover-grid">
+            <!-- Covers populated by JS -->
+        </div>
+        <div class="popover-section">
+            <input type="text" id="custom-cover-input" placeholder="Paste image link...">
+            <button id="custom-cover-btn" class="btn btn-primary">Submit</button>
+        </div>
+    </div>
+
+    <div class="custom-popover" id="more-popover" style="display: none;">
+        <!-- Font Selection -->
+        <div class="popover-font-section">
+            <div class="font-btn active" data-font="default" onclick="app.setPageFont('default')">
+                <span class="font-preview font-default">Ag</span>
+                <span class="font-name">Default</span>
+            </div>
+            <div class="font-btn" data-font="serif" onclick="app.setPageFont('serif')">
+                <span class="font-preview font-serif">Ag</span>
+                <span class="font-name">Serif</span>
+            </div>
+            <div class="font-btn" data-font="mono" onclick="app.setPageFont('mono')">
+                <span class="font-preview font-mono">Ag</span>
+                <span class="font-name">Mono</span>
+            </div>
+        </div>
+        
+        <div class="popover-divider"></div>
+        
+        <!-- Actions -->
+        <div class="menu-item" onclick="app.copyPageLink()">
+            <i class="ri-link"></i>
+            <span>Copy link</span>
+            <kbd class="menu-shortcut">Ctrl+L</kbd>
+        </div>
+        <div class="menu-item" onclick="app.copyPageContents()">
+            <i class="ri-file-copy-line"></i>
+            <span>Copy page contents</span>
+        </div>
+        <div class="menu-item" onclick="app.duplicateCurrentPage()">
+            <i class="ri-file-add-line"></i>
+            <span>Duplicate</span>
+            <kbd class="menu-shortcut">Ctrl+D</kbd>
+        </div>
+        
+        <div class="popover-divider"></div>
+        
+        <!-- Toggles matching Notion Screenshot -->
+        <div class="menu-switch-item">
+            <div class="switch-label">
+                <i class="ri-font-size"></i> Small text
+            </div>
+            <label class="toggle-switch">
+                <input type="checkbox" id="switch-small-text" onchange="app.toggleSmallText(this.checked)">
+                <span class="toggle-slider"></span>
+            </label>
+        </div>
+        <div class="menu-switch-item">
+            <div class="switch-label">
+                <i class="ri-expand-left-right-line"></i> Full width
+            </div>
+            <label class="toggle-switch">
+                <input type="checkbox" id="switch-full-width" onchange="app.toggleFullWidth(this.checked)">
+                <span class="toggle-slider"></span>
+            </label>
+        </div>
+        <div class="menu-switch-item">
+            <div class="switch-label">
+                <i class="ri-lock-line"></i> Lock page
+            </div>
+            <label class="toggle-switch">
+                <input type="checkbox" id="switch-lock-page" onchange="app.toggleLockPage(this.checked)">
+                <span class="toggle-slider"></span>
+            </label>
         </div>
 
-        <!-- Popup thêm từ vựng -->
-        <div id="vocab-modal" class="modal hidden">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3>Lưu từ vựng mới</h3>
-                    <button id="close-modal" class="close-btn"><i class="ph ph-x"></i></button>
+        <div class="popover-divider"></div>
+
+        <div class="menu-item" onclick="app.showWordCount()">
+            <i class="ri-file-text-line"></i>
+            <span>Word count & analytics</span>
+        </div>
+        <div class="menu-item" onclick="app.exportToTxt()">
+            <i class="ri-download-line"></i>
+            <span>Export as TXT</span>
+        </div>
+        <div class="menu-item text-danger" onclick="app.deleteCurrentPage()">
+            <i class="ri-delete-bin-line"></i>
+            <span>Delete page</span>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div class="modal-overlay" id="search-modal" style="display: none;">
+        <div class="modal-content search-modal-content">
+            <input type="text" id="search-input" placeholder="Search pages..." autocomplete="off">
+            <div class="search-results" id="search-results"></div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="settings-modal" style="display: none;">
+        <div class="modal-content settings-modal-content">
+            <h3>Settings</h3>
+            <div class="settings-group">
+                <label>Workspace Name</label>
+                <input type="text" id="setting-workspace-name" value="School NoteBook">
+            </div>
+            <button class="btn btn-primary" onclick="document.getElementById('settings-modal').style.display='none'">Close</button>
+        </div>
+    </div>
+
+    <!-- Floating Text Selection Toolbar (Notion Style) -->
+    <div class="notion-floating-toolbar" id="floating-toolbar" style="display: none;">
+        <!-- Top Row: Block Type Switcher & Formatting Actions -->
+        <div class="nft-header-row">
+            <div class="nft-block-type-wrapper">
+                <button class="nft-block-type-btn" id="nft-block-type-btn" type="button" title="Chuyển đổi kiểu khối">
+                    <i class="ri-text" id="nft-block-icon"></i>
+                    <span id="nft-block-label">Text</span>
+                    <i class="ri-arrow-down-s-line" style="opacity: 0.6; font-size: 11px;"></i>
+                </button>
+                <div class="nft-type-dropdown" id="nft-type-dropdown" style="display: none;">
+                    <div class="nft-dropdown-item" data-type="text"><i class="ri-text"></i> Text</div>
+                    <div class="nft-dropdown-item" data-type="h1"><i class="ri-h-1"></i> Heading 1</div>
+                    <div class="nft-dropdown-item" data-type="h2"><i class="ri-h-2"></i> Heading 2</div>
+                    <div class="nft-dropdown-item" data-type="h3"><i class="ri-h-3"></i> Heading 3</div>
+                    <div class="nft-dropdown-item" data-type="bullet"><i class="ri-list-unordered"></i> Danh sách chấm</div>
+                    <div class="nft-dropdown-item" data-type="number"><i class="ri-list-ordered"></i> Danh sách số</div>
+                    <div class="nft-dropdown-item" data-type="todo"><i class="ri-checkbox-line"></i> To-do list</div>
+                    <div class="nft-dropdown-item" data-type="quote"><i class="ri-double-quotes-l"></i> Trích dẫn</div>
+                    <div class="nft-dropdown-item" data-type="code"><i class="ri-code-box-line"></i> Khối code</div>
                 </div>
-                <div class="modal-body">
-                    <div class="form-group">
-                        <label>Từ tiếng Anh</label>
-                        <input type="text" id="eng-word" readonly class="glass-input">
-                    </div>
-                    <div class="form-group">
-                        <label>Nghĩa tiếng Việt</label>
-                        <input type="text" id="vn-meaning" placeholder="Nhập nghĩa của từ..." class="glass-input" autofocus>
-                    </div>
-                    <div class="form-group">
-                        <label>Ngữ cảnh / Ghi chú thêm</label>
-                        <input type="text" id="context-note" placeholder="Dùng trong tài liệu ECU động cơ..." class="glass-input">
+            </div>
+
+            <div class="bubble-divider"></div>
+
+            <!-- Formatting Actions Row (Word / Notion) -->
+            <div class="nft-formatting-group">
+                <!-- Color & Highlight Dropdown -->
+                <div class="bubble-dropdown-wrapper">
+                    <button class="bubble-btn" id="bubble-color-btn" type="button" title="Màu chữ & Highlight">
+                        <span class="color-indicator">A</span>
+                        <i class="ri-arrow-down-s-line" style="font-size: 10px;"></i>
+                    </button>
+                    <div class="bubble-color-dropdown" id="bubble-color-dropdown" style="display: none;">
+                        <div class="color-dropdown-title">Màu chữ</div>
+                        <div class="color-options-row">
+                            <span class="color-dot text-color" data-color="#f8fafc" style="background: #f8fafc;" title="Mặc định"></span>
+                            <span class="color-dot text-color" data-color="#ef4444" style="background: #ef4444;" title="Đỏ"></span>
+                            <span class="color-dot text-color" data-color="#3b82f6" style="background: #3b82f6;" title="Xanh"></span>
+                            <span class="color-dot text-color" data-color="#10b981" style="background: #10b981;" title="Xanh lá"></span>
+                            <span class="color-dot text-color" data-color="#f59e0b" style="background: #f59e0b;" title="Vàng"></span>
+                            <span class="color-dot text-color" data-color="#a855f7" style="background: #a855f7;" title="Tím"></span>
+                        </div>
+                        <div class="color-dropdown-title">Màu nền Highlight</div>
+                        <div class="color-options-row">
+                            <span class="color-dot bg-color" data-bgcolor="transparent" style="background: transparent; border: 1px dashed var(--text-placeholder);" title="Xóa nền"></span>
+                            <span class="color-dot bg-color" data-bgcolor="#7f1d1d" style="background: #ef4444; opacity: 0.7;" title="Nền đỏ"></span>
+                            <span class="color-dot bg-color" data-bgcolor="#1e3a8a" style="background: #3b82f6; opacity: 0.7;" title="Nền xanh"></span>
+                            <span class="color-dot bg-color" data-bgcolor="#064e3b" style="background: #10b981; opacity: 0.7;" title="Nền xanh lá"></span>
+                            <span class="color-dot bg-color" data-bgcolor="#78350f" style="background: #f59e0b; opacity: 0.7;" title="Nền vàng"></span>
+                            <span class="color-dot bg-color" data-bgcolor="#581c87" style="background: #a855f7; opacity: 0.7;" title="Nền tím"></span>
+                        </div>
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button class="btn btn-primary w-100" id="save-vocab-btn">Lưu vào Flashcard</button>
+
+                <button class="bubble-btn" data-action="bold" type="button" title="In đậm (Ctrl+B)"><i class="ri-bold"></i></button>
+                <button class="bubble-btn" data-action="italic" type="button" title="In nghiêng (Ctrl+I)"><i class="ri-italic"></i></button>
+                <button class="bubble-btn" data-action="underline" type="button" title="Gạch chân (Ctrl+U)"><i class="ri-underline"></i></button>
+                <button class="bubble-btn" data-action="removeFormat" type="button" title="Xóa định dạng"><i class="ri-format-clear"></i></button>
+                <button class="bubble-btn" data-action="strikethrough" type="button" title="Gạch ngang"><i class="ri-strikethrough"></i></button>
+                <button class="bubble-btn" data-action="code" type="button" title="Mã nội dòng"><i class="ri-code-line"></i></button>
+                <button class="bubble-btn" data-action="copy" type="button" title="Sao chép"><i class="ri-file-copy-line"></i></button>
+            </div>
+        </div>
+
+        <div class="nft-divider"></div>
+
+        <!-- Notion Style Quick Action List (1: Add Vocab, 2: Notion AI tasks) -->
+        <div class="nft-actions-list">
+            <!-- 1. THÊM TỪ VỰNG (Highlighted Main Action) -->
+            <div class="nft-action-item nft-action-vocab" id="bubble-add-vocab-btn">
+                <div class="nft-action-icon"><i class="ri-book-mark-line"></i></div>
+                <div class="nft-action-text">
+                    <span class="nft-action-title">+ Thêm vào Kho Từ vựng & Flashcard</span>
+                    <span class="nft-action-desc">Lưu từ vào sổ học và tự động tạo thẻ 3D</span>
+                </div>
+                <span class="nft-badge">Sổ từ</span>
+            </div>
+
+            <div class="nft-section-title">Gợi ý tác vụ văn bản (Notion AI)</div>
+            
+            <div class="nft-action-item" data-ai="improve">
+                <div class="nft-action-icon"><i class="ri-magic-line"></i></div>
+                <div class="nft-action-text">
+                    <span class="nft-action-title">Cải thiện câu từ (Improve writing)</span>
+                </div>
+            </div>
+
+            <div class="nft-action-item" data-ai="proofread">
+                <div class="nft-action-icon"><i class="ri-spell-check"></i></div>
+                <div class="nft-action-text">
+                    <span class="nft-action-title">Kiểm tra chính tả (Proofread)</span>
+                </div>
+            </div>
+
+            <div class="nft-action-item" data-ai="explain">
+                <div class="nft-action-icon"><i class="ri-question-line"></i></div>
+                <div class="nft-action-text">
+                    <span class="nft-action-title">Giải thích nghĩa & ngữ cảnh (Explain)</span>
                 </div>
             </div>
         </div>
     </div>
+
+    <!-- Add/Edit Vocab Modal (No more cheap prompt!) -->
+    <div class="modal-overlay" id="vocab-modal" style="display: none;">
+        <div class="modal-content vocab-modal-content">
+            <div class="modal-header">
+                <h3 id="vocab-modal-title"><i class="ri-book-2-line"></i> Thêm từ vựng mới</h3>
+                <button class="modal-close-btn" onclick="vocab.closeModal()"><i class="ri-close-line"></i></button>
+            </div>
+            
+            <form id="vocab-form" onsubmit="vocab.handleFormSubmit(event)">
+                <input type="hidden" id="vocab-edit-id">
+                
+                <div class="form-group">
+                    <label>Từ tiếng Anh / Cụm từ <span class="required" style="color: #ef4444;">*</span></label>
+                    <input type="text" id="vocab-input-word" placeholder="Ví dụ: Resilient, Breakthrough..." required autocomplete="off">
+                </div>
+
+                <div class="form-row" style="display: flex; gap: 12px;">
+                    <div class="form-group" style="flex: 1;">
+                        <label>Phiên âm</label>
+                        <input type="text" id="vocab-input-phonetic" placeholder="Ví dụ: /rɪˈzɪl.i.ənt/" autocomplete="off">
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label>Chủ đề / Phân loại</label>
+                        <select id="vocab-input-tag">
+                            <option value="IELTS">IELTS</option>
+                            <option value="TOEIC">TOEIC</option>
+                            <option value="Daily">Giao tiếp</option>
+                            <option value="Tech">Công nghệ</option>
+                            <option value="General">Chung</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Nghĩa tiếng Việt <span class="required" style="color: #ef4444;">*</span></label>
+                    <input type="text" id="vocab-input-meaning" placeholder="Ví dụ: Kiên cường, khả năng hồi phục nhanh..." required autocomplete="off">
+                </div>
+
+                <div class="form-group">
+                    <label>Câu ví dụ (Tùy chọn)</label>
+                    <textarea id="vocab-input-example" rows="2" placeholder="Ví dụ: She showed a resilient spirit in tough times."></textarea>
+                </div>
+
+                <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px;">
+                    <button type="button" class="btn btn-secondary" onclick="vocab.closeModal()">Hủy</button>
+                    <button type="submit" class="btn btn-primary" id="vocab-submit-btn">Lưu vào Kho</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
     
-    <!-- Firebase SDK (v10 compat) -->
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <!-- SortableJS for Drag and Drop -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    
     <script src="firebase-config.js"></script>
-    <script src="app.js"></script>
+    <script src="app.js?v=2.2"></script>
 </body>
 </html>
