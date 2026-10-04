@@ -1638,12 +1638,14 @@ function initFloatingToolbar() {
         });
     }
 
+    let currentSelectedText = '';
+
     // 1. ADD TO VOCABULARY VAULT (+ Từ vựng)
     if (addVocabBtn) {
         addVocabBtn.addEventListener('click', (e) => {
             e.preventDefault();
-            const sel = window.getSelection();
-            const text = sel ? sel.toString().trim() : '';
+            e.stopPropagation();
+            const text = currentSelectedText || (window.getSelection() ? window.getSelection().toString().trim() : '');
             toolbar.style.display = 'none';
             if (text) {
                 vocab.openAddModal(text);
@@ -1657,9 +1659,9 @@ function initFloatingToolbar() {
     toolbar.querySelectorAll('.nft-case-btn[data-case]').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.preventDefault();
+            e.stopPropagation();
             const caseType = btn.getAttribute('data-case');
-            const sel = window.getSelection();
-            const selectedText = sel ? sel.toString() : '';
+            const selectedText = currentSelectedText || (window.getSelection() ? window.getSelection().toString() : '');
             if (!selectedText) return;
 
             let converted = selectedText;
@@ -1682,10 +1684,8 @@ function initFloatingToolbar() {
     if (linkBtn) {
         linkBtn.addEventListener('click', (e) => {
             e.preventDefault();
-            const sel = window.getSelection();
-            if (!sel || sel.isCollapsed) return;
-            const currentUrl = 'https://';
-            const url = window.prompt('Nhập địa chỉ liên kết (URL):', currentUrl);
+            e.stopPropagation();
+            const url = window.prompt('Nhập địa chỉ liên kết (URL):', 'https://');
             if (url && url !== 'https://') {
                 document.execCommand('createLink', false, url);
                 showToast('Đã gắn liên kết!');
@@ -1700,8 +1700,8 @@ function initFloatingToolbar() {
     if (searchGoogleBtn) {
         searchGoogleBtn.addEventListener('click', (e) => {
             e.preventDefault();
-            const sel = window.getSelection();
-            const text = sel ? sel.toString().trim() : '';
+            e.stopPropagation();
+            const text = currentSelectedText || (window.getSelection() ? window.getSelection().toString().trim() : '');
             if (text) {
                 window.open(`https://www.google.com/search?q=${encodeURIComponent(text)}`, '_blank');
             }
@@ -1728,16 +1728,34 @@ function initFloatingToolbar() {
                 return;
             }
 
+            currentSelectedText = text;
+
             const range = sel.getRangeAt(0);
             let container = range.commonAncestorContainer;
             if (container && container.nodeType === Node.TEXT_NODE) container = container.parentElement;
 
-            // Allow selection in editor content
-            const inEditor = container && container.closest('#editor-container, .page-content, .block-editor, .block-content');
-            if (!inEditor) {
-                toolbar.style.display = 'none';
+            // Don't show toolbar if user is selecting inside the toolbar itself or inside modals/inputs
+            if (toolbar.contains(container) || (container && container.closest('#vocab-modal, #search-modal, #settings-modal'))) {
                 return;
             }
+
+            // Check if selection is within editor content
+            const inEditor = !!(container && container.closest('#editor-container, .page-content, .block-editor, .block-content'));
+
+            // Toggle editor-only rows
+            const headerRow = document.getElementById('nft-header-row');
+            const dividerTop = document.getElementById('nft-divider-top');
+            const caseTitle = document.getElementById('nft-case-title');
+            const caseRow = document.getElementById('nft-case-row');
+            const toolsTitle = document.getElementById('nft-tools-title');
+            const linkItem = document.getElementById('bubble-link-btn');
+
+            if (headerRow) headerRow.style.display = inEditor ? 'flex' : 'none';
+            if (dividerTop) dividerTop.style.display = inEditor ? 'block' : 'none';
+            if (caseTitle) caseTitle.style.display = inEditor ? 'block' : 'none';
+            if (caseRow) caseRow.style.display = inEditor ? 'flex' : 'none';
+            if (toolsTitle) toolsTitle.style.display = inEditor ? 'block' : 'none';
+            if (linkItem) linkItem.style.display = inEditor ? 'flex' : 'none';
 
             // Update Word and Character Count Stats
             const wordCount = text.split(/\s+/).filter(Boolean).length;
@@ -1747,18 +1765,20 @@ function initFloatingToolbar() {
                 statsEl.textContent = `${wordCount} từ • ${charCount} ký tự`;
             }
 
-            // Identify active block
-            const blockEl = container.closest('.block');
-            if (blockEl) {
-                activeBlockId = blockEl.getAttribute('data-id');
-                activeBlockElement = blockEl;
-                const blockData = appState.pages[appState.activePageId]?.blocks.find(b => b.id === activeBlockId);
-                if (blockData) {
-                    updateBlockTypeBadge(blockData.type);
+            // Identify active block if in editor
+            if (inEditor) {
+                const blockEl = container.closest('.block');
+                if (blockEl) {
+                    activeBlockId = blockEl.getAttribute('data-id');
+                    activeBlockElement = blockEl;
+                    const blockData = appState.pages[appState.activePageId]?.blocks.find(b => b.id === activeBlockId);
+                    if (blockData) {
+                        updateBlockTypeBadge(blockData.type);
+                    }
+                } else {
+                    activeBlockId = null;
+                    activeBlockElement = null;
                 }
-            } else {
-                activeBlockId = null;
-                activeBlockElement = null;
             }
 
             const rect = range.getBoundingClientRect();
@@ -1771,9 +1791,12 @@ function initFloatingToolbar() {
             const tbWidth = toolbar.offsetWidth || 320;
             const tbHeight = toolbar.offsetHeight || 260;
 
-            let top = rect.top - tbHeight - 12;
+            let top = rect.top - tbHeight - 10;
             if (top < 10) {
                 top = rect.bottom + 10;
+            }
+            if (top + tbHeight > window.innerHeight - 10) {
+                top = Math.max(10, window.innerHeight - tbHeight - 10);
             }
 
             let left = rect.left + (rect.width / 2) - (tbWidth / 2);
@@ -1784,7 +1807,7 @@ function initFloatingToolbar() {
 
             toolbar.style.top = `${top}px`;
             toolbar.style.left = `${left}px`;
-        }, 80);
+        }, 50);
     };
 
     document.addEventListener('selectionchange', checkSelection);

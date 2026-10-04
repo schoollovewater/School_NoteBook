@@ -16,7 +16,7 @@
     <!-- Icons -->
     <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
     
-    <link rel="stylesheet" href="styles.css?v=2.2">
+    <link rel="stylesheet" href="styles.css?v=2.5">
 </head>
 <body>
     <div class="app-background">
@@ -511,7 +511,7 @@
     <!-- Floating Text Selection Toolbar (Notion Style) -->
     <div class="notion-floating-toolbar" id="floating-toolbar" style="display: none;">
         <!-- Top Row: Block Type Switcher & Formatting Actions -->
-        <div class="nft-header-row">
+        <div class="nft-header-row" id="nft-header-row">
             <div class="nft-block-type-wrapper">
                 <button class="nft-block-type-btn" id="nft-block-type-btn" type="button" title="Chuyển đổi kiểu khối">
                     <i class="ri-text" id="nft-block-icon"></i>
@@ -573,7 +573,7 @@
             </div>
         </div>
 
-        <div class="nft-divider"></div>
+        <div class="nft-divider" id="nft-divider-top"></div>
 
         <!-- Action List (Word & Notion Tools: 1. Add Vocab, 2. Text Tools) -->
         <div class="nft-actions-list">
@@ -587,8 +587,8 @@
                 <span class="nft-badge">Sổ từ</span>
             </div>
 
-            <div class="nft-section-title">Đổi kiểu chữ (Word Case)</div>
-            <div class="nft-case-row">
+            <div class="nft-section-title" id="nft-case-title">Đổi kiểu chữ (Word Case)</div>
+            <div class="nft-case-row" id="nft-case-row">
                 <button class="nft-case-btn" data-case="upper" type="button" title="Chuyển thành chữ IN HOA">
                     <span>AA</span> IN HOA
                 </button>
@@ -600,7 +600,7 @@
                 </button>
             </div>
 
-            <div class="nft-section-title">Tiện ích tra cứu & Liên kết</div>
+            <div class="nft-section-title" id="nft-tools-title">Tiện ích tra cứu & Liên kết</div>
             <div class="nft-action-item" id="bubble-link-btn">
                 <div class="nft-action-icon"><i class="ri-link"></i></div>
                 <div class="nft-action-text">
@@ -685,6 +685,6 @@
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     
     <script src="firebase-config.js"></script>
-    <script src="app.js?v=2.2"></script>
+    <script src="app.js?v=2.5"></script>
 </body>
 </html>

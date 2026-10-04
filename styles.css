@@ -1815,6 +1815,8 @@ body.is-dragging {
     flex-direction: column;
     gap: 6px;
     width: 320px;
+    max-height: calc(100vh - 24px);
+    overflow-y: auto;
     box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2);
     backdrop-filter: blur(25px);
     -webkit-backdrop-filter: blur(25px);
