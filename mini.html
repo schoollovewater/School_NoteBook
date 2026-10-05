@@ -1,288 +1,1099 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi" data-theme="dark">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Mini Note</title>
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="theme-color" content="#0f172a">
-    
-    <!-- PWA Manifest & App Icons -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Mini Note — Ghi chép hỏa tốc</title>
+    <meta name="description" content="Trình ghi chú nhanh đồng bộ tức thì với School NoteBook.">
     <link rel="manifest" href="manifest-mini.json">
-    <link rel="icon" type="image/jpeg" href="icon.jpg">
-    <link rel="apple-touch-icon" href="icon.jpg">
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <meta name="theme-color" content="#0f172a">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="icon" type="image/png" href="icons/icon-192.png">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+
+    <!-- Fonts & Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
     <script src="firebase-config.js"></script>
-    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script src="shared/note-schema.js?v=3.0"></script>
+
     <style>
+        :root[data-theme="dark"] {
+            --bg-base: #0f172a;
+            --bg-surface: #1e293b;
+            --bg-elevated: #334155;
+            --border: rgba(255, 255, 255, 0.12);
+            --border-strong: rgba(255, 255, 255, 0.22);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --accent: #f59e0b;
+            --accent-hover: #d97706;
+            --primary: #3b82f6;
+            --danger: #ef4444;
+            --success: #10b981;
+        }
+        :root[data-theme="light"] {
+            --bg-base: #f1f5f9;
+            --bg-surface: #ffffff;
+            --bg-elevated: #e2e8f0;
+            --border: rgba(0, 0, 0, 0.1);
+            --border-strong: rgba(0, 0, 0, 0.2);
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+            --text-muted: #94a3b8;
+            --accent: #d97706;
+            --accent-hover: #b45309;
+            --primary: #2563eb;
+            --danger: #dc2626;
+            --success: #059669;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
         body {
-            margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-            background-color: #0f172a; color: #f8fafc;
-            height: 100vh; display: flex; overflow: hidden; /* Prevent body scroll */
-        }
-        
-        /* Layout container: left sidebar + right content */
-        .app-container {
-            flex: 1;
-            display: flex;
-            height: 100%;
-        }
-
-        /* Sidebar Tabs (Thang dọc bên trái) */
-        .sidebar {
-            width: 70px;
-            background: #1e293b;
-            border-right: 1px solid #334155;
+            background: var(--bg-base);
+            color: var(--text-primary);
+            height: 100vh;
+            height: 100dvh;
             display: flex;
             flex-direction: column;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        /* Top Header */
+        .header {
+            height: 52px;
+            padding: 0 16px;
+            padding-top: env(safe-area-inset-top, 0px);
+            background: var(--bg-surface);
+            border-bottom: 1px solid var(--border);
+            display: flex;
             align-items: center;
-            padding-top: 20px;
-            padding-bottom: 20px;
-            gap: 15px;
-            overflow-y: auto;
+            justify-content: space-between;
+            flex-shrink: 0;
+            z-index: 20;
+        }
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .brand-badge {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--accent);
+            text-decoration: none;
+        }
+        .network-status {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 12px;
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--success);
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .network-status.offline {
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--accent);
+        }
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 18px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s;
+        }
+        .btn-icon:hover {
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+        }
+        .btn-link {
+            font-size: 12px;
+            padding: 6px 12px;
+            border-radius: 8px;
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            border: 1px solid var(--border);
+            font-weight: 500;
+            transition: background 0.15s;
+        }
+        .btn-link:hover {
+            background: var(--border-strong);
         }
 
-        .tab-btn {
-            width: 44px; height: 44px;
-            border-radius: 12px;
-            background: transparent;
-            color: #64748b;
-            border: 2px solid transparent;
-            font-size: 16px; font-weight: bold;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: flex; justify-content: center; align-items: center;
-            flex-shrink: 0;
-        }
-        .tab-btn:hover { background: #334155; color: #f8fafc; }
-        .tab-btn.active {
-            background: rgba(59, 130, 246, 0.2);
-            color: #3b82f6;
-            border-color: #3b82f6;
-        }
-        
-        .add-tab-btn {
-            width: 44px; height: 44px;
-            border-radius: 12px;
-            background: transparent;
-            color: #10b981;
-            border: 2px dashed #10b981;
-            font-size: 20px;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: flex; justify-content: center; align-items: center;
-            flex-shrink: 0;
-        }
-        .add-tab-btn:hover { background: rgba(16, 185, 129, 0.1); }
-
-        /* Main Content */
-        .main-content {
+        /* App Container */
+        .app-body {
             flex: 1;
             display: flex;
-            flex-direction: column;
-            padding: 20px;
+            overflow: hidden;
             position: relative;
         }
 
-        .header {
-            margin-bottom: 20px;
+        /* Sidebar Tabs (Desktop) / Top Tabs (Mobile) */
+        .tabs-sidebar {
+            width: 64px;
+            background: var(--bg-surface);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 12px 0;
+            gap: 8px;
+            overflow-y: auto;
+            flex-shrink: 0;
         }
-        .header h1 { margin: 0; font-size: 22px; color: #3b82f6; display: flex; align-items: center; gap: 8px; }
-        .header p { margin: 5px 0 0 0; font-size: 14px; color: #94a3b8; }
+        .tab-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid transparent;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            flex-shrink: 0;
+        }
+        .tab-btn:hover {
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+        }
+        .tab-btn.active {
+            background: rgba(245, 158, 11, 0.15);
+            color: var(--accent);
+            border-color: var(--accent);
+        }
+        .tab-close-btn {
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--bg-elevated);
+            color: var(--text-muted);
+            border: 1px solid var(--border);
+            font-size: 10px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        .tab-btn:hover .tab-close-btn,
+        .tab-btn.active .tab-close-btn {
+            display: flex;
+        }
+        .tab-close-btn:hover {
+            background: var(--danger);
+            color: #fff;
+            border-color: var(--danger);
+        }
+        .tab-dirty-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--accent);
+            position: absolute;
+            bottom: 4px;
+        }
+        .tab-add-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            background: transparent;
+            color: var(--success);
+            border: 2px dashed rgba(16, 185, 129, 0.4);
+            font-size: 20px;
+            cursor: pointer;
+            transition: all 0.15s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .tab-add-btn:hover {
+            background: rgba(16, 185, 129, 0.1);
+            border-color: var(--success);
+        }
 
-        .editor {
+        /* Main Workspace */
+        .workspace {
             flex: 1;
-            background: #1e293b; border-radius: 12px; padding: 25px; border: 1px solid #334155;
-            display: flex; flex-direction: column; gap: 15px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background: var(--bg-base);
+            padding: 14px 18px;
+            gap: 10px;
+            position: relative;
         }
 
-        input, textarea {
-            width: 100%; background: transparent; border: none; color: #f8fafc;
-            font-size: 16px; outline: none; resize: none; font-family: inherit;
+        /* Note Type Selector */
+        .type-selector {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--bg-surface);
+            padding: 4px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            flex-shrink: 0;
+            width: fit-content;
         }
-        input::placeholder, textarea::placeholder { color: #64748b; }
-        
-        .title-input { font-weight: bold; font-size: 24px; border-bottom: 1px solid #334155; padding-bottom: 15px; }
-        .content-input { flex: 1; line-height: 1.6; }
-        .tags-input { font-size: 14px; color: #3b82f6; border-top: 1px dashed #334155; padding-top: 15px; }
-
-        /* Floating Action Button */
-        .fab {
-            position: absolute; bottom: 30px; right: 30px;
-            width: 65px; height: 65px; border-radius: 50%;
-            background: #3b82f6; color: white; border: none;
-            display: flex; justify-content: center; align-items: center;
-            font-size: 28px; box-shadow: 0 4px 20px rgba(59,130,246,0.5);
-            cursor: pointer; transition: transform 0.2s, background 0.2s; z-index: 100;
+        .type-btn {
+            padding: 6px 12px;
+            border-radius: 7px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: all 0.15s;
         }
-        .fab:hover { background: #60a5fa; transform: scale(1.05); }
-        .fab:active { transform: scale(0.95); background: #2563eb; }
-        .fab.loading { background: #94a3b8; pointer-events: none; }
+        .type-btn.active {
+            background: var(--accent);
+            color: #0f172a;
+            font-weight: 600;
+        }
 
+        /* Card Container */
+        .editor-card {
+            flex: 1;
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 16px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            overflow-y: auto;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        }
+
+        input, textarea, select {
+            width: 100%;
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            font-size: 15px;
+            outline: none;
+            font-family: inherit;
+        }
+        input::placeholder, textarea::placeholder {
+            color: var(--text-muted);
+        }
+
+        .title-input {
+            font-size: 20px;
+            font-weight: 700;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 10px;
+        }
+        .content-input {
+            flex: 1;
+            min-height: 140px;
+            line-height: 1.6;
+            resize: none;
+            user-select: text;
+        }
+        .tags-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border-top: 1px dashed var(--border);
+            padding-top: 10px;
+        }
+        .tags-wrapper i {
+            color: var(--accent);
+            font-size: 16px;
+        }
+        .tags-input {
+            font-size: 13px;
+            color: var(--accent);
+        }
+
+        /* Vocab Form fields */
+        .vocab-form {
+            display: none;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .vocab-field {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .vocab-field label {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .vocab-input {
+            padding: 8px 10px;
+            border-radius: 8px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            font-size: 14px;
+        }
+        .vocab-select {
+            padding: 8px 10px;
+            border-radius: 8px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        /* Bottom Bar */
+        .bottom-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-top: 4px;
+            padding-bottom: env(safe-area-inset-bottom, 0px);
+            flex-shrink: 0;
+            gap: 10px;
+        }
+        .status-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+        .actions-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn-voice {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 1px solid var(--border);
+            background: var(--bg-surface);
+            color: var(--text-secondary);
+            font-size: 18px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        .btn-voice.recording {
+            background: var(--danger);
+            color: #fff;
+            border-color: var(--danger);
+            animation: pulseRecord 1s infinite;
+        }
+        @keyframes pulseRecord {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        .btn-send {
+            padding: 10px 20px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, var(--accent), #ef4444);
+            color: #fff;
+            border: none;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 14px rgba(245, 158, 11, 0.4);
+            transition: transform 0.15s, opacity 0.15s;
+        }
+        .btn-send:hover { transform: translateY(-1px); }
+        .btn-send:active { transform: translateY(1px); }
+        .btn-send.loading { opacity: 0.6; pointer-events: none; }
+
+        /* Toast notification */
         .toast {
-            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
-            background: #10b981; color: white; padding: 12px 24px;
-            border-radius: 30px; font-size: 15px; opacity: 0; pointer-events: none;
-            transition: 0.3s; z-index: 200; font-weight: bold; box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-20px);
+            background: var(--success);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 24px;
+            font-size: 14px;
+            font-weight: 600;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            z-index: 100;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            gap: 6px;
         }
-        .toast.show { opacity: 1; transform: translateX(-50%) translateY(10px); }
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        /* --- MOBILE RESPONSIVE (≤ 640px) --- */
+        @media (max-width: 640px) {
+            .app-body {
+                flex-direction: column;
+            }
+            .tabs-sidebar {
+                width: 100%;
+                height: 48px;
+                border-right: none;
+                border-bottom: 1px solid var(--border);
+                flex-direction: row;
+                padding: 4px 12px;
+                gap: 6px;
+                overflow-x: auto;
+                overflow-y: hidden;
+            }
+            .tab-btn {
+                width: auto;
+                min-width: 44px;
+                height: 36px;
+                padding: 0 12px;
+                flex-direction: row;
+                gap: 6px;
+                font-size: 13px;
+            }
+            .tab-close-btn {
+                position: static;
+                display: flex;
+                width: 16px;
+                height: 16px;
+            }
+            .tab-add-btn {
+                width: 36px;
+                height: 36px;
+            }
+            .workspace {
+                padding: 10px;
+                gap: 8px;
+            }
+            .editor-card {
+                padding: 12px 14px;
+            }
+            .title-input {
+                font-size: 17px;
+            }
+            .content-input {
+                font-size: 14px;
+            }
+            .type-btn {
+                padding: 5px 8px;
+                font-size: 12px;
+            }
+            .btn-send {
+                padding: 8px 14px;
+                font-size: 13px;
+            }
+        }
     </style>
 </head>
 <body>
-    <div class="app-container">
-        <!-- Sidebar (Thang dọc bên trái) -->
-        <div class="sidebar" id="sidebar">
-            <!-- Render tabs here -->
+    <!-- Top Header -->
+    <header class="header">
+        <div class="header-left">
+            <a href="index.html" class="brand-badge" title="Về Sổ tay chính">
+                <i class="ri-flashlight-fill"></i>
+                <span>Mini Note</span>
+            </a>
+            <span class="network-status" id="net-status">
+                <i class="ri-wifi-line"></i> <span id="net-text">Online</span>
+            </span>
         </div>
-
-        <!-- Main Content (Khung nhập bên phải) -->
-        <div class="main-content">
-            <div class="header">
-                <h1><i class="ph ph-rocket-launch"></i> Mini Note</h1>
-                <p>Nhập liệu thần tốc - Tabs dọc bên trái</p>
-            </div>
-            
-            <div class="editor">
-                <input type="text" id="title-in" class="title-input" placeholder="Tiêu đề...">
-                <textarea id="content-in" class="content-input" placeholder="Nội dung..."></textarea>
-                <input type="text" id="tags-in" class="tags-input" placeholder="Gắn thẻ/tag (vd: work, ý tưởng)...">
-            </div>
-            
-            <!-- Nút gửi nhỏ gọn ở góc phải dưới -->
-            <button class="fab" id="send-all" title="Gửi tất cả các Tab lên Web Tổng">
-                <i class="ph ph-paper-plane-right"></i>
+        <div class="header-actions">
+            <button class="btn-icon" id="theme-toggle" title="Đổi giao diện">
+                <i class="ri-moon-line"></i>
             </button>
+            <a href="index.html" class="btn-link" title="Mở School NoteBook">
+                <i class="ri-book-2-line"></i> <span>Sổ tay</span>
+            </a>
         </div>
+    </header>
+
+    <!-- App Body -->
+    <div class="app-body">
+        <!-- Tabs Bar -->
+        <nav class="tabs-sidebar" id="tabs-bar" aria-label="Danh sách tab"></nav>
+
+        <!-- Main Workspace -->
+        <main class="workspace">
+            <!-- Note Type Selector -->
+            <div class="type-selector" id="type-selector">
+                <button class="type-btn active" data-type="note">
+                    <i class="ri-file-text-line"></i> Ghi chú
+                </button>
+                <button class="type-btn" data-type="todo">
+                    <i class="ri-checkbox-line"></i> Việc cần làm
+                </button>
+                <button class="type-btn" data-type="vocab">
+                    <i class="ri-translate-2"></i> Từ vựng
+                </button>
+            </div>
+
+            <!-- Standard Note / Todo Card -->
+            <div class="editor-card" id="note-card">
+                <input type="text" id="note-title" class="title-input" placeholder="Tiêu đề (tùy chọn)..." autocomplete="off">
+                <textarea id="note-content" class="content-input" placeholder="Nhập nội dung ghi chú... (Hỗ trợ markdown: # tiêu đề, - danh sách, [] việc cần làm)"></textarea>
+                <div class="tags-wrapper">
+                    <i class="ri-price-tag-3-line"></i>
+                    <input type="text" id="note-tags" class="tags-input" placeholder="Thẻ phân loại: work, idea, toan...">
+                </div>
+            </div>
+
+            <!-- Vocab Card -->
+            <div class="editor-card vocab-form" id="vocab-card">
+                <div class="vocab-field">
+                    <label>Từ vựng tiếng Anh *</label>
+                    <input type="text" id="vocab-word" class="vocab-input" placeholder="vd: Microcontroller, Refactor...">
+                </div>
+                <div class="vocab-field">
+                    <label>Phiên âm</label>
+                    <input type="text" id="vocab-phonetic" class="vocab-input" placeholder="vd: /ˌmaɪ.kroʊ.kənˈtroʊ.lɚ/">
+                </div>
+                <div class="vocab-field">
+                    <label>Nghĩa tiếng Việt *</label>
+                    <input type="text" id="vocab-meaning" class="vocab-input" placeholder="vd: Vi điều khiển, Tái cấu trúc mã...">
+                </div>
+                <div class="vocab-field">
+                    <label>Nhóm phân loại</label>
+                    <select id="vocab-tag" class="vocab-select">
+                        <option value="TechAdvanced">🔧 Kỹ thuật chuyên sâu</option>
+                        <option value="TechCommon" selected>💻 Kỹ thuật quen thuộc</option>
+                        <option value="TOEIC">🎯 Tiếng Anh TOEIC</option>
+                        <option value="Other">📝 Khác</option>
+                    </select>
+                </div>
+                <div class="vocab-field">
+                    <label>Câu ví dụ</label>
+                    <input type="text" id="vocab-example" class="vocab-input" placeholder="vd: Clean architecture makes refactoring safe.">
+                </div>
+            </div>
+
+            <!-- Bottom Action Bar -->
+            <div class="bottom-bar">
+                <div class="status-info">
+                    <span id="char-count">0 ký tự</span>
+                    <span id="draft-status">• Tự lưu nháp</span>
+                </div>
+                <div class="actions-right">
+                    <button class="btn-voice" id="voice-btn" title="Nhập liệu bằng giọng nói">
+                        <i class="ri-mic-line"></i>
+                    </button>
+                    <button class="btn-send" id="send-btn" title="Gửi lên Sổ tay chính (Ctrl+Enter)">
+                        <i class="ri-send-plane-fill"></i>
+                        <span>Gửi</span>
+                    </button>
+                </div>
+            </div>
+        </main>
     </div>
-    
-    <div id="toast" class="toast">✅ Đã gửi!</div>
+
+    <!-- Toast -->
+    <div id="toast" class="toast">
+        <i class="ri-checkbox-circle-fill"></i> <span id="toast-msg">Đã gửi vào Sổ tay!</span>
+    </div>
 
     <script>
-        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-        const db = firebase.firestore();
-        db.enablePersistence().catch(err => console.warn(err));
+        // --- FIREBASE INIT ---
+        let db = null;
+        if (typeof window.USE_FIREBASE !== 'undefined' && window.USE_FIREBASE && window.firebaseConfig) {
+            try {
+                if (!firebase.apps.length) firebase.initializeApp(window.firebaseConfig);
+                db = firebase.firestore();
+                db.enablePersistence().catch(err => console.warn('Offline persistence:', err));
+            } catch (e) { console.warn('Firebase init error:', e); }
+        }
 
-        // State quản lý các tab
-        let notes = [{ id: 1, title: '', content: '', tags: '' }];
-        let activeTabId = 1;
-        let nextId = 2;
+        // --- THEME ---
+        const themeToggle = document.getElementById('theme-toggle');
+        let currentTheme = localStorage.getItem('theme') || 'dark';
+        function applyTheme(th) {
+            currentTheme = th;
+            document.documentElement.setAttribute('data-theme', th);
+            themeToggle.innerHTML = th === 'dark' ? '<i class="ri-moon-line"></i>' : '<i class="ri-sun-line"></i>';
+            localStorage.setItem('theme', th);
+        }
+        applyTheme(currentTheme);
+        themeToggle.onclick = () => applyTheme(currentTheme === 'dark' ? 'light' : 'dark');
 
-        const sidebar = document.getElementById('sidebar');
-        const titleIn = document.getElementById('title-in');
-        const contentIn = document.getElementById('content-in');
-        const tagsIn = document.getElementById('tags-in');
-        const sendBtn = document.getElementById('send-all');
-        const toast = document.getElementById('toast');
+        // --- NETWORK STATUS ---
+        const netStatus = document.getElementById('net-status');
+        const netText = document.getElementById('net-text');
+        function updateNet() {
+            const on = navigator.onLine;
+            netStatus.className = 'network-status' + (on ? '' : ' offline');
+            netStatus.innerHTML = on ? '<i class="ri-wifi-line"></i> <span>Online</span>' : '<i class="ri-wifi-off-line"></i> <span>Offline (Lưu tạm)</span>';
+        }
+        window.addEventListener('online', updateNet);
+        window.addEventListener('offline', updateNet);
+        updateNet();
 
-        // Lấy dữ liệu từ ô nhập lưu vào biến JS ngầm
-        function saveCurrentInput() {
-            const note = notes.find(n => n.id === activeTabId);
-            if (note) {
-                note.title = titleIn.value;
-                note.content = contentIn.value;
-                note.tags = tagsIn.value;
+        // --- STATE & DRAFTS ---
+        const DRAFT_KEY = NoteSchema.STORAGE_KEYS.miniDrafts;
+        let tabs = [];
+        let activeTabId = null;
+
+        function loadDrafts() {
+            try {
+                const stored = JSON.parse(localStorage.getItem(DRAFT_KEY) || '[]');
+                if (Array.isArray(stored) && stored.length > 0) {
+                    tabs = stored;
+                }
+            } catch (e) { console.warn('Load drafts error:', e); }
+
+            if (!tabs.length) {
+                tabs = [createDefaultTab(1)];
             }
+            activeTabId = tabs[0].id;
         }
 
-        titleIn.addEventListener('input', saveCurrentInput);
-        contentIn.addEventListener('input', saveCurrentInput);
-        tagsIn.addEventListener('input', saveCurrentInput);
-
-        // Vẽ lại thang dọc bên trái
-        function renderTabs() {
-            sidebar.innerHTML = '';
-            notes.forEach((note, index) => {
-                const btn = document.createElement('button');
-                btn.className = 'tab-btn' + (note.id === activeTabId ? ' active' : '');
-                btn.innerText = index + 1; // Hiển thị số 1, 2, 3...
-                btn.onclick = () => switchTab(note.id);
-                sidebar.appendChild(btn);
-            });
-
-            // Nút thêm tab
-            const addBtn = document.createElement('button');
-            addBtn.className = 'add-tab-btn';
-            addBtn.innerHTML = '<i class="ph ph-plus"></i>';
-            addBtn.onclick = () => {
-                const newId = nextId++;
-                notes.push({ id: newId, title: '', content: '', tags: '' });
-                switchTab(newId);
-                // Cuộn xuống tab mới nhất
-                sidebar.scrollTo({ top: sidebar.scrollHeight, behavior: 'smooth' });
+        function createDefaultTab(num) {
+            return {
+                id: NoteSchema.generateId(),
+                label: 'Tab ' + num,
+                type: 'note', // 'note' | 'todo' | 'vocab'
+                title: '',
+                content: '',
+                tags: '',
+                vocab: { word: '', phonetic: '', meaning: '', tag: 'TechCommon', example: '' }
             };
-            sidebar.appendChild(addBtn);
         }
 
-        // Đổi tab
-        function switchTab(id) {
-            saveCurrentInput();
-            activeTabId = id;
-            
-            const note = notes.find(n => n.id === activeTabId);
-            if (note) {
-                titleIn.value = note.title;
-                contentIn.value = note.content;
-                tagsIn.value = note.tags;
+        function saveDrafts() {
+            syncCurrentToState();
+            localStorage.setItem(DRAFT_KEY, JSON.stringify(tabs));
+            const statusEl = document.getElementById('draft-status');
+            if (statusEl) {
+                const time = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+                statusEl.textContent = `• Đã lưu nháp (${time})`;
             }
             renderTabs();
-            contentIn.focus();
         }
 
-        // Khởi tạo ban đầu
-        renderTabs();
+        // --- DOM ELEMENTS ---
+        const tabsBar = document.getElementById('tabs-bar');
+        const typeSelector = document.getElementById('type-selector');
+        const noteCard = document.getElementById('note-card');
+        const vocabCard = document.getElementById('vocab-card');
+        const titleIn = document.getElementById('note-title');
+        const contentIn = document.getElementById('note-content');
+        const tagsIn = document.getElementById('note-tags');
+        const charCount = document.getElementById('char-count');
+        const sendBtn = document.getElementById('send-btn');
+        const voiceBtn = document.getElementById('voice-btn');
+        const toastEl = document.getElementById('toast');
+        const toastMsg = document.getElementById('toast-msg');
 
-        // Gửi toàn bộ dữ liệu
-        sendBtn.addEventListener('click', async () => {
-            saveCurrentInput(); // Lưu note đang viết dở
-            
-            let promises = [];
-            let sentCount = 0;
+        // Vocab inputs
+        const vWord = document.getElementById('vocab-word');
+        const vPhonetic = document.getElementById('vocab-phonetic');
+        const vMeaning = document.getElementById('vocab-meaning');
+        const vTag = document.getElementById('vocab-tag');
+        const vExample = document.getElementById('vocab-example');
 
-            notes.forEach((note, index) => {
-                const t = note.title.trim();
-                const c = note.content.trim();
-                const tags = note.tags.trim();
+        function getActiveTab() {
+            return tabs.find(t => t.id === activeTabId) || tabs[0];
+        }
 
-                if (c) {
-                    promises.push(db.collection('notes').add({
-                        title: t || '📱 Ghi chú Mini (Tab ' + (index + 1) + ')',
-                        content: c,
-                        tldr: c.length > 40 ? c.substring(0, 40) + '...' : c,
-                        tags: tags,
-                        date: new Date().toISOString()
-                    }));
-                    sentCount++;
-                }
+        function syncCurrentToState() {
+            const tab = getActiveTab();
+            if (!tab) return;
+            if (tab.type === 'vocab') {
+                tab.vocab = {
+                    word: vWord.value,
+                    phonetic: vPhonetic.value,
+                    meaning: vMeaning.value,
+                    tag: vTag.value,
+                    example: vExample.value
+                };
+            } else {
+                tab.title = titleIn.value;
+                tab.content = contentIn.value;
+                tab.tags = tagsIn.value;
+            }
+        }
+
+        function syncStateToUI() {
+            const tab = getActiveTab();
+            if (!tab) return;
+
+            // Set type button
+            typeSelector.querySelectorAll('.type-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.type === tab.type);
             });
 
-            if (promises.length === 0) {
-                alert("Chưa có tab nào có nội dung để gửi!");
+            if (tab.type === 'vocab') {
+                noteCard.style.display = 'none';
+                vocabCard.style.display = 'flex';
+                vWord.value = tab.vocab?.word || '';
+                vPhonetic.value = tab.vocab?.phonetic || '';
+                vMeaning.value = tab.vocab?.meaning || '';
+                vTag.value = tab.vocab?.tag || 'TechCommon';
+                vExample.value = tab.vocab?.example || '';
+                updateCharCount(tab.vocab?.word || '');
+            } else {
+                noteCard.style.display = 'flex';
+                vocabCard.style.display = 'none';
+                titleIn.value = tab.title || '';
+                contentIn.value = tab.content || '';
+                tagsIn.value = tab.tags || '';
+                contentIn.placeholder = tab.type === 'todo'
+                    ? 'Nhập các đầu việc cần làm (mỗi dòng 1 việc)...'
+                    : 'Nhập nội dung ghi chú... (Hỗ trợ markdown: # tiêu đề, - danh sách, [] việc)';
+                updateCharCount(tab.content || '');
+            }
+        }
+
+        function updateCharCount(text) {
+            const chars = (text || '').length;
+            const words = (text || '').trim().split(/\s+/).filter(Boolean).length;
+            charCount.textContent = `${words} từ · ${chars} ký tự`;
+        }
+
+        function renderTabs() {
+            tabsBar.innerHTML = '';
+            tabs.forEach((tab, index) => {
+                const btn = document.createElement('button');
+                btn.className = 'tab-btn' + (tab.id === activeTabId ? ' active' : '');
+                const hasData = (tab.title || tab.content || tab.vocab?.word);
+                btn.innerHTML = `
+                    <span>${index + 1}</span>
+                    ${hasData ? '<span class="tab-dirty-dot"></span>' : ''}
+                    <span class="tab-close-btn" title="Đóng tab" onclick="event.stopPropagation(); closeTab('${tab.id}')">✕</span>
+                `;
+                btn.onclick = () => switchTab(tab.id);
+                tabsBar.appendChild(btn);
+            });
+
+            // Add tab button
+            const addBtn = document.createElement('button');
+            addBtn.className = 'tab-add-btn';
+            addBtn.innerHTML = '<i class="ri-add-line"></i>';
+            addBtn.title = 'Thêm tab mới (Alt+N)';
+            addBtn.onclick = addTab;
+            tabsBar.appendChild(addBtn);
+        }
+
+        function switchTab(id) {
+            syncCurrentToState();
+            activeTabId = id;
+            renderTabs();
+            syncStateToUI();
+            const tab = getActiveTab();
+            if (tab.type === 'vocab') vWord.focus();
+            else contentIn.focus();
+        }
+
+        function addTab() {
+            syncCurrentToState();
+            const newTab = createDefaultTab(tabs.length + 1);
+            tabs.push(newTab);
+            switchTab(newTab.id);
+            saveDrafts();
+        }
+
+        function closeTab(id) {
+            if (tabs.length === 1) {
+                // Reset tab duy nhất
+                tabs = [createDefaultTab(1)];
+                switchTab(tabs[0].id);
+                saveDrafts();
+                return;
+            }
+            const target = tabs.find(t => t.id === id);
+            const hasData = target && (target.title || target.content || target.vocab?.word);
+            if (hasData && !confirm('Tab này đang có nội dung chưa gửi. Bạn có chắc muốn đóng?')) {
+                return;
+            }
+            const idx = tabs.findIndex(t => t.id === id);
+            tabs = tabs.filter(t => t.id !== id);
+            if (activeTabId === id) {
+                const next = tabs[Math.max(0, idx - 1)];
+                activeTabId = next.id;
+            }
+            renderTabs();
+            syncStateToUI();
+            saveDrafts();
+        }
+
+        // --- TYPE SWITCHING ---
+        typeSelector.addEventListener('click', (e) => {
+            const btn = e.target.closest('.type-btn');
+            if (!btn) return;
+            syncCurrentToState();
+            const tab = getActiveTab();
+            tab.type = btn.dataset.type;
+            syncStateToUI();
+            saveDrafts();
+        });
+
+        // --- INPUT LISTENERS (AUTO-SAVE) ---
+        let draftTimer;
+        function onInput() {
+            syncCurrentToState();
+            const tab = getActiveTab();
+            updateCharCount(tab.type === 'vocab' ? tab.vocab?.word : tab.content);
+            clearTimeout(draftTimer);
+            draftTimer = setTimeout(saveDrafts, 400);
+        }
+        [titleIn, contentIn, tagsIn, vWord, vPhonetic, vMeaning, vTag, vExample].forEach(el => {
+            el.addEventListener('input', onInput);
+        });
+
+        // --- SEND LOGIC ---
+        async function sendAllTabs() {
+            syncCurrentToState();
+
+            // Lọc các tab có nội dung
+            const validTabs = tabs.filter(t => {
+                if (t.type === 'vocab') return !!(t.vocab && t.vocab.word.trim() && t.vocab.meaning.trim());
+                return !!(t.content && t.content.trim());
+            });
+
+            if (!validTabs.length) {
+                alert('Chưa có tab nào có nội dung hợp lệ để gửi!');
                 return;
             }
 
             sendBtn.classList.add('loading');
-            sendBtn.innerHTML = '<i class="ph ph-hourglass-high"></i>';
+            sendBtn.innerHTML = '<i class="ri-loader-4-line ri-spin"></i> <span>Đang gửi...</span>';
 
+            let sentPages = 0;
+            let sentVocab = 0;
+            const cloudPromises = [];
+
+            // 1. Lưu trực tiếp vào LocalStorage của School NoteBook
             try {
-                await Promise.all(promises);
-                
-                // Xóa dữ liệu, reset về 1 tab duy nhất
-                notes = [{ id: 1, title: '', content: '', tags: '' }];
-                nextId = 2;
-                switchTab(1);
-                
-                toast.innerText = `✅ Đã gửi ${sentCount} ghi chú lên Web Tổng!`;
-                toast.classList.add('show');
-                setTimeout(() => toast.classList.remove('show'), 2500);
+                const existingPages = JSON.parse(localStorage.getItem(NoteSchema.STORAGE_KEYS.pages) || '{}');
+                const existingVocab = JSON.parse(localStorage.getItem(NoteSchema.STORAGE_KEYS.vocab) || '[]');
+
+                validTabs.forEach((tab, i) => {
+                    if (tab.type === 'vocab') {
+                        const item = NoteSchema.makeVocabItem(tab.vocab);
+                        existingVocab.unshift(item);
+                        sentVocab++;
+
+                        // Gửi lên Firestore nếu có
+                        if (db) {
+                            cloudPromises.push(db.collection('vocab_inbox').doc(item.id).set(item));
+                        }
+                    } else {
+                        const page = NoteSchema.makePage({
+                            title: tab.title.trim() || `📱 Ghi chú nhanh (Tab ${i + 1})`,
+                            content: tab.content.trim(),
+                            tags: tab.tags.trim(),
+                            forceType: tab.type === 'todo' ? 'todo' : undefined,
+                            source: 'mini',
+                            inbox: true
+                        });
+                        existingPages[page.id] = page;
+                        sentPages++;
+
+                        // Gửi lên Firestore nếu có
+                        if (db) {
+                            cloudPromises.push(db.collection('notes').doc(page.id).set({
+                                id: page.id,
+                                title: page.title,
+                                icon: page.icon,
+                                cover: null,
+                                blocks: page.blocks,
+                                tags: page.tags,
+                                source: 'mini',
+                                inbox: true,
+                                createdAt: page.createdAt,
+                                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                            }));
+                        }
+                    }
+                });
+
+                localStorage.setItem(NoteSchema.STORAGE_KEYS.pages, JSON.stringify(existingPages));
+                localStorage.setItem(NoteSchema.STORAGE_KEYS.vocab, JSON.stringify(existingVocab));
+
+                // 2. Phát BroadcastChannel để tab Sổ tay đang mở nhận ngay
+                if ('BroadcastChannel' in window) {
+                    const ch = new BroadcastChannel(NoteSchema.CHANNEL);
+                    if (sentPages) ch.postMessage({ type: 'pages-updated', count: sentPages });
+                    if (sentVocab) ch.postMessage({ type: 'vocab-updated', count: sentVocab });
+                }
+
+                // 3. Đợi cloud lưu nếu online
+                if (cloudPromises.length) {
+                    await Promise.all(cloudPromises).catch(err => console.warn('Cloud sync error (saved locally):', err));
+                }
+
+                // 4. Xóa nháp, reset về 1 tab trống
+                tabs = [createDefaultTab(1)];
+                activeTabId = tabs[0].id;
+                localStorage.removeItem(DRAFT_KEY);
+                renderTabs();
+                syncStateToUI();
+
+                const msg = [];
+                if (sentPages) msg.push(`${sentPages} ghi chú`);
+                if (sentVocab) msg.push(`${sentVocab} từ vựng`);
+                showToast(`✅ Đã gửi ${msg.join(', ')} vào Inbox!`);
+
             } catch (err) {
                 alert('Lỗi: ' + err.message);
             } finally {
                 sendBtn.classList.remove('loading');
-                sendBtn.innerHTML = '<i class="ph ph-paper-plane-right"></i>';
+                sendBtn.innerHTML = '<i class="ri-send-plane-fill"></i> <span>Gửi</span>';
+            }
+        }
+
+        sendBtn.addEventListener('click', sendAllTabs);
+
+        function showToast(msg) {
+            toastMsg.textContent = msg;
+            toastEl.classList.add('show');
+            setTimeout(() => toastEl.classList.remove('show'), 2600);
+        }
+
+        // --- KEYBOARD SHORTCUTS ---
+        document.addEventListener('keydown', (e) => {
+            // Ctrl + Enter: Gửi ngay
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault();
+                sendAllTabs();
+            }
+            // Alt + N: Thêm tab mới
+            if (e.altKey && e.key.toLowerCase() === 'n') {
+                e.preventDefault();
+                addTab();
+            }
+            // Alt + W: Đóng tab hiện tại
+            if (e.altKey && e.key.toLowerCase() === 'w') {
+                e.preventDefault();
+                closeTab(activeTabId);
+            }
+            // Alt + 1..9: Nhảy đến tab
+            if (e.altKey && !isNaN(e.key) && Number(e.key) >= 1 && Number(e.key) <= tabs.length) {
+                e.preventDefault();
+                switchTab(tabs[Number(e.key) - 1].id);
             }
         });
+
+        // --- VOICE RECOGNITION (WEB SPEECH API) ---
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (SpeechRecognition) {
+            const recognition = new SpeechRecognition();
+            recognition.lang = 'vi-VN';
+            recognition.continuous = false;
+            recognition.interimResults = false;
+
+            let isRecording = false;
+
+            voiceBtn.onclick = () => {
+                if (isRecording) {
+                    recognition.stop();
+                    return;
+                }
+                try {
+                    recognition.start();
+                    voiceBtn.classList.add('recording');
+                    isRecording = true;
+                } catch (e) { console.warn(e); }
+            };
+
+            recognition.onresult = (e) => {
+                const transcript = e.results[0][0].transcript;
+                const tab = getActiveTab();
+                if (tab.type === 'vocab') {
+                    if (!vWord.value) vWord.value = transcript;
+                    else vMeaning.value = (vMeaning.value ? vMeaning.value + ' ' : '') + transcript;
+                } else {
+                    contentIn.value = (contentIn.value ? contentIn.value + '\n' : '') + transcript;
+                }
+                onInput();
+            };
+
+            recognition.onend = () => {
+                voiceBtn.classList.remove('recording');
+                isRecording = false;
+            };
+
+            recognition.onerror = () => {
+                voiceBtn.classList.remove('recording');
+                isRecording = false;
+            };
+        } else {
+            voiceBtn.style.display = 'none';
+        }
+
+        // --- SHARE TARGET PARAMS ---
+        // Khi nhận share từ Android/Chrome (title, text, url)
+        window.addEventListener('DOMContentLoaded', () => {
+            loadDrafts();
+            renderTabs();
+            syncStateToUI();
+
+            const params = new URLSearchParams(location.search);
+            const shareTitle = params.get('title') || '';
+            const shareText = params.get('text') || '';
+            const shareUrl = params.get('url') || '';
+            if (shareTitle || shareText || shareUrl) {
+                const cur = getActiveTab();
+                cur.title = shareTitle;
+                cur.content = [shareText, shareUrl].filter(Boolean).join('\n\n');
+                syncStateToUI();
+                saveDrafts();
+                showToast('📥 Đã nhận nội dung chia sẻ');
+            }
+        });
+
+        // --- PWA: SERVICE WORKER REGISTRATION ---
+        if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+            navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW error:', err));
+        }
     </script>
 </body>
 </html>

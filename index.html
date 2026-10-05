@@ -2,13 +2,18 @@
 <html lang="vi" data-theme="dark">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>School NoteBook</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>School NoteBook — Sổ tay học tập & Flashcard</title>
+    <meta name="description" content="Sổ tay ghi chép học tập kiểu Notion kèm Kho từ vựng và Flashcard 3D, chạy offline và đồng bộ với Mini Note.">
     
     <!-- PWA Manifest & App Icons -->
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0f172a">
-    <link rel="apple-touch-icon" href="icon.jpg">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="icon" type="image/png" href="icons/icon-192.png">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
     
     <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Merriweather:ital,wght@0,300;0,400;0,700;1,300&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
@@ -16,7 +21,7 @@
     <!-- Icons -->
     <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
     
-    <link rel="stylesheet" href="styles.css?v=2.6">
+    <link rel="stylesheet" href="styles.css?v=3.0">
 </head>
 <body>
     <div class="app-background">
@@ -24,6 +29,8 @@
         <div class="bokeh bokeh-2"></div>
         <div class="bokeh bokeh-3"></div>
     </div>
+
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
 
     <div class="app-container glass-panel">
         <!-- Sidebar -->
@@ -51,6 +58,17 @@
                 <button class="sidebar-btn" id="new-page-btn">
                     <i class="ri-add-circle-line"></i> New page
                 </button>
+                <button class="sidebar-btn sidebar-btn-mini" id="open-mini-btn" onclick="app.openMiniNote()">
+                    <i class="ri-flashlight-line"></i> Ghi nhanh (Mini Note)
+                </button>
+            </div>
+
+            <div class="sidebar-section sidebar-section-inbox" id="inbox-section" style="display: none;">
+                <div class="section-title">
+                    <span>📥 INBOX</span>
+                    <span class="inbox-count" id="inbox-count">0</span>
+                </div>
+                <ul class="page-tree" id="inbox-list"></ul>
             </div>
 
             <div class="sidebar-section">
@@ -68,7 +86,7 @@
                     <span>TOOLS</span>
                 </div>
                 <ul class="page-tree">
-                    <li class="page-item" onclick="app.showVocab()">
+                    <li class="page-item" onclick="app.showVocab(); closeMobileSidebar();">
                         <div class="page-item-content">
                             <span class="page-icon">📚</span>
                             <span class="page-title">Kho từ vựng</span>
@@ -101,6 +119,9 @@
                 </div>
                 <div class="topbar-right">
                     <span class="save-status text-muted" id="save-status">Saved</span>
+                    <button class="icon-btn topbar-mini-btn" id="topbar-mini-btn" title="Ghi nhanh (Mini Note)" onclick="app.openMiniNote()">
+                        <i class="ri-flashlight-line"></i>
+                    </button>
                     <button class="icon-btn" id="theme-toggle" title="Toggle theme">
                         <i class="ri-moon-line"></i>
                     </button>
@@ -131,6 +152,13 @@
                         </div>
 
                         <input type="text" class="page-title-input" id="page-title" placeholder="Untitled" autocomplete="off">
+
+                        <div class="inbox-banner" id="inbox-banner" style="display: none;">
+                            <span class="inbox-banner-text">📥 Ghi chú này đang nằm trong Inbox</span>
+                            <button class="inbox-banner-btn" id="move-to-notebook-btn" onclick="app.moveToNotebook()">
+                                <i class="ri-inbox-unarchive-line"></i> Chuyển vào sổ
+                            </button>
+                        </div>
                     </div>
 
                     <div class="block-editor" id="block-editor">
@@ -754,14 +782,35 @@
     <!-- Toast Notification Container -->
     <div id="toast-container" class="toast-container"></div>
 
+    <!-- Mobile Bottom Navigation -->
+    <nav class="mobile-bottom-nav" id="mobile-bottom-nav" aria-label="Điều hướng di động">
+        <button class="mbn-item" id="mbn-pages" onclick="app.showPages()">
+            <i class="ri-file-list-3-line"></i><span>Trang</span>
+            <em class="mbn-badge" id="mobile-inbox-badge" style="display:none;">0</em>
+        </button>
+        <button class="mbn-item" id="mbn-search" onclick="openSearchModal()">
+            <i class="ri-search-line"></i><span>Tìm</span>
+        </button>
+        <button class="mbn-item mbn-primary" id="mbn-mini" onclick="app.openMiniNote()" aria-label="Ghi nhanh">
+            <i class="ri-flashlight-fill"></i>
+        </button>
+        <button class="mbn-item" id="mbn-new" onclick="app.createNewPage()">
+            <i class="ri-add-box-line"></i><span>Mới</span>
+        </button>
+        <button class="mbn-item" id="mbn-vocab" onclick="app.showVocab()">
+            <i class="ri-book-open-line"></i><span>Từ vựng</span>
+        </button>
+    </nav>
+
     <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
     
-    <!-- SortableJS for Drag and Drop -->
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <!-- SortableJS for Drag and Drop (pinned version) -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
     
     <script src="firebase-config.js"></script>
-    <script src="app.js?v=2.6"></script>
+    <script src="shared/note-schema.js?v=3.0"></script>
+    <script src="app.js?v=3.0"></script>
 </body>
 </html>

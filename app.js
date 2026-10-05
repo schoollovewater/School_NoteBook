@@ -255,26 +255,160 @@ function loadPages() {
         document.querySelector('.workspace-name').textContent = workspaceName;
     }
     
-    // Pull from cloud if enabled
-    if (db) {
-        db.collection('notes').get().then(snapshot => {
-            let hasChanges = false;
-            snapshot.forEach(doc => {
-                const data = doc.data();
-                if (data.blocks) {
-                    appState.pages[data.id] = data;
-                    hasChanges = true;
+    // Realtime sync from cloud + cross-tab sync (Mini Note on same device)
+    startCloudSync();
+    startLocalSync();
+}
+
+// --- REALTIME SYNC ---
+// Nhận ghi chú từ Firestore theo thời gian thực. Ghi chú định dạng cũ ({title, content})
+// do Mini Note / CLI cũ gửi lên sẽ được chuyển sang blocks và ghi đè lại lên Cloud.
+function isEditingActivePage() {
+    const ae = document.activeElement;
+    return !!ae && (ae === elements.pageTitleInput || elements.blockEditor.contains(ae));
+}
+
+function startCloudSync() {
+    if (!db) return;
+    db.collection('notes').onSnapshot(snapshot => {
+        let sidebarDirty = false;
+        let activeDirty = false;
+        let newInbox = 0;
+
+        snapshot.docChanges().forEach(change => {
+            const doc = change.doc;
+            if (doc.metadata.hasPendingWrites) return; // echo of our own local write
+
+            if (change.type === 'removed') {
+                if (appState.pages[doc.id]) {
+                    delete appState.pages[doc.id];
+                    sidebarDirty = true;
+                    if (doc.id === appState.activePageId) activeDirty = true;
                 }
-            });
-            if (hasChanges) {
-                localStorage.setItem('schooldb_pages', JSON.stringify(appState.pages));
-                renderSidebar();
-                if (appState.activePageId && appState.pages[appState.activePageId]) {
-                    openPage(appState.activePageId);
-                }
+                return;
             }
-        }).catch(err => console.error("Error loading from Firebase:", err));
+
+            const result = NoteSchema.normalizeRemoteNote(doc.id, doc.data());
+            if (!result) return;
+            const page = result.page;
+            const existed = !!appState.pages[page.id];
+
+            if (result.migrated) {
+                db.collection('notes').doc(doc.id).set(pageToCloud(page))
+                    .catch(err => console.warn('Migration write failed:', err));
+            }
+
+            // Không ghi đè trang đang được gõ dở
+            if (page.id === appState.activePageId && isEditingActivePage()) return;
+
+            appState.pages[page.id] = Object.assign({}, appState.pages[page.id] || {}, page);
+            sidebarDirty = true;
+            if (page.id === appState.activePageId) activeDirty = true;
+            if (!existed && page.inbox && change.type === 'added' && cloudSyncReady) newInbox++;
+        });
+
+        if (sidebarDirty) {
+            localStorage.setItem('schooldb_pages', JSON.stringify(appState.pages));
+            renderSidebar();
+        }
+        if (activeDirty) {
+            if (appState.pages[appState.activePageId]) openPage(appState.activePageId);
+            else openFirstPageOrCreate();
+        }
+        if (newInbox > 0) showToast(`📥 ${newInbox} ghi chú mới từ Mini Note`);
+        cloudSyncReady = true;
+    }, err => {
+        console.error('Firebase realtime error:', err);
+        elements.saveStatus.textContent = 'Cloud Error';
+    });
+
+    // Từ vựng gửi từ Mini Note ở thiết bị khác
+    db.collection('vocab_inbox').onSnapshot(snapshot => {
+        let added = 0;
+        snapshot.docChanges().forEach(change => {
+            if (change.type !== 'added' || change.doc.metadata.hasPendingWrites) return;
+            const data = change.doc.data();
+            if (data && data.word && !vocab.items.some(i => i.id === data.id)) {
+                vocab.items.unshift(Object.assign(NoteSchema.makeVocabItem(data), data.id ? { id: data.id } : {}));
+                added++;
+            }
+            change.doc.ref.delete().catch(() => {});
+        });
+        if (added) {
+            vocab.save();
+            vocab.renderGrid();
+            vocab.initDeck();
+            showToast(`📚 Đã nhận ${added} từ vựng mới từ Mini Note`);
+        }
+    }, err => console.warn('vocab_inbox sync error:', err));
+}
+let cloudSyncReady = false;
+
+// Mini Note mở cùng trình duyệt ghi thẳng vào localStorage → cập nhật ngay, kể cả khi offline
+function startLocalSync() {
+    const reloadPagesFromStorage = () => {
+        try {
+            const stored = JSON.parse(localStorage.getItem('schooldb_pages') || '{}');
+            const activeId = appState.activePageId;
+            const editing = isEditingActivePage();
+            const activeCopy = appState.pages[activeId];
+            appState.pages = stored;
+            if (editing && activeCopy) appState.pages[activeId] = activeCopy;
+            renderSidebar();
+            if (!editing) {
+                if (appState.pages[activeId]) openPage(activeId);
+                else openFirstPageOrCreate();
+            }
+        } catch (e) { console.warn('Local sync failed:', e); }
+    };
+    const reloadVocab = () => {
+        vocab.initVocab();
+    };
+
+    window.addEventListener('storage', (e) => {
+        if (e.key === 'schooldb_pages') reloadPagesFromStorage();
+        if (e.key === 'schooldb_vocab_items') reloadVocab();
+        if (e.key === 'theme' && e.newValue) {
+            appState.theme = e.newValue;
+            applyTheme(appState.theme);
+        }
+    });
+
+    if ('BroadcastChannel' in window) {
+        const ch = new BroadcastChannel(NoteSchema.CHANNEL);
+        ch.onmessage = (e) => {
+            if (!e.data) return;
+            if (e.data.type === 'pages-updated') {
+                reloadPagesFromStorage();
+                if (e.data.count) showToast(`📥 ${e.data.count} ghi chú mới từ Mini Note`);
+            }
+            if (e.data.type === 'vocab-updated') {
+                reloadVocab();
+                if (e.data.count) showToast(`📚 Đã thêm ${e.data.count} từ vựng từ Mini Note`);
+            }
+        };
     }
+}
+
+function openFirstPageOrCreate() {
+    const firstId = Object.keys(appState.pages)[0];
+    if (firstId) openPage(firstId);
+    else createNewPage();
+}
+
+function pageToCloud(pageData) {
+    return {
+        id: pageData.id,
+        title: pageData.title || '',
+        icon: pageData.icon || '📄',
+        cover: pageData.cover || null,
+        blocks: pageData.blocks || [],
+        tags: pageData.tags || [],
+        source: pageData.source || 'app',
+        inbox: !!pageData.inbox,
+        createdAt: pageData.createdAt || new Date().toISOString(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
 }
 
 let saveTimeout;
@@ -310,14 +444,7 @@ function saveToStorage() {
             // Sync active page
             if (appState.activePageId && appState.pages[appState.activePageId]) {
                 const pageData = appState.pages[appState.activePageId];
-                db.collection('notes').doc(appState.activePageId).set({
-                    id: pageData.id,
-                    title: pageData.title,
-                    icon: pageData.icon || '📄',
-                    cover: pageData.cover || null,
-                    blocks: pageData.blocks,
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                }, { merge: true })
+                db.collection('notes').doc(appState.activePageId).set(pageToCloud(pageData), { merge: true })
                 .then(() => {
                     elements.saveStatus.textContent = 'Saved to Cloud';
                 })
@@ -352,18 +479,38 @@ function showToast(msg) {
 // --- UI UPDATES ---
 function renderSidebar() {
     elements.pageList.innerHTML = '';
-    Object.values(appState.pages).forEach(page => {
+    const inboxList = document.getElementById('inbox-list');
+    const inboxSection = document.getElementById('inbox-section');
+    const inboxCount = document.getElementById('inbox-count');
+    if (inboxList) inboxList.innerHTML = '';
+
+    const pages = Object.values(appState.pages);
+    const inboxPages = pages
+        .filter(p => p.inbox)
+        .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+
+    const makeItem = (page) => {
         const li = document.createElement('li');
         li.className = `page-item ${page.id === appState.activePageId ? 'active' : ''}`;
         li.innerHTML = `
             <div class="page-item-content">
-                <span class="page-icon">${page.icon || '📄'}</span>
-                <span class="page-title">${page.title || 'Untitled'}</span>
+                <span class="page-icon">${escapeHtml(page.icon || '📄')}</span>
+                <span class="page-title">${escapeHtml(page.title || 'Untitled')}</span>
             </div>
         `;
-        li.onclick = () => openPage(page.id);
-        elements.pageList.appendChild(li);
-    });
+        li.onclick = () => { openPage(page.id); closeMobileSidebar(); };
+        return li;
+    };
+
+    pages.filter(p => !p.inbox || !inboxList).forEach(page => elements.pageList.appendChild(makeItem(page)));
+    if (inboxList) inboxPages.forEach(page => inboxList.appendChild(makeItem(page)));
+    if (inboxSection) inboxSection.style.display = inboxPages.length ? '' : 'none';
+    if (inboxCount) inboxCount.textContent = inboxPages.length;
+    const navBadge = document.getElementById('mobile-inbox-badge');
+    if (navBadge) {
+        navBadge.textContent = inboxPages.length;
+        navBadge.style.display = inboxPages.length ? '' : 'none';
+    }
 }
 
 function updatePageTitle(title) {
@@ -434,6 +581,18 @@ function openPage(id) {
     document.querySelector('.page-content').classList.toggle('full-width', isFull);
 
     updatePageTitle(page.title);
+
+    // Inbox banner (ghi chú từ Mini Note / CLI / chia sẻ)
+    const banner = document.getElementById('inbox-banner');
+    if (banner) {
+        banner.style.display = page.inbox ? 'flex' : 'none';
+        const srcLabel = { mini: 'Mini Note', cli: 'CLI', share: 'chia sẻ' }[page.source] || 'ghi nhanh';
+        const label = banner.querySelector('.inbox-banner-text');
+        if (label) {
+            const tags = (page.tags || []).map(t => `<span class="inbox-tag">#${escapeHtml(t)}</span>`).join(' ');
+            label.innerHTML = `📥 Ghi chú từ <b>${srcLabel}</b> đang nằm trong Inbox ${tags}`;
+        }
+    }
     
     renderBlocks(page.blocks);
     
@@ -1148,6 +1307,31 @@ const app = {
             else createNewPage();
         }
         document.getElementById('more-popover').style.display = 'none';
+    },
+    // Chuyển ghi chú từ Inbox vào sổ tay chính
+    moveToNotebook: () => {
+        const page = appState.pages[appState.activePageId];
+        if (!page) return;
+        page.inbox = false;
+        if (!page.icon || page.icon === '⚡') page.icon = '📄';
+        saveToStorage();
+        renderSidebar();
+        openPage(page.id);
+        showToast('✅ Đã chuyển vào sổ tay');
+    },
+    openMiniNote: () => {
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+        if (isStandalone || window.innerWidth < 768) {
+            window.location.href = 'mini.html';
+        } else {
+            window.open('mini.html', 'mininote', 'width=460,height=720');
+        }
+    },
+    openSidebar: () => openMobileSidebar(),
+    showPages: () => {
+        elements.vocabContainer.style.display = 'none';
+        elements.editorContainer.style.display = 'block';
+        openMobileSidebar();
     }
 };
 
@@ -1184,6 +1368,9 @@ function initSortable() {
             fallbackTolerance: 3,
             swapThreshold: 0.65,
             invertSwap: true,
+            delay: 220,                 // Mobile: long-press to drag so normal scrolling isn't hijacked
+            delayOnTouchOnly: true,
+            touchStartThreshold: 4,
             scroll: document.getElementById('editor-container'),
             scrollSensitivity: 70,
             scrollSpeed: 14,
@@ -2413,9 +2600,141 @@ function executeFormatAction(action) {
 }
 
 function escapeHtml(str) {
-    if (!str) return '';
-    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    if (str === null || str === undefined || str === '') return '';
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
+
+// --- MOBILE: DRAWER, BOTTOM NAV, GESTURES ---
+const MOBILE_BP = 768;
+function isMobileView() { return window.innerWidth <= MOBILE_BP; }
+
+function openMobileSidebar() {
+    document.getElementById('sidebar')?.classList.add('open');
+    document.getElementById('sidebar-overlay')?.classList.add('show');
+}
+function closeMobileSidebar() {
+    if (!isMobileView()) return;
+    document.getElementById('sidebar')?.classList.remove('open');
+    document.getElementById('sidebar-overlay')?.classList.remove('show');
+}
+
+function initMobile() {
+    const toggleBtn = document.getElementById('toggle-sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    const sidebar = document.getElementById('sidebar');
+    if (toggleBtn) toggleBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        sidebar.classList.contains('open') ? closeMobileSidebar() : openMobileSidebar();
+    });
+    if (overlay) overlay.addEventListener('click', closeMobileSidebar);
+
+    // Vuốt từ mép trái để mở, vuốt sang trái trên sidebar để đóng
+    let sx = 0, sy = 0, tracking = false, fromEdge = false;
+    document.addEventListener('touchstart', (e) => {
+        if (!isMobileView() || e.touches.length !== 1) return;
+        sx = e.touches[0].clientX; sy = e.touches[0].clientY;
+        fromEdge = sx < 24;
+        tracking = fromEdge || sidebar.classList.contains('open');
+    }, { passive: true });
+    document.addEventListener('touchend', (e) => {
+        if (!tracking) return;
+        tracking = false;
+        const t = e.changedTouches[0];
+        const dx = t.clientX - sx, dy = Math.abs(t.clientY - sy);
+        if (dy > 60) return;
+        if (fromEdge && dx > 60) openMobileSidebar();
+        else if (!fromEdge && dx < -60) closeMobileSidebar();
+    }, { passive: true });
+
+    // Đóng drawer khi mở Kho từ vựng hoặc tạo trang mới
+    ['new-page-btn', 'sidebar-new-page-btn', 'search-btn'].forEach(id => {
+        document.getElementById(id)?.addEventListener('click', closeMobileSidebar);
+    });
+    window.addEventListener('resize', () => {
+        if (!isMobileView()) {
+            sidebar.classList.remove('open');
+            overlay?.classList.remove('show');
+        }
+    });
+
+    // Chạm vào block → hiện tay cầm kéo (thay cho hover trên màn hình cảm ứng)
+    elements.blockEditor.addEventListener('focusin', (e) => {
+        elements.blockEditor.querySelectorAll('.block-wrapper.is-focused').forEach(w => w.classList.remove('is-focused'));
+        e.target.closest('.block-wrapper')?.classList.add('is-focused');
+    });
+
+    initFlashcardSwipe();
+}
+
+// Flashcard: vuốt phải = Đã thuộc, vuốt trái = Cần ôn, chạm = lật
+function initFlashcardSwipe() {
+    const scene = document.querySelector('.flashcard-scene');
+    const card = document.getElementById('flashcard-card');
+    if (!scene || !card) return;
+    let sx = 0, sy = 0, dx = 0, active = false, swiped = false;
+
+    scene.addEventListener('touchstart', (e) => {
+        if (e.touches.length !== 1) return;
+        sx = e.touches[0].clientX; sy = e.touches[0].clientY; dx = 0;
+        active = true; swiped = false;
+        scene.style.transition = 'none';
+    }, { passive: true });
+
+    scene.addEventListener('touchmove', (e) => {
+        if (!active) return;
+        dx = e.touches[0].clientX - sx;
+        const dy = e.touches[0].clientY - sy;
+        if (Math.abs(dy) > Math.abs(dx)) return;
+        scene.style.transform = `translateX(${dx}px) rotate(${dx / 25}deg)`;
+        scene.classList.toggle('swipe-right', dx > 50);
+        scene.classList.toggle('swipe-left', dx < -50);
+    }, { passive: true });
+
+    scene.addEventListener('touchend', () => {
+        if (!active) return;
+        active = false;
+        scene.style.transition = 'transform 0.25s ease';
+        scene.classList.remove('swipe-left', 'swipe-right');
+        if (Math.abs(dx) > 90) {
+            swiped = true;
+            const mastered = dx > 0;
+            scene.style.transform = `translateX(${mastered ? 120 : -120}%) rotate(${mastered ? 12 : -12}deg)`;
+            if (navigator.vibrate) navigator.vibrate(15);
+            setTimeout(() => {
+                scene.style.transition = 'none';
+                scene.style.transform = '';
+                vocab.markCard(mastered);
+            }, 200);
+        } else {
+            scene.style.transform = '';
+        }
+    });
+
+    // Chặn click lật thẻ sau khi vừa vuốt
+    scene.addEventListener('click', (e) => {
+        if (swiped) { e.stopPropagation(); e.preventDefault(); swiped = false; }
+    }, true);
+}
+
+// --- PWA: SERVICE WORKER ---
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW register failed:', err));
+    });
+}
+
+// Mở trang theo #id (dùng cho link chia sẻ và lối tắt PWA)
+window.addEventListener('DOMContentLoaded', () => {
+    initMobile();
+    const params = new URLSearchParams(location.search);
+    if (params.get('view') === 'vocab') app.showVocab();
+    if (params.get('view') === 'flashcard') {
+        app.showVocab();
+        if (typeof vocab.switchView === 'function') vocab.switchView('flashcard');
+    }
+    const hashId = decodeURIComponent(location.hash.slice(1));
+    if (hashId && appState.pages[hashId]) openPage(hashId);
+});
 
 function escapeJs(str) {
     if (!str) return '';
@@ -2425,5 +2744,7 @@ function escapeJs(str) {
 window.vocab = vocab;
 window.openPage = openPage;
 window.app = app;
+window.closeMobileSidebar = closeMobileSidebar;
+window.openMobileSidebar = openMobileSidebar;
 
 

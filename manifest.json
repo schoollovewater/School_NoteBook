@@ -1,16 +1,46 @@
 {
-  "name": "School Universe NoteBook",
-  "short_name": "NoteBook",
-  "start_url": "/",
+  "name": "School NoteBook — Sổ tay học tập & Flashcard",
+  "short_name": "School NoteBook",
+  "description": "Sổ tay ghi chép học tập kiểu Notion kèm Kho từ vựng và Flashcard 3D.",
+  "id": "/",
+  "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#0f172a",
   "theme_color": "#0f172a",
+  "orientation": "any",
   "icons": [
     {
-      "src": "icon.jpg",
-      "sizes": "192x192 512x512 1024x1024",
-      "type": "image/jpeg",
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "any maskable"
+    },
+    {
+      "src": "icon.jpg",
+      "sizes": "1024x1024",
+      "type": "image/jpeg",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Ghi nhanh (Mini Note)",
+      "short_name": "Ghi nhanh",
+      "url": "./mini.html",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Kho từ vựng & Flashcard",
+      "short_name": "Flashcard",
+      "url": "./index.html?view=flashcard",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }

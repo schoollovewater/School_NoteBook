@@ -87,6 +87,7 @@ body {
 .app-container {
     display: flex;
     height: 100vh;
+    height: 100dvh;
     width: 100vw;
     background: var(--bg-glass);
     backdrop-filter: blur(20px);
@@ -435,7 +436,8 @@ body {
     justify-content: center;
 }
 
-.block-wrapper:hover .block-handle {
+.block-wrapper:hover .block-handle,
+.block-wrapper.is-focused .block-handle {
     opacity: 1;
 }
 
@@ -557,24 +559,243 @@ body {
     color: var(--text-secondary);
 }
 
-/* Responsive */
+/* --- SIDEBAR OVERLAY & INBOX STYLES --- */
+.sidebar-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 99;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+}
+.sidebar-overlay.show {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.sidebar-section-inbox .section-title {
+    color: #f59e0b;
+}
+.inbox-count {
+    background: rgba(245, 158, 11, 0.2);
+    color: #f59e0b;
+    padding: 2px 7px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 700;
+}
+.sidebar-btn-mini {
+    background: rgba(245, 158, 11, 0.1) !important;
+    color: #f59e0b !important;
+    border: 1px dashed rgba(245, 158, 11, 0.35) !important;
+}
+.sidebar-btn-mini:hover {
+    background: rgba(245, 158, 11, 0.22) !important;
+}
+.topbar-mini-btn {
+    color: #f59e0b !important;
+}
+.topbar-mini-btn:hover {
+    background: rgba(245, 158, 11, 0.15) !important;
+}
+
+.inbox-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 14px;
+    padding: 10px 14px;
+    background: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--text-primary);
+}
+.inbox-banner-btn {
+    background: #f59e0b;
+    color: #0f172a;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: transform 0.15s, background 0.15s;
+    flex-shrink: 0;
+}
+.inbox-banner-btn:hover {
+    background: #d97706;
+    transform: scale(1.02);
+}
+.inbox-tag {
+    background: rgba(59, 130, 246, 0.2);
+    color: #60a5fa;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    margin-left: 4px;
+}
+
+/* Mobile Bottom Navigation (Hidden on desktop) */
+.mobile-bottom-nav {
+    display: none;
+}
+
+/* Flashcard swipe gestures */
+.flashcard-scene.swipe-right .flashcard-card {
+    box-shadow: 0 0 30px rgba(16, 185, 129, 0.6) !important;
+}
+.flashcard-scene.swipe-left .flashcard-card {
+    box-shadow: 0 0 30px rgba(239, 68, 68, 0.6) !important;
+}
+
+/* Responsive & Mobile Layout */
 @media (max-width: 768px) {
     .sidebar {
         position: fixed;
-        left: -260px;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 280px;
         height: 100vh;
+        height: 100dvh;
+        transform: translateX(-100%);
+        transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        z-index: 100;
+        box-shadow: 6px 0 28px rgba(0, 0, 0, 0.45);
     }
     
     .sidebar.open {
-        transform: translateX(260px);
+        transform: translateX(0);
     }
     
     .page-content {
-        padding: 24px;
+        padding: 20px 16px 80px 16px;
+    }
+    
+    .page-title-input {
+        font-size: 28px !important;
+    }
+
+    .page-cover {
+        width: 100% !important;
+        margin-left: 0 !important;
+        margin-top: -20px !important;
+        height: 22vh !important;
+        border-radius: 8px;
     }
     
     .d-md-none {
         display: block !important;
+    }
+
+    /* Popovers as bottom sheets on small screens */
+    .custom-popover {
+        position: fixed !important;
+        left: 12px !important;
+        right: 12px !important;
+        top: auto !important;
+        bottom: calc(64px + env(safe-area-inset-bottom, 0px)) !important;
+        width: auto !important;
+        max-height: 72vh !important;
+        overflow-y: auto !important;
+        border-radius: 16px !important;
+        transform: none !important;
+    }
+
+    .slash-menu {
+        position: fixed !important;
+        left: 12px !important;
+        right: 12px !important;
+        top: auto !important;
+        bottom: calc(64px + env(safe-area-inset-bottom, 0px)) !important;
+        width: auto !important;
+        max-height: 60vh !important;
+        border-radius: 16px !important;
+    }
+
+    /* Bottom Nav Bar */
+    .mobile-bottom-nav {
+        display: flex;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: calc(56px + env(safe-area-inset-bottom, 0px));
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+        background: var(--bg-elevated);
+        border-top: 1px solid var(--border-color);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        z-index: 90;
+        justify-content: space-around;
+        align-items: center;
+    }
+
+    .mbn-item {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+        background: transparent;
+        border: none;
+        color: var(--text-secondary);
+        font-size: 11px;
+        font-weight: 500;
+        cursor: pointer;
+        position: relative;
+        height: 100%;
+        padding: 4px 0;
+        transition: color 0.15s;
+    }
+    .mbn-item i {
+        font-size: 20px;
+    }
+    .mbn-item:active, .mbn-item.active {
+        color: var(--accent);
+    }
+    .mbn-badge {
+        position: absolute;
+        top: 4px;
+        right: calc(50% - 18px);
+        background: #ef4444;
+        color: white;
+        font-size: 10px;
+        font-weight: 700;
+        font-style: normal;
+        padding: 1px 5px;
+        border-radius: 10px;
+        line-height: 1.2;
+    }
+    .mbn-item.mbn-primary i {
+        width: 44px;
+        height: 44px;
+        background: linear-gradient(135deg, #f59e0b, #ef4444);
+        color: #fff;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 22px;
+        box-shadow: 0 4px 14px rgba(245, 158, 11, 0.4);
+        margin-top: -16px;
+    }
+
+    .editor-scroll-area {
+        padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px)) !important;
+    }
+
+    .vocab-area {
+        padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px)) !important;
     }
 }
 
