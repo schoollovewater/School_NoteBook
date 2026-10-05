@@ -443,50 +443,492 @@ function openPage(id) {
     renderSidebar(); // Update active state
 }
 
-// --- PAGE HEADER ACTIONS ---
-const defaultCovers = [
-    'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=1200&q=80',
-    'https://images.unsplash.com/photo-1557682250-33bd709cbe85?w=1200&q=80',
-    'https://images.unsplash.com/photo-1557683316-973673baf926?w=1200&q=80',
-    'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1200&q=80'
+// --- PAGE HEADER ACTIONS (ICON & COVER) ---
+const curatedCovers = [
+    // Tech & Coding
+    {
+        cat: 'tech',
+        title: 'Cyber Code Matrix',
+        url: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=1200&q=80'
+    },
+    {
+        cat: 'tech',
+        title: 'Minimalist Workspace',
+        url: 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=1200&q=80'
+    },
+    {
+        cat: 'tech',
+        title: 'Cyber Security Grid',
+        url: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=1200&q=80'
+    },
+    {
+        cat: 'tech',
+        title: 'Processor Chipset',
+        url: 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=1200&q=80'
+    },
+    {
+        cat: 'tech',
+        title: 'Developer Keyboard',
+        url: 'https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=1200&q=80'
+    },
+
+    // Study & Learning
+    {
+        cat: 'study',
+        title: 'Classic Library',
+        url: 'https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?w=1200&q=80'
+    },
+    {
+        cat: 'study',
+        title: 'Study Desk & Coffee',
+        url: 'https://images.unsplash.com/photo-1497633762265-9d179a990aa6?w=1200&q=80'
+    },
+    {
+        cat: 'study',
+        title: 'Stationery & Notes',
+        url: 'https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?w=1200&q=80'
+    },
+    {
+        cat: 'study',
+        title: 'Campus Architecture',
+        url: 'https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=1200&q=80'
+    },
+    {
+        cat: 'study',
+        title: 'Open Journal Notebook',
+        url: 'https://images.unsplash.com/photo-1512820790803-83ca734da794?w=1200&q=80'
+    },
+
+    // Nature & Calm
+    {
+        cat: 'nature',
+        title: 'Misty Pine Forest',
+        url: 'https://images.unsplash.com/photo-1511497584788-87676104235f?w=1200&q=80'
+    },
+    {
+        cat: 'nature',
+        title: 'Sunset Ocean Horizon',
+        url: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1200&q=80'
+    },
+    {
+        cat: 'nature',
+        title: 'Emerald Green Forest',
+        url: 'https://images.unsplash.com/photo-1448375240586-882707db888b?w=1200&q=80'
+    },
+    {
+        cat: 'nature',
+        title: 'Milky Way & Starry Night',
+        url: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1200&q=80'
+    },
+    {
+        cat: 'nature',
+        title: 'Spring Sakura Blossom',
+        url: 'https://images.unsplash.com/photo-1522383225653-ed111181a951?w=1200&q=80'
+    },
+
+    // Modern Gradient & Abstract
+    {
+        cat: 'gradient',
+        title: 'Holographic Pastel',
+        url: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=1200&q=80'
+    },
+    {
+        cat: 'gradient',
+        title: 'Deep Purple Aurora',
+        url: 'https://images.unsplash.com/photo-1557682250-33bd709cbe85?w=1200&q=80'
+    },
+    {
+        cat: 'gradient',
+        title: 'Sunset Coral Mesh',
+        url: 'https://images.unsplash.com/photo-1557683316-973673baf926?w=1200&q=80'
+    },
+    {
+        cat: 'gradient',
+        title: 'Neon Fluid 3D Wave',
+        url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1200&q=80'
+    },
+    {
+        cat: 'gradient',
+        title: 'Warm Peach Glow',
+        url: 'https://images.unsplash.com/photo-1508739773434-c26b3d09e071?w=1200&q=80'
+    }
 ];
 
-const emojis = ['📄','😀','😂','🥰','😎','🤔','🙌','💡','🚀','💻','📱','📚','🎓','📝','✨','🔥','⭐','🎉','🌿','🎨'];
+const emojiData = [
+    // Study & Learning (Học tập)
+    { emoji: '📚', cat: 'study', kw: 'sach book doc read study giao trinh' },
+    { emoji: '📖', cat: 'study', kw: 'sach mo open book study doc' },
+    { emoji: '✏️', cat: 'study', kw: 'but chi pencil write viet ghi chep' },
+    { emoji: '📝', cat: 'study', kw: 'ghi chu note memo paper bai tap' },
+    { emoji: '🎓', cat: 'study', kw: 'tot nghiep graduate university cap hoc dai hoc' },
+    { emoji: '🔬', cat: 'study', kw: 'kinh hien vi microscope science khoa hoc lab' },
+    { emoji: '🧪', cat: 'study', kw: 'ong nghiem test tube chemistry hoa hoc thi nghiem' },
+    { emoji: '📐', cat: 'study', kw: 'thuoc ke ruler math toan hinh hoc' },
+    { emoji: '🔭', cat: 'study', kw: 'kinh thien van telescope astronomy vu tru sao' },
+    { emoji: '💡', cat: 'study', kw: 'bong den idea sang tao light bulb y tuong' },
+    { emoji: '🧠', cat: 'study', kw: 'nao bo brain tu duy mind think tri tue' },
+    { emoji: '📊', cat: 'study', kw: 'bieu do chart analytics data thong ke cot' },
+    { emoji: '📈', cat: 'study', kw: 'tang truong chart growth trend up phat trien' },
+    { emoji: '📌', cat: 'study', kw: 'dinh ghim pin ghim attach quan trong' },
+    { emoji: '📋', cat: 'study', kw: 'clipboard bang ghi chep ke hoach plan danh sach' },
+    { emoji: '🔖', cat: 'study', kw: 'bookmark the danh dau doc sach luu lai' },
 
-function initPopovers() {
-    // Populate emoji grid
-    const emojiGrid = document.getElementById('emoji-grid');
-    emojis.forEach(e => {
+    // Tech & Coding (Công nghệ)
+    { emoji: '💻', cat: 'tech', kw: 'may tinh laptop computer code lap trinh dev' },
+    { emoji: '🖥️', cat: 'tech', kw: 'man hinh monitor desktop pc display may tinh ban' },
+    { emoji: '⌨️', cat: 'tech', kw: 'ban phim keyboard go phim typing go' },
+    { emoji: '🖱️', cat: 'tech', kw: 'chuot mouse click chuot may tinh' },
+    { emoji: '📱', cat: 'tech', kw: 'dien thoai phone mobile smartphone app' },
+    { emoji: '⚙️', cat: 'tech', kw: 'cai dat gear setting config tool thiet lap' },
+    { emoji: '🔧', cat: 'tech', kw: 'co le wrench tool fix sua chua debug' },
+    { emoji: '🔨', cat: 'tech', kw: 'bua hammer build xay dung cong cu' },
+    { emoji: '🚀', cat: 'tech', kw: 'ten lua rocket launch deploy khoi nghiep toc do' },
+    { emoji: '🤖', cat: 'tech', kw: 'robot ai bot automation tri tue nhan tao tu dong' },
+    { emoji: '🌐', cat: 'tech', kw: 'web internet network mang toan cau website' },
+    { emoji: '🔒', cat: 'tech', kw: 'khoa lock security bao mat password mat khau' },
+    { emoji: '📡', cat: 'tech', kw: 've tinh satellite antenna tin hieu signal song' },
+    { emoji: '🔋', cat: 'tech', kw: 'pin battery power nang luong nap pin' },
+    { emoji: '💾', cat: 'tech', kw: 'dia mem floppy disk save luu tru storage disk' },
+    { emoji: '⚡', cat: 'tech', kw: 'tia chop lightning fast speed nhanh hieu qua' },
+
+    // Emotion & Vibe (Cảm xúc & Tương tác)
+    { emoji: '😀', cat: 'emotion', kw: 'vui cuoi happy smile face mat cuoi' },
+    { emoji: '😎', cat: 'emotion', kw: 'ngau cool sunglasses pro kinh ram xin' },
+    { emoji: '🤔', cat: 'emotion', kw: 'suy nghi think wonder question thac mac' },
+    { emoji: '🥳', cat: 'emotion', kw: 'an mung party celebrate happy tiec party hat' },
+    { emoji: '🤩', cat: 'emotion', kw: 'ngoi sao mat star struck wow amazed phan khich' },
+    { emoji: '✨', cat: 'emotion', kw: 'lap lanh sparkle star magic toa sang lung linh' },
+    { emoji: '🔥', cat: 'emotion', kw: 'lua fire hot trending chay nhiet huyet xuan hoa' },
+    { emoji: '⭐', cat: 'emotion', kw: 'ngoi sao star favorite danh gia uu tien' },
+    { emoji: '💯', cat: 'emotion', kw: 'tram diem 100 perfect diem muoi xuat sac' },
+    { emoji: '🎯', cat: 'emotion', kw: 'muc tieu target goal focus chinh xac dung dich' },
+    { emoji: '💖', cat: 'emotion', kw: 'trai tim heart love yeu thich quan tam' },
+    { emoji: '👏', cat: 'emotion', kw: 'vo tay clap cheer hoan ho khen ngoi' },
+    { emoji: '🙌', cat: 'emotion', kw: 'hai tay celebrating praise hoan ho yeah' },
+    { emoji: '✌️', cat: 'emotion', kw: 'peace hoa binh victory chien thang hai ngon tay' },
+    { emoji: '🎉', cat: 'emotion', kw: 'phao hoa tada party celebration chuc mung' },
+    { emoji: '☕', cat: 'emotion', kw: 'ca phe coffee chill relax nghi ngoi sang' },
+
+    // Life & Nature (Đời sống & Thiên nhiên)
+    { emoji: '🌿', cat: 'life', kw: 'la cay herb leaf nature cay coi moi truong xanh' },
+    { emoji: '🌸', cat: 'life', kw: 'hoa anh dao sakura flower hoa blossom mua xuan' },
+    { emoji: '🍀', cat: 'life', kw: 'co bon la clover lucky may man co xanh' },
+    { emoji: '🌞', cat: 'life', kw: 'mat troi sun morning sang am ap nang' },
+    { emoji: '🌙', cat: 'life', kw: 'mat trang moon night dem toi trua dem' },
+    { emoji: '🌈', cat: 'life', kw: 'cau vong rainbow hy vong mau sac troi mua' },
+    { emoji: '🐱', cat: 'life', kw: 'meo cat pet thu cung de thuong dong vat' },
+    { emoji: '🍕', cat: 'life', kw: 'pizza food thuc an do an an trua' },
+    { emoji: '🍔', cat: 'life', kw: 'burger hamburger fast food banh mi' },
+    { emoji: '⚽', cat: 'life', kw: 'bong da soccer football sport the thao banh' },
+    { emoji: '🎮', cat: 'life', kw: 'tay cam tro choi game gaming play giai tri' },
+    { emoji: '🎧', cat: 'life', kw: 'tai nghe headphone music am nhac nghe nhac' },
+    { emoji: '🚲', cat: 'life', kw: 'xe dap bike bicycle ride di chuyen the duc' },
+    { emoji: '✈️', cat: 'life', kw: 'may bay airplane fly travel du lich chuyen di' },
+    { emoji: '🏕️', cat: 'life', kw: 'cam trai camping camp nature da ngoai rung leu' },
+    { emoji: '🎨', cat: 'life', kw: 'bang mau art paint ve hoi hoa sang tao mau' },
+
+    // Office & Organization (Quản lý)
+    { emoji: '📂', cat: 'office', kw: 'thu muc open folder file doc tai lieu mo' },
+    { emoji: '📁', cat: 'office', kw: 'thu muc folder file luu tru ho so' },
+    { emoji: '📄', cat: 'office', kw: 'trang giay page document van ban giay to' },
+    { emoji: '🗓️', cat: 'office', kw: 'lich calendar schedule lich trinh thoi gian bieu' },
+    { emoji: '📅', cat: 'office', kw: 'ngay thang calendar date event su kien' },
+    { emoji: '⏰', cat: 'office', kw: 'dong ho bao thuc clock alarm time thoi gian gio' },
+    { emoji: '⏳', cat: 'office', kw: 'dong ho cat hourglass wait cho deadline sap het gio' },
+    { emoji: '🏷️', cat: 'office', kw: 'the tag label phan loai nhan mac' },
+    { emoji: '💼', cat: 'office', kw: 'cap tai lieu briefcase work cong viec di lam' },
+    { emoji: '🗂️', cat: 'office', kw: 'phan chia tab dividers sort phan muc' },
+    { emoji: '🗃️', cat: 'office', kw: 'hop ho so file box archive luu tru ho so' },
+    { emoji: '📉', cat: 'office', kw: 'giam sut chart decline trend down ha nhiet' },
+    { emoji: '✉️', cat: 'office', kw: 'thu email envelope mail tin nhan thu tu' },
+    { emoji: '📦', cat: 'office', kw: 'hop package delivery kien hang box giao hang' },
+    { emoji: '🔔', cat: 'office', kw: 'chuong thong bao bell notification nhac nho' },
+    { emoji: '🔑', cat: 'office', kw: 'chia khoa key access mat ma khoa mo' }
+];
+
+let currentEmojiCategory = 'all';
+let currentCoverCategory = 'all';
+
+function renderEmojiGrid(category = 'all', query = '') {
+    const grid = document.getElementById('emoji-grid');
+    if (!grid) return;
+    grid.innerHTML = '';
+    
+    const q = (query || '').toLowerCase().trim();
+    const filtered = emojiData.filter(item => {
+        const matchesCategory = (category === 'all' || item.cat === category);
+        const matchesQuery = !q || item.emoji.includes(q) || item.kw.toLowerCase().includes(q);
+        return matchesCategory && matchesQuery;
+    });
+
+    if (filtered.length === 0) {
+        grid.innerHTML = '<div style="grid-column: 1 / -1; padding: 24px; text-align: center; color: var(--text-placeholder); font-size: 13px;">Không tìm thấy icon nào phù hợp với từ khóa</div>';
+        return;
+    }
+
+    filtered.forEach(item => {
         const span = document.createElement('span');
         span.className = 'emoji-item';
-        span.textContent = e;
+        span.textContent = item.emoji;
+        span.title = item.kw.split(' ')[0] || '';
         span.onclick = () => {
-            applyIcon(e);
+            applyIcon(item.emoji);
             document.getElementById('emoji-picker').style.display = 'none';
         };
-        emojiGrid.appendChild(span);
+        grid.appendChild(span);
     });
+}
 
-    // Populate cover grid
-    const coverGrid = document.getElementById('cover-grid');
-    defaultCovers.forEach(c => {
+function selectEmojiCategory(cat, btn) {
+    currentEmojiCategory = cat;
+    document.querySelectorAll('.emoji-tab-btn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    
+    const searchVal = document.getElementById('emoji-search-input')?.value || '';
+    renderEmojiGrid(cat, searchVal);
+}
+
+function filterEmojis(val) {
+    renderEmojiGrid(currentEmojiCategory, val);
+}
+
+function applyCustomEmoji() {
+    const input = document.getElementById('custom-emoji-input');
+    const val = input ? input.value.trim() : '';
+    if (!val) {
+        showToast('⚠️ Hãy nhập ký tự hoặc emoji!');
+        return;
+    }
+    applyIcon(val);
+    input.value = '';
+    document.getElementById('emoji-picker').style.display = 'none';
+    showToast('✨ Đã cập nhật icon trang!');
+}
+
+function removeIcon() {
+    const page = appState.pages[appState.activePageId];
+    if (page) {
+        page.icon = '📄';
+        document.getElementById('page-icon').textContent = '📄';
+        triggerSave();
+        renderSidebar();
+        document.getElementById('emoji-picker').style.display = 'none';
+        showToast('🗑️ Đã đặt lại biểu tượng mặc định');
+    }
+}
+
+function renderCoverGrid(category = 'all') {
+    const grid = document.getElementById('cover-grid');
+    if (!grid) return;
+    grid.innerHTML = '';
+    
+    const filtered = (category === 'all') 
+        ? curatedCovers 
+        : curatedCovers.filter(c => c.cat === category);
+
+    filtered.forEach(item => {
         const div = document.createElement('div');
         div.className = 'cover-item';
-        div.style.backgroundImage = `url(${c})`;
+        div.style.backgroundImage = `url(${item.url})`;
+        div.title = item.title;
         div.onclick = () => {
-            applyCover(c);
+            applyCover(item.url);
             document.getElementById('cover-picker').style.display = 'none';
+            showToast(`🖼️ Đã đổi ảnh bìa: ${item.title}`);
         };
-        coverGrid.appendChild(div);
+        grid.appendChild(div);
+    });
+}
+
+function filterCoverGallery(cat, btn) {
+    currentCoverCategory = cat;
+    document.querySelectorAll('.cover-filter-btn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    renderCoverGrid(cat);
+}
+
+function switchCoverTab(tabName) {
+    const tabGallery = document.getElementById('cover-tab-gallery');
+    const tabUpload = document.getElementById('cover-tab-upload');
+    const tabLink = document.getElementById('cover-tab-link');
+    
+    const btnGallery = document.getElementById('tab-cover-gallery-btn');
+    const btnUpload = document.getElementById('tab-cover-upload-btn');
+    const btnLink = document.getElementById('tab-cover-link-btn');
+
+    if (tabGallery) tabGallery.style.display = (tabName === 'gallery') ? 'block' : 'none';
+    if (tabUpload) tabUpload.style.display = (tabName === 'upload') ? 'block' : 'none';
+    if (tabLink) tabLink.style.display = (tabName === 'link') ? 'block' : 'none';
+
+    if (btnGallery) btnGallery.classList.toggle('active', tabName === 'gallery');
+    if (btnUpload) btnUpload.classList.toggle('active', tabName === 'upload');
+    if (btnLink) btnLink.classList.toggle('active', tabName === 'link');
+}
+
+function handleCoverFileUpload(event) {
+    const file = event.target.files && event.target.files[0];
+    if (file) {
+        processCoverFile(file);
+    }
+    event.target.value = '';
+}
+
+function processCoverFile(file) {
+    if (!file.type.startsWith('image/')) {
+        showToast('⚠️ Vui lòng chọn tệp hình ảnh hợp lệ (PNG, JPG, WebP)!');
+        return;
+    }
+
+    showToast('⏳ Đang tối ưu hóa dung lượng ảnh...');
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+            try {
+                // Downscale & compress with canvas to keep localStorage safe
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+                const maxW = 1400;
+                const maxH = 600;
+
+                if (width > maxW || height > maxH) {
+                    const ratio = Math.min(maxW / width, maxH / height);
+                    width = Math.round(width * ratio);
+                    height = Math.round(height * ratio);
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+
+                const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.82);
+                applyCover(compressedDataUrl);
+                document.getElementById('cover-picker').style.display = 'none';
+                showToast('🖼️ Đã tải và áp dụng ảnh bìa từ máy tính!');
+            } catch (err) {
+                console.error('Lỗi nén ảnh:', err);
+                if (e.target.result.length < 2 * 1024 * 1024) {
+                    applyCover(e.target.result);
+                    document.getElementById('cover-picker').style.display = 'none';
+                    showToast('🖼️ Đã áp dụng ảnh bìa từ máy tính!');
+                } else {
+                    showToast('⚠️ Ảnh quá lớn, vui lòng chọn ảnh có kích thước nhẹ hơn!');
+                }
+            }
+        };
+        img.onerror = () => {
+            showToast('⚠️ Không thể tải dữ liệu ảnh!');
+        };
+        img.src = e.target.result;
+    };
+    reader.onerror = () => {
+        showToast('⚠️ Đọc tệp thất bại!');
+    };
+    reader.readAsDataURL(file);
+}
+
+function setupCoverDropzone() {
+    const dropzone = document.querySelector('.cover-upload-dropzone');
+    if (!dropzone) return;
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropzone.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropzone.classList.add('dragover');
+        }, false);
     });
 
-    document.getElementById('custom-cover-btn').onclick = () => {
-        const val = document.getElementById('custom-cover-input').value;
-        if (val) {
-            applyCover(val);
-            document.getElementById('cover-picker').style.display = 'none';
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropzone.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropzone.classList.remove('dragover');
+        }, false);
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        if (files && files.length > 0) {
+            processCoverFile(files[0]);
         }
-    };
+    }, false);
+}
+
+function applyCustomLinkCover() {
+    const input = document.getElementById('custom-cover-input');
+    const val = input ? input.value.trim() : '';
+    if (!val) {
+        showToast('⚠️ Vui lòng nhập link ảnh hợp lệ!');
+        return;
+    }
+    applyCover(val);
+    document.getElementById('cover-picker').style.display = 'none';
+    showToast('🌐 Đã áp dụng ảnh bìa từ link bên ngoài!');
+}
+
+function removeCover() {
+    const page = appState.pages[appState.activePageId];
+    if (page) {
+        page.cover = null;
+        const coverEl = document.getElementById('page-cover');
+        if (coverEl) {
+            coverEl.style.display = 'none';
+            const img = coverEl.querySelector('img');
+            if (img) img.src = '';
+        }
+        triggerSave();
+        document.getElementById('cover-picker').style.display = 'none';
+        showToast('🗑️ Đã xóa ảnh bìa khỏi trang');
+    }
+}
+
+function initPopovers() {
+    // Populate emoji grid and cover gallery
+    renderEmojiGrid('all');
+    renderCoverGrid('all');
+    setupCoverDropzone();
+
+    // Link URL input handling
+    const customBtn = document.getElementById('custom-cover-btn');
+    if (customBtn) {
+        customBtn.onclick = applyCustomLinkCover;
+    }
+
+    const customInput = document.getElementById('custom-cover-input');
+    const previewContainer = document.getElementById('cover-link-preview');
+    const previewImg = document.getElementById('cover-preview-img');
+    if (customInput && previewContainer && previewImg) {
+        customInput.addEventListener('input', () => {
+            const url = customInput.value.trim();
+            if (url && (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:image/'))) {
+                previewImg.src = url;
+                previewContainer.style.display = 'block';
+            } else {
+                previewContainer.style.display = 'none';
+            }
+        });
+        customInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                applyCustomLinkCover();
+            }
+        });
+    }
+
+    const customEmojiInput = document.getElementById('custom-emoji-input');
+    if (customEmojiInput) {
+        customEmojiInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                applyCustomEmoji();
+            }
+        });
+    }
 }
 
 function applyIcon(iconStr) {
@@ -526,17 +968,58 @@ function showEmojiPicker(target) {
     const picker = document.getElementById('emoji-picker');
     const rect = target.getBoundingClientRect();
     picker.style.display = 'block';
-    picker.style.top = `${rect.bottom + 10}px`;
-    picker.style.left = `${rect.left}px`;
+    
+    // Position below target, keeping inside viewport
+    const top = rect.bottom + window.scrollY + 6;
+    let left = rect.left + window.scrollX;
+    if (left + 390 > window.innerWidth) {
+        left = window.innerWidth - 400;
+    }
+    if (left < 10) left = 10;
+    
+    picker.style.top = `${top}px`;
+    picker.style.left = `${left}px`;
+    picker.style.right = 'auto';
+
+    // Auto-focus search input
+    const searchInput = document.getElementById('emoji-search-input');
+    if (searchInput) {
+        searchInput.value = '';
+        setTimeout(() => searchInput.focus(), 60);
+        filterEmojis('');
+    }
 }
 
 function showCoverPicker(target) {
     const picker = document.getElementById('cover-picker');
     const rect = target.getBoundingClientRect();
     picker.style.display = 'block';
-    picker.style.top = `${rect.bottom + 10}px`;
-    picker.style.right = '48px'; // align roughly to edge
+    
+    const top = rect.bottom + window.scrollY + 6;
+    picker.style.top = `${top}px`;
+    picker.style.right = '32px';
+    picker.style.left = 'auto';
+
+    switchCoverTab('gallery');
 }
+
+// Global window bindings for HTML inline onclick handlers
+window.renderEmojiGrid = renderEmojiGrid;
+window.selectEmojiCategory = selectEmojiCategory;
+window.filterEmojis = filterEmojis;
+window.applyCustomEmoji = applyCustomEmoji;
+window.removeIcon = removeIcon;
+window.renderCoverGrid = renderCoverGrid;
+window.filterCoverGallery = filterCoverGallery;
+window.switchCoverTab = switchCoverTab;
+window.handleCoverFileUpload = handleCoverFileUpload;
+window.applyCustomLinkCover = applyCustomLinkCover;
+window.removeCover = removeCover;
+window.addCover = addCover;
+window.changeCover = changeCover;
+window.changeIcon = changeIcon;
+window.showEmojiPicker = showEmojiPicker;
+window.showCoverPicker = showCoverPicker;
 
 const app = {
     createNewPage,
@@ -720,8 +1203,10 @@ function serializeBlocks() {
     const blocks = [];
     elements.blockEditor.querySelectorAll('.block-wrapper').forEach(wrapper => {
         const contentEl = wrapper.querySelector('.block-content');
+        if (!contentEl) return;
         const type = contentEl.getAttribute('data-type');
-        let content = contentEl.innerText.trim();
+        const rawText = contentEl.innerText !== undefined ? contentEl.innerText : (contentEl.textContent || '');
+        let content = rawText.trim();
         
         // save checked state for todos
         if (type === 'todo') {

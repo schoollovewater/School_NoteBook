@@ -389,21 +389,99 @@
     </div>
 
     <!-- Custom Popovers -->
-    <div class="custom-popover" id="emoji-picker" style="display: none;">
-        <div class="popover-header">Choose an icon</div>
+    <!-- 1. Emoji / Icon Picker (Categorized & Searchable) -->
+    <div class="custom-popover emoji-popover" id="emoji-picker" style="display: none;">
+        <div class="popover-header-row">
+            <span class="popover-header-title"><i class="ri-emotion-line"></i> Chọn biểu tượng (Icon)</span>
+            <button class="popover-close-btn" onclick="document.getElementById('emoji-picker').style.display='none'"><i class="ri-close-line"></i></button>
+        </div>
+
+        <div class="emoji-search-box">
+            <i class="ri-search-line"></i>
+            <input type="text" id="emoji-search-input" placeholder="Tìm kiếm icon (sách, code, sao...)" oninput="filterEmojis(this.value)">
+        </div>
+
+        <!-- Emoji Categories -->
+        <div class="emoji-category-tabs" id="emoji-category-tabs">
+            <button class="emoji-tab-btn active" data-cat="all" onclick="selectEmojiCategory('all', this)">Tất cả</button>
+            <button class="emoji-tab-btn" data-cat="study" onclick="selectEmojiCategory('study', this)">📚 Học tập</button>
+            <button class="emoji-tab-btn" data-cat="tech" onclick="selectEmojiCategory('tech', this)">💻 Công nghệ</button>
+            <button class="emoji-tab-btn" data-cat="emotion" onclick="selectEmojiCategory('emotion', this)">✨ Cảm xúc</button>
+            <button class="emoji-tab-btn" data-cat="life" onclick="selectEmojiCategory('life', this)">🌿 Đời sống</button>
+            <button class="emoji-tab-btn" data-cat="office" onclick="selectEmojiCategory('office', this)">📂 Quản lý</button>
+        </div>
+
         <div class="emoji-grid" id="emoji-grid">
             <!-- Emojis populated by JS -->
         </div>
+
+        <div class="popover-footer-actions">
+            <div class="custom-emoji-input-group">
+                <input type="text" id="custom-emoji-input" maxlength="4" placeholder="Tự gõ emoji...">
+                <button class="btn btn-secondary btn-sm" onclick="applyCustomEmoji()"><i class="ri-check-line"></i> Dùng</button>
+            </div>
+            <button class="btn btn-secondary btn-sm text-danger" onclick="removeIcon()" title="Xóa icon khỏi trang">
+                <i class="ri-delete-bin-line"></i> Xóa icon
+            </button>
+        </div>
     </div>
 
-    <div class="custom-popover" id="cover-picker" style="display: none;">
-        <div class="popover-header">Gallery</div>
-        <div class="cover-grid" id="cover-grid">
-            <!-- Covers populated by JS -->
+    <!-- 2. Cover Image Picker (Gallery, Upload, URL) -->
+    <div class="custom-popover cover-popover" id="cover-picker" style="display: none;">
+        <div class="popover-header-row">
+            <span class="popover-header-title"><i class="ri-image-line"></i> Thay đổi ảnh bìa</span>
+            <button class="popover-close-btn" onclick="document.getElementById('cover-picker').style.display='none'"><i class="ri-close-line"></i></button>
         </div>
-        <div class="popover-section">
-            <input type="text" id="custom-cover-input" placeholder="Paste image link...">
-            <button id="custom-cover-btn" class="btn btn-primary">Submit</button>
+
+        <!-- Cover Tabs -->
+        <div class="cover-nav-tabs">
+            <button class="cover-tab-btn active" id="tab-cover-gallery-btn" onclick="switchCoverTab('gallery')">
+                <i class="ri-gallery-line"></i> Bộ sưu tập
+            </button>
+            <button class="cover-tab-btn" id="tab-cover-upload-btn" onclick="switchCoverTab('upload')">
+                <i class="ri-upload-cloud-line"></i> Tải từ máy
+            </button>
+            <button class="cover-tab-btn" id="tab-cover-link-btn" onclick="switchCoverTab('link')">
+                <i class="ri-link"></i> Dán link URL
+            </button>
+            <button class="cover-tab-btn text-danger" onclick="removeCover()">
+                <i class="ri-delete-bin-line"></i> Xóa bìa
+            </button>
+        </div>
+
+        <!-- Tab 1: Gallery -->
+        <div class="cover-tab-content" id="cover-tab-gallery">
+            <div class="cover-category-filters">
+                <button class="cover-filter-btn active" onclick="filterCoverGallery('all', this)">Tất cả</button>
+                <button class="cover-filter-btn" onclick="filterCoverGallery('tech', this)">💻 Công nghệ</button>
+                <button class="cover-filter-btn" onclick="filterCoverGallery('study', this)">📚 Học tập</button>
+                <button class="cover-filter-btn" onclick="filterCoverGallery('nature', this)">🌿 Thiên nhiên</button>
+                <button class="cover-filter-btn" onclick="filterCoverGallery('gradient', this)">🎨 Gradient</button>
+            </div>
+            <div class="cover-grid" id="cover-grid">
+                <!-- Covers populated by JS -->
+            </div>
+        </div>
+
+        <!-- Tab 2: Upload from Computer -->
+        <div class="cover-tab-content" id="cover-tab-upload" style="display: none;">
+            <input type="file" id="cover-file-input" accept="image/png, image/jpeg, image/jpg, image/webp" style="display: none;" onchange="handleCoverFileUpload(event)">
+            <div class="cover-upload-dropzone" onclick="document.getElementById('cover-file-input').click()">
+                <div class="dropzone-icon"><i class="ri-upload-cloud-2-line"></i></div>
+                <div class="dropzone-title">Bấm vào đây để chọn ảnh từ máy tính</div>
+                <div class="dropzone-sub">Hỗ trợ định dạng PNG, JPG, JPEG, WebP (Tự động tối ưu dung lượng)</div>
+            </div>
+        </div>
+
+        <!-- Tab 3: Link URL -->
+        <div class="cover-tab-content" id="cover-tab-link" style="display: none;">
+            <div class="cover-link-group">
+                <input type="url" id="custom-cover-input" placeholder="Dán đường link ảnh (https://...)" autocomplete="off">
+                <button id="custom-cover-btn" class="btn btn-primary"><i class="ri-check-line"></i> Áp dụng</button>
+            </div>
+            <div class="cover-link-preview" id="cover-link-preview" style="display: none;">
+                <img id="cover-preview-img" src="" alt="Preview">
+            </div>
         </div>
     </div>
 
