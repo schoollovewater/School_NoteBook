@@ -160,8 +160,49 @@ function initApp() {
         });
     }
 
-    // Keyboard Shortcuts (Ctrl+K, Ctrl+B, Ctrl+I, Ctrl+D, Ctrl+L, Ctrl+N)
+    // Keyboard Shortcuts (Ctrl+Z, Ctrl+Y, Ctrl+K, Ctrl+B, Ctrl+I, Ctrl+D, Ctrl+L, Ctrl+N)
     document.addEventListener('keydown', (e) => {
+        // Undo: Ctrl+Z (Cmd+Z)
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+            e.preventDefault();
+            EditorHistory.undo();
+            return;
+        }
+        // Redo: Ctrl+Y (Cmd+Y) or Ctrl+Shift+Z
+        if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) {
+            e.preventDefault();
+            EditorHistory.redo();
+            return;
+        }
+        // Delete current line / selected block: Ctrl+Shift+K (hoặc khi chọn khối nhấn Backspace/Delete)
+        if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'k') {
+            e.preventDefault();
+            const activeEl = document.activeElement;
+            const currentWrapper = (typeof selectedBlockWrappers !== 'undefined' && selectedBlockWrappers && selectedBlockWrappers.length > 0)
+                ? selectedBlockWrappers[0]
+                : (activeEl ? activeEl.closest('.block-wrapper') : null);
+            if (currentWrapper && elements.blockEditor && elements.blockEditor.contains(currentWrapper)) {
+                EditorHistory.recordBeforeAction();
+                const prev = currentWrapper.previousElementSibling || currentWrapper.nextElementSibling;
+                if (typeof selectedBlockWrappers !== 'undefined' && selectedBlockWrappers && selectedBlockWrappers.length > 0) {
+                    selectedBlockWrappers.forEach(w => w.remove());
+                    clearBlockSelection();
+                } else {
+                    currentWrapper.remove();
+                }
+                if (prev) {
+                    const nextContent = prev.querySelector('.block-content');
+                    if (nextContent && nextContent.contentEditable !== 'false') setCaretAtStart(nextContent);
+                } else {
+                    focusFirstBlockOrCreate();
+                }
+                updateNumberPrefixes();
+                triggerSave();
+                EditorHistory.updateLastSnapshot();
+                showToast('🗑️ Đã xóa dòng');
+                return;
+            }
+        }
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
             e.preventDefault();
             openSearchModal();
@@ -470,6 +511,146 @@ function pageToCloud(pageData) {
     };
 }
 
+// --- EDITOR HISTORY (UNDO / REDO SYSTEM) ---
+const EditorHistory = {
+    undoStack: [],
+    redoStack: [],
+    maxHistory: 60,
+    isApplying: false,
+    lastTypingTime: 0,
+    lastTypingBlockId: null,
+    lastSavedSnapshot: null,
+    saveSnapTimeout: null,
+
+    createSnapshot() {
+        if (!appState.activePageId) return null;
+        return {
+            pageId: appState.activePageId,
+            title: elements.pageTitleInput ? elements.pageTitleInput.value : '',
+            blocks: serializeBlocks(),
+            activeBlockId: activeBlockId || null
+        };
+    },
+
+    init() {
+        this.undoStack = [];
+        this.redoStack = [];
+        this.lastTypingTime = 0;
+        this.lastTypingBlockId = null;
+        this.lastSavedSnapshot = this.createSnapshot();
+    },
+
+    recordBeforeAction() {
+        if (this.isApplying) return;
+        if (!this.lastSavedSnapshot) {
+            this.lastSavedSnapshot = this.createSnapshot();
+        }
+        if (this.lastSavedSnapshot && this.lastSavedSnapshot.blocks) {
+            const last = this.undoStack[this.undoStack.length - 1];
+            const isDup = last && 
+                last.pageId === this.lastSavedSnapshot.pageId && 
+                last.title === this.lastSavedSnapshot.title && 
+                JSON.stringify(last.blocks) === JSON.stringify(this.lastSavedSnapshot.blocks);
+            if (!isDup) {
+                this.undoStack.push(this.lastSavedSnapshot);
+                if (this.undoStack.length > this.maxHistory) this.undoStack.shift();
+            }
+        }
+        this.redoStack = [];
+    },
+
+    updateLastSnapshot() {
+        if (this.isApplying) return;
+        this.lastSavedSnapshot = this.createSnapshot();
+    },
+
+    recordTyping() {
+        if (this.isApplying) return;
+        const now = Date.now();
+        const isNewBurst = (now - this.lastTypingTime > 800) || (this.lastTypingBlockId !== activeBlockId);
+        if (isNewBurst) {
+            this.recordBeforeAction();
+        }
+        this.lastTypingTime = now;
+        this.lastTypingBlockId = activeBlockId;
+        clearTimeout(this.saveSnapTimeout);
+        this.saveSnapTimeout = setTimeout(() => {
+            this.updateLastSnapshot();
+        }, 500);
+    },
+
+    record(force = false) {
+        if (force) {
+            this.recordBeforeAction();
+            setTimeout(() => this.updateLastSnapshot(), 0);
+        } else {
+            this.recordTyping();
+        }
+    },
+
+    applyState(state) {
+        if (!state || state.pageId !== appState.activePageId) return;
+        this.isApplying = true;
+        try {
+            if (elements.pageTitleInput) {
+                elements.pageTitleInput.value = state.title || '';
+                updatePageTitle(state.title);
+            }
+            renderBlocks(state.blocks || []);
+            if (appState.pages[appState.activePageId]) {
+                appState.pages[appState.activePageId].title = state.title || '';
+                appState.pages[appState.activePageId].blocks = state.blocks || [];
+            }
+            clearBlockSelection();
+            updateNumberPrefixes();
+            saveToStorage();
+
+            if (state.activeBlockId) {
+                const targetWrapper = document.querySelector(`.block-wrapper[data-id="${state.activeBlockId}"]`);
+                if (targetWrapper) {
+                    const contentEl = targetWrapper.querySelector('.block-content');
+                    if (contentEl && contentEl.contentEditable !== 'false') {
+                        setCaretAtStart(contentEl);
+                    }
+                }
+            }
+            this.lastSavedSnapshot = state;
+        } finally {
+            this.isApplying = false;
+        }
+    },
+
+    undo() {
+        if (this.undoStack.length === 0) {
+            showToast('ℹ️ Không có thao tác trước đó để hoàn tác');
+            return;
+        }
+        const current = this.createSnapshot();
+        if (current) this.redoStack.push(current);
+
+        const prev = this.undoStack.pop();
+        if (prev) {
+            this.applyState(prev);
+            showToast('↩️ Đã hoàn tác (Ctrl+Z)');
+        }
+    },
+
+    redo() {
+        if (this.redoStack.length === 0) {
+            showToast('ℹ️ Không có thao tác nào để làm lại');
+            return;
+        }
+        const current = this.createSnapshot();
+        if (current) this.undoStack.push(current);
+
+        const next = this.redoStack.pop();
+        if (next) {
+            this.applyState(next);
+            showToast('↪️ Đã làm lại (Ctrl+Y)');
+        }
+    }
+};
+
 let saveTimeout;
 function triggerSave() {
     elements.saveStatus.textContent = 'Saving...';
@@ -745,6 +926,7 @@ function openPage(id) {
     }
     
     renderBlocks(page.blocks);
+    EditorHistory.init();
     
     // Apply lock state
     applyLockState(!!page.locked);
@@ -1679,6 +1861,7 @@ function checkMarkdownShortcuts(target) {
     // 1. Bullet list: "* " or "- "
     const bulletMatch = text.match(/^(\*|-)\s(.*)/s);
     if (bulletMatch) {
+        EditorHistory.recordBeforeAction();
         setBlockType(target, 'bullet');
         target.innerHTML = bulletMatch[2];
         setCaretAtStart(target);
@@ -1689,6 +1872,7 @@ function checkMarkdownShortcuts(target) {
     // 2. Numbered list: "1. " or "1) "
     const numberMatch = text.match(/^1[\.\)]\s(.*)/s);
     if (numberMatch) {
+        EditorHistory.recordBeforeAction();
         setBlockType(target, 'number');
         target.innerHTML = numberMatch[1];
         setCaretAtStart(target);
@@ -1700,6 +1884,7 @@ function checkMarkdownShortcuts(target) {
     // 3. To-do list: "[] " or "[ ] "
     const todoMatch = text.match(/^(\[\]|\[\s\])\s(.*)/s);
     if (todoMatch) {
+        EditorHistory.recordBeforeAction();
         setBlockType(target, 'todo');
         target.innerHTML = todoMatch[2];
         setCaretAtStart(target);
@@ -1710,6 +1895,7 @@ function checkMarkdownShortcuts(target) {
     // 4. Heading 1: "# "
     const h1Match = text.match(/^#\s(.*)/s);
     if (h1Match) {
+        EditorHistory.recordBeforeAction();
         setBlockType(target, 'h1');
         target.innerHTML = h1Match[1];
         setCaretAtStart(target);
@@ -1720,6 +1906,7 @@ function checkMarkdownShortcuts(target) {
     // 5. Heading 2: "## "
     const h2Match = text.match(/^##\s(.*)/s);
     if (h2Match) {
+        EditorHistory.recordBeforeAction();
         setBlockType(target, 'h2');
         target.innerHTML = h2Match[1];
         setCaretAtStart(target);
@@ -1730,6 +1917,7 @@ function checkMarkdownShortcuts(target) {
     // 6. Heading 3: "### "
     const h3Match = text.match(/^###\s(.*)/s);
     if (h3Match) {
+        EditorHistory.recordBeforeAction();
         setBlockType(target, 'h3');
         target.innerHTML = h3Match[1];
         setCaretAtStart(target);
@@ -1740,6 +1928,7 @@ function checkMarkdownShortcuts(target) {
     // 7. Quote: "> "
     const quoteMatch = text.match(/^>\s(.*)/s);
     if (quoteMatch) {
+        EditorHistory.recordBeforeAction();
         setBlockType(target, 'quote');
         target.innerHTML = quoteMatch[1];
         setCaretAtStart(target);
@@ -1749,6 +1938,7 @@ function checkMarkdownShortcuts(target) {
     
     // 8. Divider: "---"
     if (text.trim() === '---') {
+        EditorHistory.recordBeforeAction();
         setBlockType(target, 'divider');
         const wrapper = target.closest('.block-wrapper');
         const newWrapper = createBlockElement('text', '', generateId(), 0);
@@ -1760,6 +1950,7 @@ function checkMarkdownShortcuts(target) {
     
     // 9. Code block: "```"
     if (text.trim() === '```') {
+        EditorHistory.recordBeforeAction();
         setBlockType(target, 'code');
         target.innerHTML = '';
         setCaretAtStart(target);
@@ -1771,25 +1962,28 @@ function checkMarkdownShortcuts(target) {
 }
 
 function selectBlockAndShowMenu(wrapper) {
+    if (!wrapper) return;
     const contentEl = wrapper.querySelector('.block-content');
-    if (!contentEl) return;
     
-    // 1. Highlight / select all contents of this block ("bôi đen cả dòng")
-    contentEl.focus();
-    const range = document.createRange();
-    range.selectNodeContents(contentEl);
-    const sel = window.getSelection();
-    sel.removeAllRanges();
-    sel.addRange(range);
-    
-    // 2. Set active block state
+    // 1. Đưa block này vào selectedBlockWrappers và đánh dấu is-block-selected ("chọn cả dòng")
+    clearBlockSelection();
+    wrapper.classList.add('is-block-selected');
+    wrapper.classList.add('is-focused');
+    selectedBlockWrappers = [wrapper];
     activeBlockId = wrapper.getAttribute('data-id');
-    activeBlockElement = wrapper;
+    activeBlockElement = contentEl || wrapper;
+
+    if (contentEl && contentEl.contentEditable !== 'false') {
+        contentEl.focus();
+        const range = document.createRange();
+        range.selectNodeContents(contentEl);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+    }
+    
     const currentType = wrapper.getAttribute('data-type') || 'text';
     updateBlockTypeBadge(currentType);
-    
-    // 3. Highlight visually
-    wrapper.classList.add('is-focused');
     
     // 4. Open Floating Toolbar right above this block
     const toolbar = document.getElementById('floating-toolbar');
@@ -1950,6 +2144,7 @@ function handleBlockKeydown(e) {
     // Handle Indentation with Tab
     if (e.key === 'Tab') {
         e.preventDefault();
+        EditorHistory.recordBeforeAction();
         let indent = parseInt(wrapper.getAttribute('data-indent') || '0', 10);
         if (e.shiftKey) {
             indent = Math.max(0, indent - 1);
@@ -1960,11 +2155,13 @@ function handleBlockKeydown(e) {
         wrapper.style.marginLeft = `${indent * 24}px`;
         updateNumberPrefixes();
         triggerSave();
+        EditorHistory.updateLastSnapshot();
         return;
     }
 
     if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
+        EditorHistory.record(true);
         
         let indent = parseInt(wrapper.getAttribute('data-indent') || '0', 10);
         const type = target.getAttribute('data-type') || 'text';
@@ -2081,6 +2278,7 @@ function handleBlockKeydown(e) {
                 // 1. If not plain text, revert to plain text first (keeps text!)
                 if (type && type !== 'text') {
                     e.preventDefault();
+                    EditorHistory.record(true);
                     setBlockType(target, 'text');
                     updateNumberPrefixes();
                     closeSlashMenu();
@@ -2091,6 +2289,7 @@ function handleBlockKeydown(e) {
                 // 2. If indented, outdent first!
                 if (indent > 0) {
                     e.preventDefault();
+                    EditorHistory.record(true);
                     indent = indent - 1;
                     wrapper.setAttribute('data-indent', indent);
                     wrapper.style.marginLeft = `${indent * 24}px`;
@@ -2101,7 +2300,27 @@ function handleBlockKeydown(e) {
                 // 3. Otherwise merge with previous block!
                 const prev = wrapper.previousElementSibling;
                 if (prev && prev.classList.contains('block-wrapper')) {
+                    const prevType = prev.getAttribute('data-type');
+                    // Nếu block phía trước là ảnh hoặc divider
+                    if (prevType === 'image' || prevType === 'divider') {
+                        e.preventDefault();
+                        EditorHistory.record(true);
+                        const currentText = (target.innerText || '').trim();
+                        if (!currentText || target.innerHTML === '<br>') {
+                            // Dòng hiện tại trống: Xóa dòng ảnh phía trước!
+                            prev.remove();
+                            updateNumberPrefixes();
+                            triggerSave();
+                            showToast('🗑️ Đã xóa dòng phía trước');
+                        } else {
+                            // Dòng hiện tại có chữ: chọn dòng ảnh phía trước
+                            selectSingleBlock(prev);
+                        }
+                        return;
+                    }
+
                     e.preventDefault();
+                    EditorHistory.record(true);
                     const prevContent = prev.querySelector('.block-content');
                     if (prevContent) {
                         const prevTextLen = prevContent.innerText ? prevContent.innerText.length : 0;
@@ -2122,10 +2341,46 @@ function handleBlockKeydown(e) {
             }
         }
     }
+
+    // Forward Delete key handler: xóa dòng ảnh hoặc dòng phân cách phía dưới nếu con trỏ ở cuối dòng
+    if (e.key === 'Delete') {
+        const sel = window.getSelection();
+        if (sel && sel.isCollapsed && sel.rangeCount) {
+            const range = sel.getRangeAt(0);
+            let isAtEnd = false;
+            if (range.endOffset >= (range.endContainer.textContent || '').length) {
+                let nextNode = range.endContainer.nextSibling;
+                isAtEnd = true;
+                while (nextNode) {
+                    if (nextNode.textContent && nextNode.textContent.length > 0) {
+                        isAtEnd = false;
+                        break;
+                    }
+                    nextNode = nextNode.nextSibling;
+                }
+            }
+            if (isAtEnd) {
+                const next = wrapper.nextElementSibling;
+                if (next && next.classList.contains('block-wrapper')) {
+                    const nextType = next.getAttribute('data-type');
+                    if (nextType === 'image' || nextType === 'divider') {
+                        e.preventDefault();
+                        EditorHistory.record(true);
+                        next.remove();
+                        updateNumberPrefixes();
+                        triggerSave();
+                        showToast('🗑️ Đã xóa dòng phía dưới');
+                        return;
+                    }
+                }
+            }
+        }
+    }
 }
 
 function handleBlockInput(e) {
     const target = e.target;
+    EditorHistory.record(false);
     
     // Check for Word/Markdown shortcuts: "- ", "1. ", "[] ", "# ", etc.
     const converted = checkMarkdownShortcuts(target);
@@ -2149,20 +2404,25 @@ function handleBlockPaste(e) {
     let target = e.target;
     let wrapper = target.closest('.block-wrapper');
     if (!wrapper) return;
+    EditorHistory.record(true);
 
-    // Nếu người dùng đang bôi đen nhiều khối (multi-block selection), xóa các khối đã chọn và thay thế
+    // Nếu người dùng đang bôi đen nhiều khối (multi-block selection), chỉ xóa và thay thế nếu vị trí dán nằm trong khối đã chọn
     if (typeof selectedBlockWrappers !== 'undefined' && selectedBlockWrappers && selectedBlockWrappers.length > 0) {
-        const firstBlock = selectedBlockWrappers[0];
-        const restBlocks = selectedBlockWrappers.slice(1);
-        restBlocks.forEach(w => w.remove());
-        if (typeof clearBlockSelection === 'function') clearBlockSelection();
-        if (firstBlock) {
-            const firstContent = firstBlock.querySelector('.block-content');
-            if (firstContent) {
-                target = firstContent;
-                wrapper = firstBlock;
-                target.innerHTML = '';
+        if (selectedBlockWrappers.includes(wrapper)) {
+            const firstBlock = selectedBlockWrappers[0];
+            const restBlocks = selectedBlockWrappers.slice(1);
+            restBlocks.forEach(w => w.remove());
+            clearBlockSelection();
+            if (firstBlock) {
+                const firstContent = firstBlock.querySelector('.block-content');
+                if (firstContent) {
+                    target = firstContent;
+                    wrapper = firstBlock;
+                    target.innerHTML = '';
+                }
             }
+        } else {
+            clearBlockSelection();
         }
     }
 
@@ -2217,12 +2477,24 @@ function handleBlockPaste(e) {
 
     if (!text) return;
 
-    // Dán 1 dòng thông thường: chèn plain text sạch vào vị trí con trỏ
+    // Dán 1 dòng thông thường: nếu là ảnh markdown ![caption](url), tạo ngay block ảnh
     if (!text.includes('\n')) {
+        const trimmed = text.trim();
+        const imgMatch = trimmed.match(/^!\[(.*?)\]\((.+?)\)$/);
+        if (imgMatch) {
+            e.preventDefault();
+            EditorHistory.recordBeforeAction();
+            setBlockType(target, 'image', JSON.stringify({ src: imgMatch[2], caption: imgMatch[1] || '', width: '100%', align: 'center' }));
+            selectSingleBlock(wrapper);
+            triggerSave();
+            EditorHistory.updateLastSnapshot();
+            return;
+        }
         e.preventDefault();
         document.execCommand('insertText', false, text);
         checkMarkdownShortcuts(target);
         triggerSave();
+        EditorHistory.updateLastSnapshot();
         return;
     }
 
@@ -2257,12 +2529,18 @@ function handleBlockPaste(e) {
 
     // 1. Dòng đầu tiên: đưa vào block hiện tại
     const firstLine = lines[0];
-    let finalFirstHtml = beforeHtml + escapeHtml(firstLine);
-    if (lines.length === 1 && afterHtml) {
-        finalFirstHtml += afterHtml;
+    const firstTrimmed = firstLine.trim();
+    const firstImgMatch = firstTrimmed.match(/^!\[(.*?)\]\((.+?)\)$/);
+    if (firstImgMatch) {
+        setBlockType(target, 'image', JSON.stringify({ src: firstImgMatch[2], caption: firstImgMatch[1] || '', width: '100%', align: 'center' }));
+    } else {
+        let finalFirstHtml = beforeHtml + escapeHtml(firstLine);
+        if (lines.length === 1 && afterHtml) {
+            finalFirstHtml += afterHtml;
+        }
+        target.innerHTML = finalFirstHtml;
+        checkMarkdownShortcuts(target);
     }
-    target.innerHTML = finalFirstHtml;
-    checkMarkdownShortcuts(target);
 
     // 2. Các dòng tiếp theo: tạo thành các khối (block) mới nối tiếp
     let lastWrapper = wrapper;
@@ -2285,48 +2563,52 @@ function handleBlockPaste(e) {
         }
 
         const trimmed = lineText.trim();
+        let blockContent = '';
 
-        if (trimmed === '---') {
+        if ((m = trimmed.match(/^!\[(.*?)\]\((.+?)\)$/))) {
+            blockType = 'image';
+            blockContent = JSON.stringify({ src: m[2], caption: m[1] || '', width: '100%', align: 'center' });
+        } else if (trimmed === '---') {
             blockType = 'divider';
-            lineText = '';
+            blockContent = '';
         } else if ((m = trimmed.match(/^###\s+(.*)$/))) {
             blockType = 'h3';
-            lineText = m[1];
+            blockContent = escapeHtml(m[1]);
         } else if ((m = trimmed.match(/^##\s+(.*)$/))) {
             blockType = 'h2';
-            lineText = m[1];
+            blockContent = escapeHtml(m[1]);
         } else if ((m = trimmed.match(/^#\s+(.*)$/))) {
             blockType = 'h1';
-            lineText = m[1];
+            blockContent = escapeHtml(m[1]);
         } else if ((m = trimmed.match(/^(?:[-*]\s+)?\[( |x|X)?\]\s*(.*)$/))) {
             blockType = 'todo';
-            lineText = (m[1] && m[1].toLowerCase() === 'x' ? '[x] ' : '') + m[2];
+            blockContent = escapeHtml((m[1] && m[1].toLowerCase() === 'x' ? '[x] ' : '') + m[2]);
         } else if ((m = trimmed.match(/^[-*•]\s+(.*)$/))) {
             blockType = 'bullet';
-            lineText = m[1];
+            blockContent = escapeHtml(m[1]);
         } else if ((m = trimmed.match(/^\d+[.)]\s+(.*)$/))) {
             blockType = 'number';
-            lineText = m[1];
+            blockContent = escapeHtml(m[1]);
         } else if ((m = trimmed.match(/^>\s?(.*)$/))) {
             blockType = 'quote';
-            lineText = m[1];
+            blockContent = escapeHtml(m[1]);
         } else if (trimmed.startsWith('```')) {
             blockType = 'code';
-            lineText = trimmed.replace(/^```/, '');
+            blockContent = escapeHtml(trimmed.replace(/^```/, ''));
         } else {
             // Kế thừa danh sách nếu block trước là bullet/number/todo
             const prevType = lastWrapper.getAttribute('data-type');
             if (prevType === 'bullet' || prevType === 'number' || prevType === 'todo') {
                 if (trimmed) blockType = prevType;
             }
+            blockContent = escapeHtml(lineText);
         }
 
-        let finalHtml = escapeHtml(lineText);
-        if (isLastLine && afterHtml) {
-            finalHtml += afterHtml;
+        if (isLastLine && afterHtml && blockType !== 'image' && blockType !== 'divider') {
+            blockContent += afterHtml;
         }
 
-        const newWrapper = createBlockElement(blockType, finalHtml, generateId(), blockIndent);
+        const newWrapper = createBlockElement(blockType, blockContent, generateId(), blockIndent);
         lastWrapper.parentNode.insertBefore(newWrapper, lastWrapper.nextSibling);
         lastWrapper = newWrapper;
         lastContentEl = newWrapper.querySelector('.block-content');
@@ -3340,7 +3622,7 @@ function convertBlockType(blockId, newType) {
     showToast(`Đã chuyển thành ${getBlockTypeName(newType)}`);
 }
 
-// Multi-Block Selection System
+// Multi-Block Selection & Line Operations System
 let selectedBlockWrappers = [];
 
 function clearBlockSelection() {
@@ -3348,6 +3630,17 @@ function clearBlockSelection() {
         selectedBlockWrappers.forEach(w => w.classList.remove('is-block-selected'));
         selectedBlockWrappers = [];
     }
+}
+
+function selectSingleBlock(wrapper) {
+    if (!wrapper) return;
+    clearBlockSelection();
+    wrapper.classList.add('is-block-selected');
+    wrapper.classList.add('is-focused');
+    selectedBlockWrappers = [wrapper];
+    activeBlockId = wrapper.getAttribute('data-id');
+    const contentEl = wrapper.querySelector('.block-content');
+    activeBlockElement = contentEl || wrapper;
 }
 
 function selectAllBlocks() {
@@ -3360,6 +3653,66 @@ function selectAllBlocks() {
     showToast(`Đã chọn toàn bộ ${wrappers.length} dòng (Ctrl+C để sao chép, Backspace để xóa)`);
 }
 
+function blockToMarkdown(wrapper) {
+    if (!wrapper) return '';
+    const type = wrapper.getAttribute('data-type') || 'text';
+    const indent = parseInt(wrapper.getAttribute('data-indent') || '0', 10);
+    const indentStr = '  '.repeat(indent);
+    const contentEl = wrapper.querySelector('.block-content');
+
+    if (type === 'image') {
+        const img = contentEl ? (contentEl.querySelector('img.note-image') || contentEl.querySelector('img')) : null;
+        const cap = contentEl ? contentEl.querySelector('.image-caption') : null;
+        const src = img ? (img.getAttribute('src') || '') : '';
+        const caption = cap ? (cap.innerText || cap.textContent || '').trim() : '';
+        return `${indentStr}![${caption || 'Hình ảnh'}](${src})\n`;
+    }
+
+    const rawText = contentEl ? (contentEl.innerText !== undefined ? contentEl.innerText : (contentEl.textContent || '')) : '';
+    const text = rawText.trim();
+
+    if (type === 'h1' || type === 'toggle-h1') return `${indentStr}# ${text}\n`;
+    if (type === 'h2' || type === 'toggle-h2') return `${indentStr}## ${text}\n`;
+    if (type === 'h3' || type === 'toggle-h3') return `${indentStr}### ${text}\n`;
+    if (type === 'bullet') return `${indentStr}- ${text}\n`;
+    if (type === 'number') return `${indentStr}1. ${text}\n`;
+    if (type === 'todo') {
+        const isChecked = wrapper.querySelector('.todo-cb')?.checked;
+        return `${indentStr}${isChecked ? '[x]' : '[ ]'} ${text}\n`;
+    }
+    if (type === 'quote') return `${indentStr}> ${text}\n`;
+    if (type === 'code') return `${indentStr}\`\`\`\n${rawText}\n\`\`\`\n`;
+    if (type === 'divider') return `${indentStr}---\n`;
+    return `${indentStr}${rawText}\n`;
+}
+
+function blockToHtml(wrapper) {
+    if (!wrapper) return '';
+    const type = wrapper.getAttribute('data-type') || 'text';
+    const contentEl = wrapper.querySelector('.block-content');
+    if (type === 'image') {
+        const img = contentEl ? (contentEl.querySelector('img.note-image') || contentEl.querySelector('img')) : null;
+        const cap = contentEl ? contentEl.querySelector('.image-caption') : null;
+        const src = img ? (img.getAttribute('src') || '') : '';
+        const caption = cap ? (cap.innerText || cap.textContent || '').trim() : '';
+        return `<p><img src="${src}" alt="${escapeHtml(caption)}"></p>`;
+    }
+    const html = contentEl ? contentEl.innerHTML : '';
+    if (type === 'h1') return `<h1>${html}</h1>`;
+    if (type === 'h2') return `<h2>${html}</h2>`;
+    if (type === 'h3') return `<h3>${html}</h3>`;
+    if (type === 'bullet') return `<ul><li>${html}</li></ul>`;
+    if (type === 'number') return `<ol><li>${html}</li></ol>`;
+    if (type === 'todo') {
+        const isChecked = wrapper.querySelector('.todo-cb')?.checked;
+        return `<p>[${isChecked ? 'x' : ' '}] ${html}</p>`;
+    }
+    if (type === 'quote') return `<blockquote>${html}</blockquote>`;
+    if (type === 'code') return `<pre><code>${html}</code></pre>`;
+    if (type === 'divider') return `<hr>`;
+    return `<p>${html}</p>`;
+}
+
 function initMultiBlockSelection() {
     let isMouseDown = false;
     let dragStartWrapper = null;
@@ -3367,7 +3720,7 @@ function initMultiBlockSelection() {
     if (!elements.blockEditor) return;
 
     elements.blockEditor.addEventListener('mousedown', (e) => {
-        if (e.target.closest('.block-handle') || e.target.closest('.todo-cb') || e.target.closest('.toggle-icon')) {
+        if (e.target.closest('.block-handle') || e.target.closest('.todo-cb') || e.target.closest('.toggle-icon') || e.target.closest('.image-toolbar')) {
             return;
         }
         isMouseDown = true;
@@ -3404,8 +3757,15 @@ function initMultiBlockSelection() {
         dragStartWrapper = null;
     });
 
-    // Keyboard handlers when multiple blocks are selected
+    // Keyboard handlers when blocks are selected
     document.addEventListener('keydown', (e) => {
+        // Arrow keys clear selection when moving cursor
+        if (selectedBlockWrappers && selectedBlockWrappers.length > 0 && !e.shiftKey) {
+            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+                clearBlockSelection();
+            }
+        }
+
         // Ctrl+A handling
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
             const activeEl = document.activeElement;
@@ -3416,7 +3776,6 @@ function initMultiBlockSelection() {
                     const sel = window.getSelection();
                     const textLen = (blockContent.innerText || '').trim().length;
                     const selLen = (sel ? sel.toString() : '').trim().length;
-                    // If single line already selected or empty, select all blocks!
                     if (selLen >= textLen || textLen === 0) {
                         e.preventDefault();
                         selectAllBlocks();
@@ -3430,45 +3789,113 @@ function initMultiBlockSelection() {
             }
         }
 
-        // Multi-block actions
+        // Multi-block / Selected line actions
         if (selectedBlockWrappers && selectedBlockWrappers.length > 0) {
             if (e.key === 'Escape') {
                 clearBlockSelection();
                 return;
             }
 
-            // Copy multi-block text
-            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
-                const combinedText = selectedBlockWrappers
-                    .map(w => {
-                        const contentEl = w.querySelector('.block-content');
-                        return contentEl ? (contentEl.innerText || '').trim() : '';
-                    })
-                    .join('\n');
-                navigator.clipboard.writeText(combinedText);
-                showToast(`Đã sao chép ${selectedBlockWrappers.length} dòng`);
-                return;
-            }
-
-            // Delete multi-block text
+            // Delete multi-block text / selected line (supports images, headings, etc.)
             if (e.key === 'Backspace' || e.key === 'Delete') {
                 e.preventDefault();
+                EditorHistory.recordBeforeAction();
                 const firstBlock = selectedBlockWrappers[0];
-                const restBlocks = selectedBlockWrappers.slice(1);
-                restBlocks.forEach(w => w.remove());
-                if (firstBlock) {
-                    const contentEl = firstBlock.querySelector('.block-content');
-                    setBlockType(contentEl, 'text');
-                    contentEl.innerHTML = '';
-                    firstBlock.classList.remove('is-block-selected');
-                    contentEl.focus();
-                }
+                const prev = firstBlock.previousElementSibling;
+                const next = selectedBlockWrappers[selectedBlockWrappers.length - 1].nextElementSibling;
+                
+                selectedBlockWrappers.forEach(w => w.remove());
                 selectedBlockWrappers = [];
+                clearBlockSelection();
+
+                let targetToFocus = prev || next;
+                if (!targetToFocus || !targetToFocus.classList.contains('block-wrapper')) {
+                    targetToFocus = createBlockElement('text', '', generateId(), 0);
+                    elements.blockEditor.appendChild(targetToFocus);
+                }
+                const nextContent = targetToFocus.querySelector('.block-content');
+                if (nextContent && nextContent.contentEditable !== 'false') {
+                    setCaretAtStart(nextContent);
+                }
                 updateNumberPrefixes();
                 triggerSave();
-                showToast('Đã xóa các dòng đã chọn');
+                EditorHistory.updateLastSnapshot();
+                showToast('🗑️ Đã xóa dòng được chọn');
                 return;
             }
+        }
+    });
+
+    // Global Copy handler: sao chép cả dòng (toàn bộ cấu trúc markdown + HTML)
+    document.addEventListener('copy', (e) => {
+        // 1. Nếu đang chọn khối (nhiều dòng hoặc 1 dòng qua click handle / ảnh)
+        if (selectedBlockWrappers && selectedBlockWrappers.length > 0) {
+            e.preventDefault();
+            const mdText = selectedBlockWrappers.map(w => blockToMarkdown(w)).join('');
+            const htmlText = selectedBlockWrappers.map(w => blockToHtml(w)).join('');
+            if (e.clipboardData) {
+                e.clipboardData.setData('text/plain', mdText);
+                e.clipboardData.setData('text/html', htmlText);
+            }
+            showToast(`📋 Đã sao chép ${selectedBlockWrappers.length} dòng!`);
+            return;
+        }
+
+        // 2. Nếu con trỏ chuột đang ở trong 1 block:
+        const activeEl = document.activeElement;
+        const currentWrapper = activeEl ? activeEl.closest('.block-wrapper') : null;
+        if (currentWrapper && elements.blockEditor && elements.blockEditor.contains(currentWrapper)) {
+            const sel = window.getSelection();
+            const selText = sel ? sel.toString() : '';
+            const contentEl = currentWrapper.querySelector('.block-content');
+            const contentText = contentEl ? (contentEl.innerText || '').trim() : '';
+
+            // Nếu người dùng KHÔNG bôi đen từng chữ (con trỏ chỉ nhấp nháy ở dòng đó) 
+            // HOẶC toàn bộ nội dung dòng đó được bôi đen -> Copy CẢ DÒNG (cả kiểu block, ảnh, markdown)
+            if (!selText || sel.isCollapsed || selText.trim() === contentText) {
+                e.preventDefault();
+                const mdText = blockToMarkdown(currentWrapper);
+                const htmlText = blockToHtml(currentWrapper);
+                if (e.clipboardData) {
+                    e.clipboardData.setData('text/plain', mdText);
+                    e.clipboardData.setData('text/html', htmlText);
+                }
+                showToast('📋 Đã sao chép cả dòng!');
+                return;
+            }
+        }
+    });
+
+    // Global Cut handler
+    document.addEventListener('cut', (e) => {
+        if (selectedBlockWrappers && selectedBlockWrappers.length > 0) {
+            e.preventDefault();
+            EditorHistory.recordBeforeAction();
+            const mdText = selectedBlockWrappers.map(w => blockToMarkdown(w)).join('');
+            const htmlText = selectedBlockWrappers.map(w => blockToHtml(w)).join('');
+            if (e.clipboardData) {
+                e.clipboardData.setData('text/plain', mdText);
+                e.clipboardData.setData('text/html', htmlText);
+            }
+            const firstBlock = selectedBlockWrappers[0];
+            const prev = firstBlock.previousElementSibling;
+            const next = selectedBlockWrappers[selectedBlockWrappers.length - 1].nextElementSibling;
+            selectedBlockWrappers.forEach(w => w.remove());
+            selectedBlockWrappers = [];
+            clearBlockSelection();
+
+            let targetToFocus = prev || next;
+            if (!targetToFocus || !targetToFocus.classList.contains('block-wrapper')) {
+                targetToFocus = createBlockElement('text', '', generateId(), 0);
+                elements.blockEditor.appendChild(targetToFocus);
+            }
+            const nextContent = targetToFocus.querySelector('.block-content');
+            if (nextContent && nextContent.contentEditable !== 'false') setCaretAtStart(nextContent);
+            updateNumberPrefixes();
+            triggerSave();
+            EditorHistory.updateLastSnapshot();
+            showToast('✂️ Đã cắt các dòng đã chọn');
+            return;
         }
     });
 }
@@ -3749,9 +4176,10 @@ function renderImageBlock(contentEl, contentData) {
                 <button type="button" class="img-btn ${align === 'center' || !align ? 'active' : ''}" data-action="align-center" title="Căn giữa"><i class="ri-align-center"></i></button>
                 <button type="button" class="img-btn ${align === 'right' ? 'active' : ''}" data-action="align-right" title="Căn phải"><i class="ri-align-right"></i></button>
                 <span class="img-tb-divider"></span>
+                <button type="button" class="img-btn" data-action="caption" title="Thêm/sửa chú thích"><i class="ri-chat-1-line"></i></button>
                 <button type="button" class="img-btn" data-action="zoom" title="Xem ảnh toàn màn hình"><i class="ri-zoom-in-line"></i></button>
                 <button type="button" class="img-btn" data-action="download" title="Tải ảnh về máy"><i class="ri-download-2-line"></i></button>
-                <button type="button" class="img-btn danger" data-action="delete" title="Xóa ảnh"><i class="ri-delete-bin-line"></i></button>
+                <button type="button" class="img-btn danger" data-action="delete" title="Xóa dòng ảnh"><i class="ri-delete-bin-line"></i></button>
             </div>
             <div class="image-media-wrapper" style="width: ${width};">
                 <img class="note-image" src="${safeSrc}" alt="${safeCaption || 'Hình ảnh ghi chú'}" loading="lazy" />
@@ -3765,8 +4193,18 @@ function renderImageBlock(contentEl, contentData) {
     const imgEl = contentEl.querySelector('.note-image');
     const captionEl = contentEl.querySelector('.image-caption');
 
+    // Bấm vào ảnh hoặc vùng ảnh: Chọn toàn bộ dòng ảnh (cho phép xóa bằng Backspace/Delete hoặc copy bằng Ctrl+C)
+    container.addEventListener('click', (e) => {
+        if (e.target.closest('.image-toolbar') || e.target.closest('.image-caption')) return;
+        const wrapper = contentEl.closest('.block-wrapper');
+        if (wrapper) {
+            selectSingleBlock(wrapper);
+        }
+    });
+
+    // Nhấp đúp vào ảnh: Phóng to xem chi tiết trong lightbox
     if (imgEl) {
-        imgEl.addEventListener('click', (e) => {
+        imgEl.addEventListener('dblclick', (e) => {
             e.stopPropagation();
             const curCap = captionEl ? (captionEl.innerText || captionEl.textContent || '').trim() : '';
             openImageLightbox(imgEl.src, curCap);
@@ -3777,15 +4215,22 @@ function renderImageBlock(contentEl, contentData) {
         captionEl.addEventListener('input', () => {
             triggerSave();
         });
+        captionEl.addEventListener('blur', () => {
+            if (!captionEl.innerText.trim()) {
+                captionEl.style.display = '';
+            }
+        });
         captionEl.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 e.preventDefault();
+                EditorHistory.recordBeforeAction();
                 const wrapper = contentEl.closest('.block-wrapper');
                 const nextWrapper = createBlockElement('text', '', generateId(), parseInt(wrapper.getAttribute('data-indent') || '0', 10));
                 wrapper.parentNode.insertBefore(nextWrapper, wrapper.nextSibling);
                 const nextContent = nextWrapper.querySelector('.block-content');
                 if (nextContent) nextContent.focus();
                 triggerSave();
+                EditorHistory.updateLastSnapshot();
             }
         });
     }
@@ -3795,38 +4240,53 @@ function renderImageBlock(contentEl, contentData) {
             e.stopPropagation();
             const action = btn.getAttribute('data-action');
             if (action === 'resize-50') {
+                EditorHistory.recordBeforeAction();
                 mediaWrap.style.width = '50%';
                 contentEl.querySelectorAll('[data-action^="resize-"]').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 triggerSave();
+                EditorHistory.updateLastSnapshot();
             } else if (action === 'resize-75') {
+                EditorHistory.recordBeforeAction();
                 mediaWrap.style.width = '75%';
                 contentEl.querySelectorAll('[data-action^="resize-"]').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 triggerSave();
+                EditorHistory.updateLastSnapshot();
             } else if (action === 'resize-100') {
+                EditorHistory.recordBeforeAction();
                 mediaWrap.style.width = '100%';
                 contentEl.querySelectorAll('[data-action^="resize-"]').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 triggerSave();
+                EditorHistory.updateLastSnapshot();
             } else if (action === 'align-left') {
+                EditorHistory.recordBeforeAction();
                 container.className = 'image-block-container align-left';
                 contentEl.setAttribute('data-align', 'left');
                 contentEl.querySelectorAll('[data-action^="align-"]').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 triggerSave();
+                EditorHistory.updateLastSnapshot();
             } else if (action === 'align-center') {
+                EditorHistory.recordBeforeAction();
                 container.className = 'image-block-container align-center';
                 contentEl.setAttribute('data-align', 'center');
                 contentEl.querySelectorAll('[data-action^="align-"]').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 triggerSave();
+                EditorHistory.updateLastSnapshot();
             } else if (action === 'align-right') {
+                EditorHistory.recordBeforeAction();
                 container.className = 'image-block-container align-right';
                 contentEl.setAttribute('data-align', 'right');
                 contentEl.querySelectorAll('[data-action^="align-"]').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 triggerSave();
+                EditorHistory.updateLastSnapshot();
+            } else if (action === 'caption') {
+                captionEl.style.display = 'block';
+                captionEl.focus();
             } else if (action === 'zoom') {
                 const curCap = captionEl ? (captionEl.innerText || captionEl.textContent || '').trim() : '';
                 openImageLightbox(imgEl.src, curCap);
@@ -3836,15 +4296,19 @@ function renderImageBlock(contentEl, contentData) {
             } else if (action === 'delete') {
                 const wrapper = contentEl.closest('.block-wrapper');
                 if (wrapper) {
+                    EditorHistory.recordBeforeAction();
                     const prev = wrapper.previousElementSibling || wrapper.nextElementSibling;
                     wrapper.remove();
+                    clearBlockSelection();
                     if (prev) {
                         const targetContent = prev.querySelector('.block-content');
-                        if (targetContent) targetContent.focus();
+                        if (targetContent && targetContent.contentEditable !== 'false') targetContent.focus();
                     } else {
                         focusFirstBlockOrCreate();
                     }
+                    updateNumberPrefixes();
                     triggerSave();
+                    EditorHistory.updateLastSnapshot();
                     showToast('🗑️ Đã xóa hình ảnh');
                 }
             }
@@ -3861,6 +4325,7 @@ function insertImageFromFile(file, targetWrapper = null) {
     showToast('⏳ Đang tối ưu hóa dung lượng ảnh...');
 
     compressImageFile(file).then(dataUrl => {
+        EditorHistory.recordBeforeAction();
         let wrapper = targetWrapper;
         if (!wrapper && activeBlockElement) {
             wrapper = activeBlockElement.closest('.block-wrapper');
@@ -3874,9 +4339,6 @@ function insertImageFromFile(file, targetWrapper = null) {
             align: 'center'
         }), generateId(), indent);
 
-        // Tạo sẵn một dòng văn bản trống kế tiếp để người dùng gõ tiếp ngay mà không bị gián đoạn
-        const nextTextBlock = createBlockElement('text', '', generateId(), indent);
-
         if (wrapper && wrapper.parentNode) {
             const contentEl = wrapper.querySelector('.block-content');
             const isBlank = contentEl && (!contentEl.innerText || !contentEl.innerText.trim());
@@ -3885,18 +4347,25 @@ function insertImageFromFile(file, targetWrapper = null) {
             } else {
                 wrapper.parentNode.insertBefore(imgBlock, wrapper.nextSibling);
             }
-            imgBlock.parentNode.insertBefore(nextTextBlock, imgBlock.nextSibling);
+            // Chỉ thêm dòng mới nếu ảnh được chèn vào cuối cùng của trang
+            if (!imgBlock.nextElementSibling) {
+                const nextTextBlock = createBlockElement('text', '', generateId(), indent);
+                imgBlock.parentNode.appendChild(nextTextBlock);
+                const nextContent = nextTextBlock.querySelector('.block-content');
+                if (nextContent) nextContent.focus();
+            }
         } else {
             elements.blockEditor.appendChild(imgBlock);
+            const nextTextBlock = createBlockElement('text', '', generateId(), indent);
             elements.blockEditor.appendChild(nextTextBlock);
+            const nextContent = nextTextBlock.querySelector('.block-content');
+            if (nextContent) nextContent.focus();
         }
 
-        const nextContent = nextTextBlock.querySelector('.block-content');
-        if (nextContent) {
-            nextContent.focus();
-        }
-
+        selectSingleBlock(imgBlock);
+        updateNumberPrefixes();
         triggerSave();
+        EditorHistory.updateLastSnapshot();
         showToast('🖼️ Đã chèn ảnh thành công!');
     }).catch(err => {
         console.error('Lỗi chèn ảnh:', err);
@@ -4018,6 +4487,7 @@ function switchImageModalTab(tabName) {
 
 function applyImageToTarget(src, caption = '') {
     if (!src) return;
+    EditorHistory.recordBeforeAction();
     const wrapper = imageModalTargetWrapper;
     const indent = wrapper ? parseInt(wrapper.getAttribute('data-indent') || '0', 10) : 0;
 
@@ -4028,8 +4498,6 @@ function applyImageToTarget(src, caption = '') {
         align: 'center'
     }), generateId(), indent);
 
-    const nextTextBlock = createBlockElement('text', '', generateId(), indent);
-
     if (wrapper && wrapper.parentNode) {
         const contentEl = wrapper.querySelector('.block-content');
         const isBlank = contentEl && (!contentEl.innerText || !contentEl.innerText.trim());
@@ -4038,17 +4506,26 @@ function applyImageToTarget(src, caption = '') {
         } else {
             wrapper.parentNode.insertBefore(imgBlock, wrapper.nextSibling);
         }
-        imgBlock.parentNode.insertBefore(nextTextBlock, imgBlock.nextSibling);
+        // Chỉ thêm dòng mới nếu ảnh được chèn vào cuối cùng của trang
+        if (!imgBlock.nextElementSibling) {
+            const nextTextBlock = createBlockElement('text', '', generateId(), indent);
+            imgBlock.parentNode.appendChild(nextTextBlock);
+            const nextContent = nextTextBlock.querySelector('.block-content');
+            if (nextContent) nextContent.focus();
+        }
     } else {
         elements.blockEditor.appendChild(imgBlock);
+        const nextTextBlock = createBlockElement('text', '', generateId(), indent);
         elements.blockEditor.appendChild(nextTextBlock);
+        const nextContent = nextTextBlock.querySelector('.block-content');
+        if (nextContent) nextContent.focus();
     }
 
-    const nextContent = nextTextBlock.querySelector('.block-content');
-    if (nextContent) nextContent.focus();
-
+    selectSingleBlock(imgBlock);
     closeImageModal();
+    updateNumberPrefixes();
     triggerSave();
+    EditorHistory.updateLastSnapshot();
     showToast('🖼️ Đã chèn ảnh thành công!');
 }
 
