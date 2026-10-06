@@ -823,6 +823,82 @@
                 </div>
             </form>
         </div>
+    <!-- Insert Image Modal -->
+    <div class="modal-overlay" id="image-modal" style="display: none;">
+        <div class="modal-content image-modal-content">
+            <div class="modal-header">
+                <h3><i class="ri-image-2-line"></i> Chèn hình ảnh</h3>
+                <button class="modal-close-btn" id="image-modal-close-btn" type="button"><i class="ri-close-line"></i></button>
+            </div>
+            
+            <div class="image-modal-tabs">
+                <button class="img-tab-btn active" data-tab="upload" id="tab-img-upload-btn" type="button">
+                    <i class="ri-upload-cloud-2-line"></i> Tải tệp lên
+                </button>
+                <button class="img-tab-btn" data-tab="link" id="tab-img-link-btn" type="button">
+                    <i class="ri-link"></i> Đường dẫn URL
+                </button>
+                <button class="img-tab-btn" data-tab="camera" id="tab-img-camera-btn" type="button">
+                    <i class="ri-camera-lens-line"></i> Camera
+                </button>
+            </div>
+
+            <!-- Tab 1: Upload from computer -->
+            <div class="image-modal-panel" id="panel-img-upload">
+                <div class="image-upload-dropzone" id="image-upload-dropzone">
+                    <i class="ri-image-add-line dropzone-icon"></i>
+                    <p class="dropzone-text">Kéo thả ảnh vào đây, hoặc <span class="dropzone-browse">chọn từ thiết bị</span></p>
+                    <span class="dropzone-hint">Hỗ trợ PNG, JPG, WebP, GIF (tự động nén tối ưu dung lượng)</span>
+                    <input type="file" id="image-modal-file-input" accept="image/*" style="display: none;">
+                </div>
+            </div>
+
+            <!-- Tab 2: URL Link -->
+            <div class="image-modal-panel" id="panel-img-link" style="display: none;">
+                <div class="form-group" style="margin-top: 10px;">
+                    <label>Đường dẫn hình ảnh (URL)</label>
+                    <input type="url" id="image-modal-url-input" placeholder="https://example.com/image.png" autocomplete="off">
+                </div>
+                <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;">
+                    <button type="button" class="btn btn-secondary" id="image-modal-cancel-link-btn">Hủy</button>
+                    <button type="button" class="btn btn-primary" id="image-modal-submit-link-btn">Chèn ảnh</button>
+                </div>
+            </div>
+
+            <!-- Tab 3: Camera capture -->
+            <div class="image-modal-panel" id="panel-img-camera" style="display: none;">
+                <div class="camera-capture-box">
+                    <i class="ri-camera-line" style="font-size: 38px; color: var(--accent);"></i>
+                    <p style="margin: 10px 0; font-size: 14px;">Chụp ảnh nhanh bài giảng, bảng viết từ camera thiết bị</p>
+                    <button type="button" class="btn btn-primary" id="image-camera-trigger-btn">
+                        <i class="ri-camera-fill"></i> Mở máy ảnh
+                    </button>
+                    <input type="file" id="image-camera-input" accept="image/*" capture="environment" style="display: none;">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Image Lightbox Modal (Fullscreen Zoom) -->
+    <div class="lightbox-overlay" id="image-lightbox-modal" style="display: none;">
+        <div class="lightbox-backdrop"></div>
+        <div class="lightbox-top-bar">
+            <div class="lightbox-caption" id="lightbox-caption"></div>
+            <div class="lightbox-actions">
+                <button class="lightbox-btn" id="lightbox-download-btn" title="Tải ảnh về máy" type="button">
+                    <i class="ri-download-2-line"></i>
+                </button>
+                <button class="lightbox-btn" id="lightbox-zoom-toggle-btn" title="Phóng to / Thu nhỏ" type="button">
+                    <i class="ri-zoom-in-line"></i>
+                </button>
+                <button class="lightbox-btn close" id="lightbox-close-btn" title="Đóng (ESC)" type="button">
+                    <i class="ri-close-line"></i>
+                </button>
+            </div>
+        </div>
+        <div class="lightbox-content">
+            <img src="" alt="Fullscreen Image" id="lightbox-image">
+        </div>
     </div>
 
     <!-- Toast Notification Container -->

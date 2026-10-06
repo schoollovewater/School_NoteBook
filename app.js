@@ -231,6 +231,9 @@ function initApp() {
 
     initFloatingToolbar();
     vocab.initVocab();
+    initImageModal();
+    initImageLightbox();
+    initEditorDragDrop();
 
     // Flashcard Keyboard Shortcuts
     document.addEventListener('keydown', (e) => {
@@ -1550,6 +1553,27 @@ function serializeBlocks() {
         const contentEl = wrapper.querySelector('.block-content');
         if (!contentEl) return;
         const type = contentEl.getAttribute('data-type');
+        
+        // Lưu trữ khối hình ảnh với đầy đủ metadata (src, caption, width, align)
+        if (type === 'image') {
+            const img = contentEl.querySelector('img.note-image') || contentEl.querySelector('img');
+            const cap = contentEl.querySelector('.image-caption');
+            const mediaWrap = contentEl.querySelector('.image-media-wrapper');
+            let src = img ? (img.getAttribute('src') || '') : '';
+            if (!src && contentEl.dataset.src) src = contentEl.dataset.src;
+            const caption = cap ? (cap.innerText || cap.textContent || '').trim() : '';
+            const width = (mediaWrap && mediaWrap.style.width) ? mediaWrap.style.width : (img && img.style.width ? img.style.width : '100%');
+            const align = contentEl.getAttribute('data-align') || 'center';
+            
+            blocks.push({
+                id: wrapper.getAttribute('data-id'),
+                type: 'image',
+                content: JSON.stringify({ src, caption, width, align }),
+                indent: parseInt(wrapper.getAttribute('data-indent') || '0', 10)
+            });
+            return;
+        }
+
         const rawText = contentEl.innerText !== undefined ? contentEl.innerText : (contentEl.textContent || '');
         let content = rawText.trim();
         
@@ -1812,9 +1836,8 @@ function createBlockElement(type, content, id = generateId(), indent = 0) {
     const contentEl = wrapper.querySelector('.block-content');
     const handleEl = wrapper.querySelector('.block-handle');
     
-    if (type === 'image' && content.includes('<img')) {
-        contentEl.innerHTML = content;
-        contentEl.dataset.src = content;
+    if (type === 'image') {
+        renderImageBlock(contentEl, content);
     } else {
         contentEl.innerHTML = content;
     }
@@ -2143,6 +2166,33 @@ function handleBlockPaste(e) {
         }
     }
 
+    // 1. Kiểm tra dán ảnh trực tiếp từ clipboard (Messenger, Win+Shift+S, Snipping Tool, copy ảnh web)
+    const cbItems = e.clipboardData ? e.clipboardData.items : null;
+    let pastedImageFile = null;
+    if (cbItems) {
+        for (let i = 0; i < cbItems.length; i++) {
+            if (cbItems[i].type && cbItems[i].type.startsWith('image/')) {
+                pastedImageFile = cbItems[i].getAsFile();
+                break;
+            }
+        }
+    }
+    if (!pastedImageFile && e.clipboardData && e.clipboardData.files && e.clipboardData.files.length > 0) {
+        for (let i = 0; i < e.clipboardData.files.length; i++) {
+            if (e.clipboardData.files[i].type && e.clipboardData.files[i].type.startsWith('image/')) {
+                pastedImageFile = e.clipboardData.files[i];
+                break;
+            }
+        }
+    }
+
+    if (pastedImageFile) {
+        e.preventDefault();
+        e.stopPropagation();
+        insertImageFromFile(pastedImageFile, wrapper);
+        return;
+    }
+
     let text = e.clipboardData ? e.clipboardData.getData('text/plain') : '';
     const html = e.clipboardData ? e.clipboardData.getData('text/html') : '';
 
@@ -2329,9 +2379,17 @@ function closeSlashMenu() {
 
 function applySlashCommand(type) {
     if (activeBlockElement) {
-        setBlockType(activeBlockElement, type);
+        const wrapper = activeBlockElement.closest('.block-wrapper');
         // Remove the /command string
         activeBlockElement.innerText = activeBlockElement.innerText.replace(/\/[a-zA-Z0-9_-]*$/, '');
+        
+        if (type === 'image') {
+            closeSlashMenu();
+            openImageModalForTarget(wrapper);
+            return;
+        }
+
+        setBlockType(activeBlockElement, type);
         activeBlockElement.focus();
         
         // Move cursor to end
@@ -2380,14 +2438,7 @@ function setBlockType(element, type, initialContent = '') {
             renderTableOfContents(element);
             element.contentEditable = false;
         } else if (type === 'image') {
-            if (!element.querySelector('img') && !initialContent.includes('<img')) {
-                const url = prompt('Nhập link hình ảnh:');
-                if (url) {
-                    element.innerHTML = `<img src="${url}" style="max-width:100%; border-radius:6px; margin-top:8px;">`;
-                } else {
-                    type = 'text'; // Fallback
-                }
-            }
+            renderImageBlock(element, initialContent);
             element.contentEditable = false;
         }
     }
@@ -3585,6 +3636,568 @@ window.addEventListener('DOMContentLoaded', () => {
     const hashId = decodeURIComponent(location.hash.slice(1));
     if (hashId && appState.pages[hashId]) openPage(hashId);
 });
+
+// --- IMAGE MANAGEMENT & OPTIMIZATION (COMPRESSION, LIGHTBOX, MODAL, DRAG-DROP) ---
+function compressImageFile(file, maxW = 1400, maxH = 1400, q = 0.82) {
+    return new Promise((resolve, reject) => {
+        if (!file || !file.type.startsWith('image/')) {
+            return reject(new Error('Tệp không phải là hình ảnh'));
+        }
+        // Giữ nguyên GIF động để tránh mất hoạt ảnh
+        if (file.type === 'image/gif') {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target.result);
+            reader.onerror = () => reject(new Error('Không thể đọc tệp GIF'));
+            reader.readAsDataURL(file);
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                try {
+                    let width = img.width;
+                    let height = img.height;
+                    if (width > maxW || height > maxH) {
+                        const ratio = Math.min(maxW / width, maxH / height);
+                        width = Math.round(width * ratio);
+                        height = Math.round(height * ratio);
+                    }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    let dataUrl = canvas.toDataURL('image/webp', q);
+                    if (!dataUrl.startsWith('data:image/webp')) {
+                        dataUrl = canvas.toDataURL('image/jpeg', q);
+                    }
+                    resolve(dataUrl);
+                } catch (err) {
+                    resolve(e.target.result);
+                }
+            };
+            img.onerror = () => reject(new Error('Không thể giải mã hình ảnh'));
+            img.src = e.target.result;
+        };
+        reader.onerror = () => reject(new Error('Không thể đọc tệp'));
+        reader.readAsDataURL(file);
+    });
+}
+
+function renderImageBlock(contentEl, contentData) {
+    let src = '';
+    let caption = '';
+    let width = '100%';
+    let align = 'center';
+
+    if (contentData) {
+        if (typeof contentData === 'object') {
+            src = contentData.src || '';
+            caption = contentData.caption || '';
+            width = contentData.width || '100%';
+            align = contentData.align || 'center';
+        } else if (typeof contentData === 'string') {
+            const trimmed = contentData.trim();
+            if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+                try {
+                    const parsed = JSON.parse(trimmed);
+                    src = parsed.src || '';
+                    caption = parsed.caption || '';
+                    width = parsed.width || '100%';
+                    align = parsed.align || 'center';
+                } catch (e) {
+                    src = trimmed;
+                }
+            } else {
+                const mdMatch = trimmed.match(/^!\[(.*?)\]\((.+?)\)$/);
+                if (mdMatch) {
+                    caption = mdMatch[1] || '';
+                    src = mdMatch[2] || '';
+                } else if (trimmed.includes('<img')) {
+                    const temp = document.createElement('div');
+                    temp.innerHTML = trimmed;
+                    const foundImg = temp.querySelector('img');
+                    if (foundImg) {
+                        src = foundImg.getAttribute('src') || '';
+                        caption = foundImg.getAttribute('alt') || '';
+                    }
+                } else {
+                    src = trimmed;
+                }
+            }
+        }
+    }
+
+    contentEl.contentEditable = false;
+    contentEl.setAttribute('data-type', 'image');
+    contentEl.setAttribute('data-align', align);
+
+    const safeCaption = escapeHtml(caption);
+    const safeSrc = src ? escapeHtml(src) : '';
+
+    contentEl.innerHTML = `
+        <div class="image-block-container align-${align}">
+            <div class="image-toolbar" contenteditable="false">
+                <button type="button" class="img-btn ${width === '50%' ? 'active' : ''}" data-action="resize-50" title="50% chiều rộng">50%</button>
+                <button type="button" class="img-btn ${width === '75%' ? 'active' : ''}" data-action="resize-75" title="75% chiều rộng">75%</button>
+                <button type="button" class="img-btn ${width === '100%' || !width ? 'active' : ''}" data-action="resize-100" title="100% chiều rộng">100%</button>
+                <span class="img-tb-divider"></span>
+                <button type="button" class="img-btn ${align === 'left' ? 'active' : ''}" data-action="align-left" title="Căn trái"><i class="ri-align-left"></i></button>
+                <button type="button" class="img-btn ${align === 'center' || !align ? 'active' : ''}" data-action="align-center" title="Căn giữa"><i class="ri-align-center"></i></button>
+                <button type="button" class="img-btn ${align === 'right' ? 'active' : ''}" data-action="align-right" title="Căn phải"><i class="ri-align-right"></i></button>
+                <span class="img-tb-divider"></span>
+                <button type="button" class="img-btn" data-action="zoom" title="Xem ảnh toàn màn hình"><i class="ri-zoom-in-line"></i></button>
+                <button type="button" class="img-btn" data-action="download" title="Tải ảnh về máy"><i class="ri-download-2-line"></i></button>
+                <button type="button" class="img-btn danger" data-action="delete" title="Xóa ảnh"><i class="ri-delete-bin-line"></i></button>
+            </div>
+            <div class="image-media-wrapper" style="width: ${width};">
+                <img class="note-image" src="${safeSrc}" alt="${safeCaption || 'Hình ảnh ghi chú'}" loading="lazy" />
+            </div>
+            <div class="image-caption" contenteditable="true" data-placeholder="Thêm chú thích ảnh...">${safeCaption}</div>
+        </div>
+    `;
+
+    const container = contentEl.querySelector('.image-block-container');
+    const mediaWrap = contentEl.querySelector('.image-media-wrapper');
+    const imgEl = contentEl.querySelector('.note-image');
+    const captionEl = contentEl.querySelector('.image-caption');
+
+    if (imgEl) {
+        imgEl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const curCap = captionEl ? (captionEl.innerText || captionEl.textContent || '').trim() : '';
+            openImageLightbox(imgEl.src, curCap);
+        });
+    }
+
+    if (captionEl) {
+        captionEl.addEventListener('input', () => {
+            triggerSave();
+        });
+        captionEl.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const wrapper = contentEl.closest('.block-wrapper');
+                const nextWrapper = createBlockElement('text', '', generateId(), parseInt(wrapper.getAttribute('data-indent') || '0', 10));
+                wrapper.parentNode.insertBefore(nextWrapper, wrapper.nextSibling);
+                const nextContent = nextWrapper.querySelector('.block-content');
+                if (nextContent) nextContent.focus();
+                triggerSave();
+            }
+        });
+    }
+
+    contentEl.querySelectorAll('.img-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const action = btn.getAttribute('data-action');
+            if (action === 'resize-50') {
+                mediaWrap.style.width = '50%';
+                contentEl.querySelectorAll('[data-action^="resize-"]').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                triggerSave();
+            } else if (action === 'resize-75') {
+                mediaWrap.style.width = '75%';
+                contentEl.querySelectorAll('[data-action^="resize-"]').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                triggerSave();
+            } else if (action === 'resize-100') {
+                mediaWrap.style.width = '100%';
+                contentEl.querySelectorAll('[data-action^="resize-"]').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                triggerSave();
+            } else if (action === 'align-left') {
+                container.className = 'image-block-container align-left';
+                contentEl.setAttribute('data-align', 'left');
+                contentEl.querySelectorAll('[data-action^="align-"]').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                triggerSave();
+            } else if (action === 'align-center') {
+                container.className = 'image-block-container align-center';
+                contentEl.setAttribute('data-align', 'center');
+                contentEl.querySelectorAll('[data-action^="align-"]').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                triggerSave();
+            } else if (action === 'align-right') {
+                container.className = 'image-block-container align-right';
+                contentEl.setAttribute('data-align', 'right');
+                contentEl.querySelectorAll('[data-action^="align-"]').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                triggerSave();
+            } else if (action === 'zoom') {
+                const curCap = captionEl ? (captionEl.innerText || captionEl.textContent || '').trim() : '';
+                openImageLightbox(imgEl.src, curCap);
+            } else if (action === 'download') {
+                const curCap = captionEl ? (captionEl.innerText || captionEl.textContent || '').trim() : '';
+                downloadImage(imgEl.src, curCap || 'note-image');
+            } else if (action === 'delete') {
+                const wrapper = contentEl.closest('.block-wrapper');
+                if (wrapper) {
+                    const prev = wrapper.previousElementSibling || wrapper.nextElementSibling;
+                    wrapper.remove();
+                    if (prev) {
+                        const targetContent = prev.querySelector('.block-content');
+                        if (targetContent) targetContent.focus();
+                    } else {
+                        focusFirstBlockOrCreate();
+                    }
+                    triggerSave();
+                    showToast('🗑️ Đã xóa hình ảnh');
+                }
+            }
+        });
+    });
+}
+
+function insertImageFromFile(file, targetWrapper = null) {
+    if (!file || !file.type.startsWith('image/')) {
+        showToast('⚠️ Vui lòng chọn tệp hình ảnh hợp lệ (PNG, JPG, WebP, GIF)!');
+        return;
+    }
+
+    showToast('⏳ Đang tối ưu hóa dung lượng ảnh...');
+
+    compressImageFile(file).then(dataUrl => {
+        let wrapper = targetWrapper;
+        if (!wrapper && activeBlockElement) {
+            wrapper = activeBlockElement.closest('.block-wrapper');
+        }
+
+        const indent = wrapper ? parseInt(wrapper.getAttribute('data-indent') || '0', 10) : 0;
+        const imgBlock = createBlockElement('image', JSON.stringify({
+            src: dataUrl,
+            caption: '',
+            width: '100%',
+            align: 'center'
+        }), generateId(), indent);
+
+        // Tạo sẵn một dòng văn bản trống kế tiếp để người dùng gõ tiếp ngay mà không bị gián đoạn
+        const nextTextBlock = createBlockElement('text', '', generateId(), indent);
+
+        if (wrapper && wrapper.parentNode) {
+            const contentEl = wrapper.querySelector('.block-content');
+            const isBlank = contentEl && (!contentEl.innerText || !contentEl.innerText.trim());
+            if (isBlank) {
+                wrapper.parentNode.replaceChild(imgBlock, wrapper);
+            } else {
+                wrapper.parentNode.insertBefore(imgBlock, wrapper.nextSibling);
+            }
+            imgBlock.parentNode.insertBefore(nextTextBlock, imgBlock.nextSibling);
+        } else {
+            elements.blockEditor.appendChild(imgBlock);
+            elements.blockEditor.appendChild(nextTextBlock);
+        }
+
+        const nextContent = nextTextBlock.querySelector('.block-content');
+        if (nextContent) {
+            nextContent.focus();
+        }
+
+        triggerSave();
+        showToast('🖼️ Đã chèn ảnh thành công!');
+    }).catch(err => {
+        console.error('Lỗi chèn ảnh:', err);
+        showToast('❌ Không thể xử lý ảnh: ' + (err.message || 'Lỗi'));
+    });
+}
+
+function openImageLightbox(src, caption = '') {
+    const modal = document.getElementById('image-lightbox-modal');
+    const img = document.getElementById('lightbox-image');
+    const capEl = document.getElementById('lightbox-caption');
+    const zoomBtn = document.getElementById('lightbox-zoom-toggle-btn');
+    if (!modal || !img) return;
+
+    img.src = src;
+    img.classList.remove('is-zoomed');
+    if (capEl) capEl.textContent = caption || '';
+    if (zoomBtn) zoomBtn.innerHTML = '<i class="ri-zoom-in-line"></i>';
+
+    modal.style.display = 'flex';
+}
+
+function closeImageLightbox() {
+    const modal = document.getElementById('image-lightbox-modal');
+    if (modal) {
+        modal.style.display = 'none';
+        const img = document.getElementById('lightbox-image');
+        if (img) {
+            img.src = '';
+            img.classList.remove('is-zoomed');
+        }
+    }
+}
+
+function downloadImage(src, filename = 'note-image') {
+    if (!src) return;
+    const cleanName = (filename.trim().replace(/[^a-zA-Z0-9_-]/g, '_') || 'note-image') + '.webp';
+    const a = document.createElement('a');
+    a.href = src;
+    a.download = cleanName;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => a.remove(), 100);
+}
+
+function initImageLightbox() {
+    const modal = document.getElementById('image-lightbox-modal');
+    if (!modal) return;
+
+    const closeBtn = document.getElementById('lightbox-close-btn');
+    const backdrop = modal.querySelector('.lightbox-backdrop');
+    const zoomBtn = document.getElementById('lightbox-zoom-toggle-btn');
+    const downloadBtn = document.getElementById('lightbox-download-btn');
+    const img = document.getElementById('lightbox-image');
+
+    if (closeBtn) closeBtn.onclick = closeImageLightbox;
+    if (backdrop) backdrop.onclick = closeImageLightbox;
+
+    if (zoomBtn && img) {
+        zoomBtn.onclick = () => {
+            const isZoomed = img.classList.toggle('is-zoomed');
+            zoomBtn.innerHTML = isZoomed ? '<i class="ri-zoom-out-line"></i>' : '<i class="ri-zoom-in-line"></i>';
+        };
+        img.onclick = () => {
+            const isZoomed = img.classList.toggle('is-zoomed');
+            if (zoomBtn) {
+                zoomBtn.innerHTML = isZoomed ? '<i class="ri-zoom-out-line"></i>' : '<i class="ri-zoom-in-line"></i>';
+            }
+        };
+    }
+
+    if (downloadBtn && img) {
+        downloadBtn.onclick = () => {
+            const cap = document.getElementById('lightbox-caption')?.textContent || 'image';
+            downloadImage(img.src, cap);
+        };
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modal.style.display === 'flex') {
+            closeImageLightbox();
+        }
+    });
+}
+
+let imageModalTargetWrapper = null;
+
+function openImageModalForTarget(targetWrapper = null) {
+    imageModalTargetWrapper = targetWrapper;
+    const modal = document.getElementById('image-modal');
+    if (!modal) return;
+
+    const urlInput = document.getElementById('image-modal-url-input');
+    if (urlInput) urlInput.value = '';
+
+    switchImageModalTab('upload');
+    modal.style.display = 'flex';
+}
+
+function closeImageModal() {
+    const modal = document.getElementById('image-modal');
+    if (modal) modal.style.display = 'none';
+    imageModalTargetWrapper = null;
+}
+
+function switchImageModalTab(tabName) {
+    const tabs = ['upload', 'link', 'camera'];
+    tabs.forEach(t => {
+        const btn = document.getElementById(`tab-img-${t}-btn`);
+        const panel = document.getElementById(`panel-img-${t}`);
+        if (btn) btn.classList.toggle('active', t === tabName);
+        if (panel) panel.style.display = (t === tabName) ? 'block' : 'none';
+    });
+    if (tabName === 'link') {
+        const urlInput = document.getElementById('image-modal-url-input');
+        if (urlInput) setTimeout(() => urlInput.focus(), 60);
+    }
+}
+
+function applyImageToTarget(src, caption = '') {
+    if (!src) return;
+    const wrapper = imageModalTargetWrapper;
+    const indent = wrapper ? parseInt(wrapper.getAttribute('data-indent') || '0', 10) : 0;
+
+    const imgBlock = createBlockElement('image', JSON.stringify({
+        src: src,
+        caption: caption,
+        width: '100%',
+        align: 'center'
+    }), generateId(), indent);
+
+    const nextTextBlock = createBlockElement('text', '', generateId(), indent);
+
+    if (wrapper && wrapper.parentNode) {
+        const contentEl = wrapper.querySelector('.block-content');
+        const isBlank = contentEl && (!contentEl.innerText || !contentEl.innerText.trim());
+        if (isBlank) {
+            wrapper.parentNode.replaceChild(imgBlock, wrapper);
+        } else {
+            wrapper.parentNode.insertBefore(imgBlock, wrapper.nextSibling);
+        }
+        imgBlock.parentNode.insertBefore(nextTextBlock, imgBlock.nextSibling);
+    } else {
+        elements.blockEditor.appendChild(imgBlock);
+        elements.blockEditor.appendChild(nextTextBlock);
+    }
+
+    const nextContent = nextTextBlock.querySelector('.block-content');
+    if (nextContent) nextContent.focus();
+
+    closeImageModal();
+    triggerSave();
+    showToast('🖼️ Đã chèn ảnh thành công!');
+}
+
+function handleModalImageFile(file) {
+    if (!file) return;
+    closeImageModal();
+    insertImageFromFile(file, imageModalTargetWrapper);
+}
+
+function initImageModal() {
+    const modal = document.getElementById('image-modal');
+    if (!modal) return;
+
+    const closeBtn = document.getElementById('image-modal-close-btn');
+    if (closeBtn) closeBtn.onclick = closeImageModal;
+
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeImageModal();
+    });
+
+    document.querySelectorAll('.img-tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const tab = btn.getAttribute('data-tab');
+            if (tab) switchImageModalTab(tab);
+        });
+    });
+
+    const dropzone = document.getElementById('image-upload-dropzone');
+    const fileInput = document.getElementById('image-modal-file-input');
+    if (dropzone && fileInput) {
+        dropzone.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files && e.target.files[0];
+            if (file) handleModalImageFile(file);
+            e.target.value = '';
+        });
+
+        ['dragenter', 'dragover'].forEach(name => {
+            dropzone.addEventListener(name, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropzone.classList.add('dragover');
+            });
+        });
+
+        ['dragleave', 'drop'].forEach(name => {
+            dropzone.addEventListener(name, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropzone.classList.remove('dragover');
+            });
+        });
+
+        dropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropzone.classList.remove('dragover');
+            const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+            if (file) handleModalImageFile(file);
+        });
+    }
+
+    const urlInput = document.getElementById('image-modal-url-input');
+    const submitLinkBtn = document.getElementById('image-modal-submit-link-btn');
+    const cancelLinkBtn = document.getElementById('image-modal-cancel-link-btn');
+
+    if (cancelLinkBtn) cancelLinkBtn.onclick = closeImageModal;
+
+    const submitUrl = () => {
+        const url = urlInput ? urlInput.value.trim() : '';
+        if (!url) {
+            showToast('⚠️ Vui lòng nhập đường dẫn hình ảnh hợp lệ!');
+            return;
+        }
+        applyImageToTarget(url, '');
+    };
+
+    if (submitLinkBtn) submitLinkBtn.onclick = submitUrl;
+    if (urlInput) {
+        urlInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                submitUrl();
+            }
+        });
+    }
+
+    const cameraTriggerBtn = document.getElementById('image-camera-trigger-btn');
+    const cameraInput = document.getElementById('image-camera-input');
+    if (cameraTriggerBtn && cameraInput) {
+        cameraTriggerBtn.onclick = () => cameraInput.click();
+        cameraInput.addEventListener('change', (e) => {
+            const file = e.target.files && e.target.files[0];
+            if (file) handleModalImageFile(file);
+            e.target.value = '';
+        });
+    }
+}
+
+function initEditorDragDrop() {
+    const editorScroll = document.querySelector('.editor-scroll-area') || document.getElementById('editor-container');
+    if (!editorScroll) return;
+
+    let dragTimer;
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+        editorScroll.addEventListener(eventName, (e) => {
+            if (e.dataTransfer && e.dataTransfer.types && Array.from(e.dataTransfer.types).includes('Files')) {
+                e.preventDefault();
+                editorScroll.classList.add('is-dragging-file');
+                clearTimeout(dragTimer);
+            }
+        });
+    });
+
+    editorScroll.addEventListener('dragleave', (e) => {
+        dragTimer = setTimeout(() => {
+            editorScroll.classList.remove('is-dragging-file');
+        }, 80);
+    });
+
+    editorScroll.addEventListener('drop', (e) => {
+        editorScroll.classList.remove('is-dragging-file');
+        const files = e.dataTransfer ? e.dataTransfer.files : null;
+        if (!files || files.length === 0) return;
+
+        let imageFile = null;
+        for (let i = 0; i < files.length; i++) {
+            if (files[i].type && files[i].type.startsWith('image/')) {
+                imageFile = files[i];
+                break;
+            }
+        }
+
+        if (imageFile) {
+            e.preventDefault();
+            e.stopPropagation();
+            const dropElem = document.elementFromPoint(e.clientX, e.clientY);
+            const targetWrapper = dropElem ? dropElem.closest('.block-wrapper') : null;
+            insertImageFromFile(imageFile, targetWrapper);
+        }
+    });
+}
+
+window.openImageLightbox = openImageLightbox;
+window.closeImageLightbox = closeImageLightbox;
+window.openImageModalForTarget = openImageModalForTarget;
+window.closeImageModal = closeImageModal;
+
 
 function escapeHtml(str) {
     return String(str == null ? '' : str)

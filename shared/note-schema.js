@@ -25,7 +25,8 @@
     }
 
     function block(type, content, indent) {
-        return { id: generateId(), type: type, content: escapeHtml(content), indent: indent || 0 };
+        const safeContent = (type === 'image') ? String(content || '') : escapeHtml(content);
+        return { id: generateId(), type: type, content: safeContent, indent: indent || 0 };
     }
 
     /**
@@ -76,6 +77,9 @@
             else if ((m = line.match(/^[-*•]\s+(.*)$/))) blocks.push(block('bullet', m[1], indent));
             else if ((m = line.match(/^\d+[.)]\s+(.*)$/))) blocks.push(block('number', m[1], indent));
             else if ((m = line.match(/^>\s?(.*)$/))) blocks.push(block('quote', m[1], indent));
+            else if ((m = line.match(/^!\[(.*?)\]\((.+?)\)$/))) {
+                blocks.push(block('image', JSON.stringify({ src: m[2], caption: m[1], width: '100%', align: 'center' }), indent));
+            }
             else blocks.push(block('text', line, indent));
         });
 

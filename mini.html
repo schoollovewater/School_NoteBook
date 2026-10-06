@@ -627,6 +627,10 @@
                     <span id="draft-status">• Tự lưu nháp</span>
                 </div>
                 <div class="actions-right">
+                    <button class="btn-voice" id="img-mini-btn" title="Chèn ảnh / Chụp ảnh" type="button">
+                        <i class="ri-image-add-line"></i>
+                    </button>
+                    <input type="file" id="img-mini-input" accept="image/*" style="display: none;">
                     <button class="btn-voice" id="voice-btn" title="Nhập liệu bằng giọng nói">
                         <i class="ri-mic-line"></i>
                     </button>
@@ -891,8 +895,81 @@
             el.addEventListener('input', onInput);
         });
 
-        // Hỗ trợ copy/paste tài liệu nhiều dòng tự động xuống dòng và chuẩn hoá khoảng trắng
+        // Hàm nén ảnh siêu nhẹ cho Mini Note (Canvas WebP/JPEG)
+        function compressMiniImageFile(file, maxW = 1200, maxH = 1200, q = 0.82) {
+            return new Promise((resolve, reject) => {
+                if (!file || !file.type.startsWith('image/')) return reject(new Error('Tệp không phải là ảnh'));
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        try {
+                            let width = img.width;
+                            let height = img.height;
+                            if (width > maxW || height > maxH) {
+                                const ratio = Math.min(maxW / width, maxH / height);
+                                width = Math.round(width * ratio);
+                                height = Math.round(height * ratio);
+                            }
+                            const canvas = document.createElement('canvas');
+                            canvas.width = width;
+                            canvas.height = height;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(img, 0, 0, width, height);
+                            let dataUrl = canvas.toDataURL('image/webp', q);
+                            if (!dataUrl.startsWith('data:image/webp')) dataUrl = canvas.toDataURL('image/jpeg', q);
+                            resolve(dataUrl);
+                        } catch (err) {
+                            resolve(e.target.result);
+                        }
+                    };
+                    img.onerror = () => reject(new Error('Đọc ảnh thất bại'));
+                    img.src = e.target.result;
+                };
+                reader.onerror = () => reject(new Error('Đọc tệp thất bại'));
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // Hỗ trợ copy/paste tài liệu nhiều dòng & DÁN ẢNH TRỰC TIẾP TỪ CLIPBOARD
         contentIn.addEventListener('paste', (e) => {
+            // 1. Kiểm tra nếu paste ảnh trực tiếp (như Messenger, Win+Shift+S, Zalo)
+            const items = e.clipboardData ? e.clipboardData.items : null;
+            let imageFile = null;
+            if (items) {
+                for (let i = 0; i < items.length; i++) {
+                    if (items[i].type && items[i].type.startsWith('image/')) {
+                        imageFile = items[i].getAsFile();
+                        break;
+                    }
+                }
+            }
+            if (!imageFile && e.clipboardData && e.clipboardData.files && e.clipboardData.files.length > 0) {
+                for (let i = 0; i < e.clipboardData.files.length; i++) {
+                    if (e.clipboardData.files[i].type && e.clipboardData.files[i].type.startsWith('image/')) {
+                        imageFile = e.clipboardData.files[i];
+                        break;
+                    }
+                }
+            }
+
+            if (imageFile) {
+                e.preventDefault();
+                showToast('⏳ Đang tối ưu hóa ảnh...');
+                compressMiniImageFile(imageFile).then(dataUrl => {
+                    const mdImage = (contentIn.value && !contentIn.value.endsWith('\n') ? '\n' : '') + `![Hình ảnh](${dataUrl})\n`;
+                    const start = contentIn.selectionStart;
+                    const end = contentIn.selectionEnd;
+                    contentIn.value = contentIn.value.substring(0, start) + mdImage + contentIn.value.substring(end);
+                    contentIn.selectionStart = contentIn.selectionEnd = start + mdImage.length;
+                    onInput();
+                    showToast('🖼️ Đã dán ảnh vào ghi chú!');
+                }).catch(err => {
+                    showToast('⚠️ Không thể dán ảnh: ' + err.message);
+                });
+                return;
+            }
+
             let text = e.clipboardData ? e.clipboardData.getData('text/plain') : '';
             const html = e.clipboardData ? e.clipboardData.getData('text/html') : '';
 
@@ -941,6 +1018,28 @@
                 onInput();
             }
         });
+
+        // Nút chọn / chụp ảnh ở Bottom bar của Mini Note
+        const imgMiniBtn = document.getElementById('img-mini-btn');
+        const imgMiniInput = document.getElementById('img-mini-input');
+        if (imgMiniBtn && imgMiniInput) {
+            imgMiniBtn.onclick = () => imgMiniInput.click();
+            imgMiniInput.onchange = (e) => {
+                const file = e.target.files && e.target.files[0];
+                if (file) {
+                    showToast('⏳ Đang xử lý ảnh...');
+                    compressMiniImageFile(file).then(dataUrl => {
+                        const mdImage = (contentIn.value && !contentIn.value.endsWith('\n') ? '\n' : '') + `![Hình ảnh](${dataUrl})\n`;
+                        contentIn.value += mdImage;
+                        onInput();
+                        showToast('🖼️ Đã thêm ảnh vào ghi chú!');
+                    }).catch(err => {
+                        showToast('⚠️ Lỗi: ' + err.message);
+                    });
+                }
+                e.target.value = '';
+            };
+        }
 
         // --- SEND LOGIC ---
         async function sendAllTabs() {
