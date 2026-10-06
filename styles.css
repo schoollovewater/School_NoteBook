@@ -2824,8 +2824,8 @@ body.is-dragging {
 
 /* Image Block Wrapper & Container */
 .block-wrapper[data-type="image"] {
-    margin: 2px 0;
-    padding: 2px 6px;
+    margin: 1px 0;
+    padding: 1px 6px;
 }
 
 .block-wrapper[data-type="image"] .block-content {
@@ -2849,7 +2849,8 @@ body.is-dragging {
     flex-direction: column;
     align-items: center;
     border-radius: 8px;
-    padding: 2px 0;
+    padding: 0;
+    margin: 1px 0;
     transition: all 0.2s ease;
 }
 
@@ -2940,7 +2941,7 @@ body.is-dragging {
 
 .note-image {
     max-width: 100%;
-    max-height: 65vh;
+    max-height: 55vh;
     height: auto;
     object-fit: contain;
     border-radius: 8px;
@@ -2972,9 +2973,11 @@ body.is-dragging {
 
 /* Khi chưa có chú thích: ẩn hoàn toàn để không tạo khoảng trống thừa, chỉ hiện khi focus */
 .image-caption:empty:not(:focus) {
-    display: none;
-    margin-top: 0;
-    padding: 0;
+    display: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: 0 !important;
+    line-height: 0 !important;
 }
 
 .image-caption:focus,
@@ -2985,7 +2988,7 @@ body.is-dragging {
 }
 
 .image-caption:empty::before {
-    content: attr(placeholder);
+    content: attr(data-placeholder);
     color: var(--text-placeholder);
     opacity: 0.8;
 }

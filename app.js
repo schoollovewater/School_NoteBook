@@ -162,6 +162,9 @@ function initApp() {
 
     // Keyboard Shortcuts (Ctrl+Z, Ctrl+Y, Ctrl+K, Ctrl+B, Ctrl+I, Ctrl+D, Ctrl+L, Ctrl+N)
     document.addEventListener('keydown', (e) => {
+        const isStandardInput = ['INPUT', 'TEXTAREA'].includes(e.target.tagName) && e.target.id !== 'page-title-input';
+        if (isStandardInput) return;
+
         // Undo: Ctrl+Z (Cmd+Z)
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
             e.preventDefault();
@@ -564,10 +567,12 @@ const EditorHistory = {
         this.lastSavedSnapshot = this.createSnapshot();
     },
 
-    recordTyping() {
+    recordTyping(e) {
         if (this.isApplying) return;
         const now = Date.now();
-        const isNewBurst = (now - this.lastTypingTime > 800) || (this.lastTypingBlockId !== activeBlockId);
+        const data = e && e.data;
+        const isWordBoundary = (data === ' ' || data === '.' || data === ',' || data === '!' || data === '?');
+        const isNewBurst = isWordBoundary || (now - this.lastTypingTime > 600) || (this.lastTypingBlockId !== activeBlockId);
         if (isNewBurst) {
             this.recordBeforeAction();
         }
@@ -576,15 +581,15 @@ const EditorHistory = {
         clearTimeout(this.saveSnapTimeout);
         this.saveSnapTimeout = setTimeout(() => {
             this.updateLastSnapshot();
-        }, 500);
+        }, 300);
     },
 
-    record(force = false) {
+    record(force = false, e = null) {
         if (force) {
             this.recordBeforeAction();
             setTimeout(() => this.updateLastSnapshot(), 0);
         } else {
-            this.recordTyping();
+            this.recordTyping(e);
         }
     },
 
@@ -610,7 +615,7 @@ const EditorHistory = {
                 if (targetWrapper) {
                     const contentEl = targetWrapper.querySelector('.block-content');
                     if (contentEl && contentEl.contentEditable !== 'false') {
-                        setCaretAtStart(contentEl);
+                        setCaretAtEnd(contentEl);
                     }
                 }
             }
@@ -1680,6 +1685,7 @@ const app = {
 
 // --- CUSTOM BLOCK EDITOR LOGIC ---
 let activeBlockElement = null;
+let activeBlockId = null;
 
 function renderBlocks(blocks) {
     elements.blockEditor.innerHTML = '';
@@ -1756,13 +1762,17 @@ function serializeBlocks() {
             return;
         }
 
-        const rawText = contentEl.innerText !== undefined ? contentEl.innerText : (contentEl.textContent || '');
-        let content = rawText.trim();
+        let content = contentEl.innerHTML !== undefined ? contentEl.innerHTML : (contentEl.innerText || '');
+        if (content === '<br>' || content === '<div><br></div>') {
+            content = '';
+        } else {
+            content = content.replace(/<br\s*\/?>$/i, '').trim();
+        }
         
         // save checked state for todos
         if (type === 'todo') {
             const cb = wrapper.querySelector('.todo-cb');
-            if (cb && cb.checked) {
+            if (cb && cb.checked && !content.startsWith('[x] ')) {
                 content = '[x] ' + content;
             }
         }
@@ -1785,6 +1795,18 @@ function setCaretAtStart(el) {
     const range = document.createRange();
     range.selectNodeContents(el);
     range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+}
+
+function setCaretAtEnd(el) {
+    if (!el) return;
+    el.focus();
+    const sel = window.getSelection();
+    if (!sel) return;
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    range.collapse(false);
     sel.removeAllRanges();
     sel.addRange(range);
 }
@@ -1972,6 +1994,9 @@ function selectBlockAndShowMenu(wrapper) {
     selectedBlockWrappers = [wrapper];
     activeBlockId = wrapper.getAttribute('data-id');
     activeBlockElement = contentEl || wrapper;
+
+    wrapper.setAttribute('tabindex', '-1');
+    wrapper.focus();
 
     if (contentEl && contentEl.contentEditable !== 'false') {
         contentEl.focus();
@@ -2301,21 +2326,15 @@ function handleBlockKeydown(e) {
                 const prev = wrapper.previousElementSibling;
                 if (prev && prev.classList.contains('block-wrapper')) {
                     const prevType = prev.getAttribute('data-type');
-                    // Nếu block phía trước là ảnh hoặc divider
+                    // Nếu block phía trước là ảnh hoặc divider -> Xóa ngay dòng ảnh/divider phía trước
                     if (prevType === 'image' || prevType === 'divider') {
                         e.preventDefault();
-                        EditorHistory.record(true);
-                        const currentText = (target.innerText || '').trim();
-                        if (!currentText || target.innerHTML === '<br>') {
-                            // Dòng hiện tại trống: Xóa dòng ảnh phía trước!
-                            prev.remove();
-                            updateNumberPrefixes();
-                            triggerSave();
-                            showToast('🗑️ Đã xóa dòng phía trước');
-                        } else {
-                            // Dòng hiện tại có chữ: chọn dòng ảnh phía trước
-                            selectSingleBlock(prev);
-                        }
+                        EditorHistory.recordBeforeAction();
+                        prev.remove();
+                        updateNumberPrefixes();
+                        triggerSave();
+                        EditorHistory.updateLastSnapshot();
+                        showToast('🗑️ Đã xóa dòng phía trước');
                         return;
                     }
 
@@ -2380,7 +2399,12 @@ function handleBlockKeydown(e) {
 
 function handleBlockInput(e) {
     const target = e.target;
-    EditorHistory.record(false);
+    const wrapper = target.closest('.block-wrapper');
+    if (wrapper) {
+        activeBlockId = wrapper.getAttribute('data-id');
+        activeBlockElement = target;
+    }
+    EditorHistory.record(false, e);
     
     // Check for Word/Markdown shortcuts: "- ", "1. ", "[] ", "# ", etc.
     const converted = checkMarkdownShortcuts(target);
@@ -2398,6 +2422,23 @@ function handleBlockInput(e) {
         closeSlashMenu();
     }
     triggerSave();
+}
+
+function extractCleanInlineHtml(html) {
+    if (!html) return '';
+    try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const body = doc.body;
+        if (!body) return '';
+        body.querySelectorAll('script, style, meta, link').forEach(el => el.remove());
+        const blocks = body.querySelectorAll('p, div, h1, h2, h3, h4, h5, h6, li, table, pre, blockquote');
+        if (blocks.length <= 1) {
+            const inner = blocks.length === 1 ? blocks[0].innerHTML : body.innerHTML;
+            return inner.trim();
+        }
+    } catch (e) {}
+    return '';
 }
 
 function handleBlockPaste(e) {
@@ -2475,11 +2516,17 @@ function handleBlockPaste(e) {
     // Chuẩn hóa ngắt dòng và dấu cách không ngắt (non-breaking space \u00A0 thành space thường)
     text = (text || '').replace(/\r\n?/g, '\n').replace(/\u00A0/g, ' ');
 
-    if (!text) return;
+    if (!text && !html) return;
 
-    // Dán 1 dòng thông thường: nếu là ảnh markdown ![caption](url), tạo ngay block ảnh
-    if (!text.includes('\n')) {
-        const trimmed = text.trim();
+    // Tách thành các dòng, loại bỏ trailing newline đơn lẻ
+    let lines = text.split('\n');
+    if (lines.length > 1 && lines[lines.length - 1] === '') {
+        lines.pop();
+    }
+
+    // Dán 1 dòng hoặc đoạn văn bản đơn dòng (giữ nguyên bôi đen / highlight / style)
+    if (lines.length <= 1) {
+        const trimmed = (lines[0] !== undefined ? lines[0] : text).trim();
         const imgMatch = trimmed.match(/^!\[(.*?)\]\((.+?)\)$/);
         if (imgMatch) {
             e.preventDefault();
@@ -2490,8 +2537,21 @@ function handleBlockPaste(e) {
             EditorHistory.updateLastSnapshot();
             return;
         }
+
+        const cleanInlineHtml = extractCleanInlineHtml(html);
+        if (cleanInlineHtml && (cleanInlineHtml.includes('<') || cleanInlineHtml.includes('style='))) {
+            e.preventDefault();
+            EditorHistory.recordBeforeAction();
+            document.execCommand('insertHTML', false, cleanInlineHtml);
+            checkMarkdownShortcuts(target);
+            triggerSave();
+            EditorHistory.updateLastSnapshot();
+            return;
+        }
+
         e.preventDefault();
-        document.execCommand('insertText', false, text);
+        EditorHistory.recordBeforeAction();
+        document.execCommand('insertText', false, lines[0] !== undefined ? lines[0] : text);
         checkMarkdownShortcuts(target);
         triggerSave();
         EditorHistory.updateLastSnapshot();
@@ -2524,7 +2584,6 @@ function handleBlockPaste(e) {
         afterHtml = '';
     }
 
-    const lines = text.split('\n');
     const currentIndent = parseInt(wrapper.getAttribute('data-indent') || '0', 10);
 
     // 1. Dòng đầu tiên: đưa vào block hiện tại
@@ -2696,7 +2755,13 @@ function setBlockType(element, type, initialContent = '') {
     const isToggle = type === 'toggle' || (type && type.startsWith('toggle-'));
     
     if (type === 'todo') {
-        const checked = element.style.textDecoration === 'line-through';
+        let checked = element.style.textDecoration === 'line-through';
+        if (typeof initialContent === 'string' && initialContent.startsWith('[x] ')) {
+            checked = true;
+            element.innerHTML = initialContent.slice(4);
+            element.style.textDecoration = 'line-through';
+            element.style.opacity = '0.5';
+        }
         prefix = `<input type="checkbox" class="todo-cb" ${checked ? 'checked' : ''} onclick="toggleTodo(this)">`;
     } else {
         if (element.style.textDecoration === 'line-through') {
@@ -3286,9 +3351,6 @@ function initFloatingToolbar() {
 
     if (!toolbar) return;
 
-    let activeBlockElement = null;
-    let activeBlockId = null;
-
     // Prevent selection from collapsing when clicking buttons in the toolbar
     toolbar.addEventListener('mousedown', (e) => {
         if (!['INPUT', 'TEXTAREA'].includes(e.target.tagName)) {
@@ -3641,6 +3703,9 @@ function selectSingleBlock(wrapper) {
     activeBlockId = wrapper.getAttribute('data-id');
     const contentEl = wrapper.querySelector('.block-content');
     activeBlockElement = contentEl || wrapper;
+    // Đặt tabindex và focus để các phím Backspace, Delete, Ctrl+C, Ctrl+X hoạt động trực tiếp trên khối
+    wrapper.setAttribute('tabindex', '-1');
+    wrapper.focus();
 }
 
 function selectAllBlocks() {
@@ -3796,6 +3861,22 @@ function initMultiBlockSelection() {
                 return;
             }
 
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                EditorHistory.recordBeforeAction();
+                const lastBlock = selectedBlockWrappers[selectedBlockWrappers.length - 1];
+                const indent = parseInt(lastBlock.getAttribute('data-indent') || '0', 10);
+                const nextWrapper = createBlockElement('text', '', generateId(), indent);
+                lastBlock.parentNode.insertBefore(nextWrapper, lastBlock.nextSibling);
+                clearBlockSelection();
+                const nextContent = nextWrapper.querySelector('.block-content');
+                if (nextContent) nextContent.focus();
+                updateNumberPrefixes();
+                triggerSave();
+                EditorHistory.updateLastSnapshot();
+                return;
+            }
+
             // Delete multi-block text / selected line (supports images, headings, etc.)
             if (e.key === 'Backspace' || e.key === 'Delete') {
                 e.preventDefault();
@@ -3862,6 +3943,22 @@ function initMultiBlockSelection() {
                 }
                 showToast('📋 Đã sao chép cả dòng!');
                 return;
+            }
+
+            // Nếu người dùng bôi đen 1 đoạn chữ: Đảm bảo giữ nguyên highlight / styling HTML
+            if (sel && !sel.isCollapsed && sel.rangeCount) {
+                const range = sel.getRangeAt(0);
+                const container = document.createElement('div');
+                container.appendChild(range.cloneContents());
+                const selHtml = container.innerHTML;
+                if (selHtml && (selHtml.includes('<') || selHtml.includes('style='))) {
+                    e.preventDefault();
+                    if (e.clipboardData) {
+                        e.clipboardData.setData('text/plain', selText);
+                        e.clipboardData.setData('text/html', selHtml);
+                    }
+                    return;
+                }
             }
         }
     });
@@ -4212,15 +4309,39 @@ function renderImageBlock(contentEl, contentData) {
     }
 
     if (captionEl) {
+        if (!caption) {
+            captionEl.style.display = 'none';
+        }
         captionEl.addEventListener('input', () => {
             triggerSave();
         });
         captionEl.addEventListener('blur', () => {
             if (!captionEl.innerText.trim()) {
-                captionEl.style.display = '';
+                captionEl.style.display = 'none';
             }
         });
         captionEl.addEventListener('keydown', (e) => {
+            if (e.key === 'Backspace' && (!captionEl.innerText || !captionEl.innerText.trim())) {
+                e.preventDefault();
+                const wrapper = contentEl.closest('.block-wrapper');
+                if (wrapper) {
+                    EditorHistory.recordBeforeAction();
+                    const prev = wrapper.previousElementSibling || wrapper.nextElementSibling;
+                    wrapper.remove();
+                    clearBlockSelection();
+                    if (prev) {
+                        const targetContent = prev.querySelector('.block-content');
+                        if (targetContent && targetContent.contentEditable !== 'false') setCaretAtStart(targetContent);
+                    } else {
+                        focusFirstBlockOrCreate();
+                    }
+                    updateNumberPrefixes();
+                    triggerSave();
+                    EditorHistory.updateLastSnapshot();
+                    showToast('🗑️ Đã xóa dòng ảnh');
+                }
+                return;
+            }
             if (e.key === 'Enter') {
                 e.preventDefault();
                 EditorHistory.recordBeforeAction();
@@ -4347,19 +4468,8 @@ function insertImageFromFile(file, targetWrapper = null) {
             } else {
                 wrapper.parentNode.insertBefore(imgBlock, wrapper.nextSibling);
             }
-            // Chỉ thêm dòng mới nếu ảnh được chèn vào cuối cùng của trang
-            if (!imgBlock.nextElementSibling) {
-                const nextTextBlock = createBlockElement('text', '', generateId(), indent);
-                imgBlock.parentNode.appendChild(nextTextBlock);
-                const nextContent = nextTextBlock.querySelector('.block-content');
-                if (nextContent) nextContent.focus();
-            }
         } else {
             elements.blockEditor.appendChild(imgBlock);
-            const nextTextBlock = createBlockElement('text', '', generateId(), indent);
-            elements.blockEditor.appendChild(nextTextBlock);
-            const nextContent = nextTextBlock.querySelector('.block-content');
-            if (nextContent) nextContent.focus();
         }
 
         selectSingleBlock(imgBlock);
@@ -4506,19 +4616,8 @@ function applyImageToTarget(src, caption = '') {
         } else {
             wrapper.parentNode.insertBefore(imgBlock, wrapper.nextSibling);
         }
-        // Chỉ thêm dòng mới nếu ảnh được chèn vào cuối cùng của trang
-        if (!imgBlock.nextElementSibling) {
-            const nextTextBlock = createBlockElement('text', '', generateId(), indent);
-            imgBlock.parentNode.appendChild(nextTextBlock);
-            const nextContent = nextTextBlock.querySelector('.block-content');
-            if (nextContent) nextContent.focus();
-        }
     } else {
         elements.blockEditor.appendChild(imgBlock);
-        const nextTextBlock = createBlockElement('text', '', generateId(), indent);
-        elements.blockEditor.appendChild(nextTextBlock);
-        const nextContent = nextTextBlock.querySelector('.block-content');
-        if (nextContent) nextContent.focus();
     }
 
     selectSingleBlock(imgBlock);

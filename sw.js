@@ -3,15 +3,15 @@
  * Hỗ trợ offline đầy đủ cho cả Sổ tay chính và Mini Note.
  */
 
-const CACHE_NAME = 'schooldb-v3.0';
+const CACHE_NAME = 'schooldb-v3.2';
 
 const PRECACHE_URLS = [
     './',
     './index.html',
     './mini.html',
-    './styles.css?v=3.0',
-    './app.js?v=3.0',
-    './shared/note-schema.js?v=3.0',
+    './styles.css?v=3.2',
+    './app.js?v=3.2',
+    './shared/note-schema.js?v=3.2',
     './firebase-config.js',
     './manifest.json',
     './manifest-mini.json',
@@ -50,6 +50,12 @@ self.addEventListener('fetch', (event) => {
 
     // Không can thiệp vào Firestore API (Firestore SDK tự quản lý IndexedDB offline)
     if (url.hostname.includes('firestore.googleapis.com') || url.hostname.includes('firebaseio.com')) {
+        return;
+    }
+
+    // Trên localhost / 127.0.0.1: Luôn lấy trực tiếp từ network để đảm bảo code mới nhất có hiệu lực ngay
+    if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
+        event.respondWith(fetch(request).catch(() => caches.match(request)));
         return;
     }
 
