@@ -50,6 +50,38 @@ function initApp() {
         triggerSave();
     });
 
+    elements.pageTitleInput.addEventListener('paste', (e) => {
+        let text = e.clipboardData ? e.clipboardData.getData('text/plain') : '';
+        text = (text || '').replace(/\r\n?/g, '\n').replace(/\u00A0/g, ' ');
+        if (text.includes('\n')) {
+            e.preventDefault();
+            const lines = text.split('\n');
+            elements.pageTitleInput.value = lines[0].trim();
+            updatePageTitle(elements.pageTitleInput.value);
+
+            const remainingLines = lines.slice(1);
+            let firstBlock = elements.blockEditor.querySelector('.block-wrapper');
+            let insertAfter = null;
+
+            remainingLines.forEach(line => {
+                if (!line.trim() && !insertAfter) return;
+                const newWrapper = createBlockElement('text', escapeHtml(line), generateId(), 0);
+                if (!insertAfter) {
+                    if (firstBlock) {
+                        elements.blockEditor.insertBefore(newWrapper, firstBlock);
+                    } else {
+                        elements.blockEditor.appendChild(newWrapper);
+                    }
+                } else {
+                    insertAfter.parentNode.insertBefore(newWrapper, insertAfter.nextSibling);
+                }
+                insertAfter = newWrapper;
+            });
+            updateNumberPrefixes();
+            triggerSave();
+        }
+    });
+
     document.getElementById('new-page-btn').addEventListener('click', createNewPage);
     const sidebarNewBtn = document.getElementById('sidebar-new-page-btn');
     if (sidebarNewBtn) sidebarNewBtn.addEventListener('click', createNewPage);
@@ -75,40 +107,58 @@ function initApp() {
         updatePageTitle(elements.pageTitleInput.value);
     });
     
-    // Topbar Actions
-    document.querySelectorAll('.topbar-right .icon-btn')[1].addEventListener('click', () => {
-        // Share -> Copy to clipboard
-        app.copyPageContents();
-    }); 
+    // Topbar Actions (Share & More)
+    const shareBtn = document.getElementById('topbar-share-btn');
+    const moreBtn = document.getElementById('topbar-more-btn');
+    const sharePopover = document.getElementById('share-popover');
+    const morePopover = document.getElementById('more-popover');
     
-    document.querySelectorAll('.topbar-right .icon-btn')[2].addEventListener('click', (e) => {
-        e.stopPropagation();
-        const pop = document.getElementById('more-popover');
-        const isVisible = pop.style.display === 'block';
-        if (isVisible) {
-            pop.style.display = 'none';
-            return;
-        }
-        const rect = e.currentTarget.getBoundingClientRect();
-        pop.style.display = 'block';
-        pop.style.top = `${rect.bottom + 8}px`;
-        pop.style.right = '16px';
-        
-        // Sync states with active page
-        const page = appState.pages[appState.activePageId];
-        if (page) {
-            const font = page.font || 'default';
-            pop.querySelectorAll('.font-btn').forEach(btn => {
-                btn.classList.toggle('active', btn.getAttribute('data-font') === font);
-            });
-            const switchSmall = document.getElementById('switch-small-text');
-            if (switchSmall) switchSmall.checked = !!page.smallText;
-            const switchFull = document.getElementById('switch-full-width');
-            if (switchFull) switchFull.checked = !!page.fullWidth;
-            const switchLock = document.getElementById('switch-lock-page');
-            if (switchLock) switchLock.checked = !!page.locked;
-        }
-    });
+    if (shareBtn && sharePopover) {
+        shareBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (morePopover) morePopover.style.display = 'none';
+            const isVisible = sharePopover.style.display === 'block';
+            if (isVisible) {
+                sharePopover.style.display = 'none';
+                return;
+            }
+            const rect = shareBtn.getBoundingClientRect();
+            sharePopover.style.display = 'block';
+            sharePopover.style.top = `${rect.bottom + 8}px`;
+            sharePopover.style.right = `${Math.max(16, window.innerWidth - rect.right)}px`;
+        });
+    }
+
+    if (moreBtn && morePopover) {
+        moreBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (sharePopover) sharePopover.style.display = 'none';
+            const isVisible = morePopover.style.display === 'block';
+            if (isVisible) {
+                morePopover.style.display = 'none';
+                return;
+            }
+            const rect = moreBtn.getBoundingClientRect();
+            morePopover.style.display = 'block';
+            morePopover.style.top = `${rect.bottom + 8}px`;
+            morePopover.style.right = '16px';
+            
+            // Sync states with active page
+            const page = appState.pages[appState.activePageId];
+            if (page) {
+                const font = page.font || 'default';
+                morePopover.querySelectorAll('.font-btn').forEach(btn => {
+                    btn.classList.toggle('active', btn.getAttribute('data-font') === font);
+                });
+                const switchSmall = document.getElementById('switch-small-text');
+                if (switchSmall) switchSmall.checked = !!page.smallText;
+                const switchFull = document.getElementById('switch-full-width');
+                if (switchFull) switchFull.checked = !!page.fullWidth;
+                const switchLock = document.getElementById('switch-lock-page');
+                if (switchLock) switchLock.checked = !!page.locked;
+            }
+        });
+    }
 
     // Keyboard Shortcuts (Ctrl+K, Ctrl+B, Ctrl+I, Ctrl+D, Ctrl+L, Ctrl+N)
     document.addEventListener('keydown', (e) => {
@@ -153,18 +203,24 @@ function initApp() {
         const emojiPicker = document.getElementById('emoji-picker');
         const coverPicker = document.getElementById('cover-picker');
         const morePopover = document.getElementById('more-popover');
-        if (!emojiPicker.contains(e.target) && !e.target.closest('#add-icon-btn') && !e.target.closest('#page-icon')) {
+        const sharePopover = document.getElementById('share-popover');
+        if (emojiPicker && !emojiPicker.contains(e.target) && !e.target.closest('#add-icon-btn') && !e.target.closest('#page-icon')) {
             emojiPicker.style.display = 'none';
         }
-        if (!coverPicker.contains(e.target) && !e.target.closest('#add-cover-btn') && !e.target.closest('.change-cover-btn')) {
+        if (coverPicker && !coverPicker.contains(e.target) && !e.target.closest('#add-cover-btn') && !e.target.closest('.change-cover-btn')) {
             coverPicker.style.display = 'none';
         }
-        if (!morePopover.contains(e.target) && !e.target.closest('.topbar-right .icon-btn:last-child')) {
+        if (sharePopover && !sharePopover.contains(e.target) && !e.target.closest('#topbar-share-btn')) {
+            sharePopover.style.display = 'none';
+        }
+        if (morePopover && !morePopover.contains(e.target) && !e.target.closest('#topbar-more-btn')) {
             morePopover.style.display = 'none';
         }
     });
 
     initPopovers();
+    initSidebarResizer();
+    initMultiBlockSelection();
     // Initialize Slash menu clicks
     document.querySelectorAll('.slash-menu-item').forEach(item => {
         item.addEventListener('click', (e) => {
@@ -497,8 +553,20 @@ function renderSidebar() {
                 <span class="page-icon">${escapeHtml(page.icon || '📄')}</span>
                 <span class="page-title">${escapeHtml(page.title || 'Untitled')}</span>
             </div>
+            <div class="page-item-actions">
+                <button class="page-item-action-btn delete-btn" title="Xóa trang này" type="button">
+                    <i class="ri-delete-bin-line"></i>
+                </button>
+            </div>
         `;
         li.onclick = () => { openPage(page.id); closeMobileSidebar(); };
+        const delBtn = li.querySelector('.delete-btn');
+        if (delBtn) {
+            delBtn.onclick = (e) => {
+                e.stopPropagation();
+                deletePage(page.id);
+            };
+        }
         return li;
     };
 
@@ -511,6 +579,85 @@ function renderSidebar() {
         navBadge.textContent = inboxPages.length;
         navBadge.style.display = inboxPages.length ? '' : 'none';
     }
+}
+
+function deletePage(pageId) {
+    if (!pageId) return;
+    const page = appState.pages[pageId];
+    const pageTitle = page ? (page.title || 'Untitled') : 'trang này';
+    if (!confirm(`Bạn có chắc chắn muốn xóa trang "${pageTitle}" không?`)) {
+        return;
+    }
+    delete appState.pages[pageId];
+    if (db) db.collection('notes').doc(pageId).delete();
+    saveToStorage();
+    renderSidebar();
+    showToast(`Đã xóa trang "${pageTitle}"`);
+    if (pageId === appState.activePageId) {
+        const remainingIds = Object.keys(appState.pages);
+        if (remainingIds.length > 0) {
+            openPage(remainingIds[0]);
+        } else {
+            createNewPage();
+        }
+    }
+}
+
+function toggleSidebarSection(secName) {
+    const sec = document.getElementById(`${secName}-section`);
+    if (!sec) return;
+    sec.classList.toggle('is-collapsed');
+    const isCollapsed = sec.classList.contains('is-collapsed');
+    localStorage.setItem(`schooldb_section_collapsed_${secName}`, isCollapsed ? '1' : '0');
+}
+
+function initSidebarResizer() {
+    const resizer = document.getElementById('sidebar-resizer');
+    const sidebar = document.getElementById('sidebar');
+    if (!resizer || !sidebar) return;
+
+    const savedWidth = localStorage.getItem('schooldb_sidebar_width');
+    if (savedWidth) {
+        sidebar.style.width = `${savedWidth}px`;
+    }
+
+    // Restore section collapse states
+    ['inbox', 'private', 'tools'].forEach(secName => {
+        if (localStorage.getItem(`schooldb_section_collapsed_${secName}`) === '1') {
+            const sec = document.getElementById(`${secName}-section`);
+            if (sec) sec.classList.add('is-collapsed');
+        }
+    });
+
+    let isResizing = false;
+    resizer.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        isResizing = true;
+        resizer.classList.add('is-resizing');
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (!isResizing) return;
+        let newWidth = e.clientX;
+        if (newWidth < 200) newWidth = 200;
+        if (newWidth > 500) newWidth = 500;
+        sidebar.style.width = `${newWidth}px`;
+    });
+
+    document.addEventListener('mouseup', () => {
+        if (isResizing) {
+            isResizing = false;
+            resizer.classList.remove('is-resizing');
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            const finalWidth = parseInt(sidebar.style.width, 10);
+            if (!isNaN(finalWidth)) {
+                localStorage.setItem('schooldb_sidebar_width', finalWidth);
+            }
+        }
+    });
 }
 
 function updatePageTitle(title) {
@@ -1296,17 +1443,28 @@ const app = {
         document.getElementById('more-popover').style.display = 'none';
     },
     deleteCurrentPage: () => {
-        if (!appState.activePageId) return;
-        if(confirm('Bạn có chắc muốn xóa trang này?')) {
-            delete appState.pages[appState.activePageId];
-            if (db) db.collection('notes').doc(appState.activePageId).delete();
-            saveToStorage();
-            renderSidebar();
-            const firstId = Object.keys(appState.pages)[0];
-            if (firstId) openPage(firstId);
-            else createNewPage();
+        deletePage(appState.activePageId);
+        const pop = document.getElementById('more-popover');
+        if (pop) pop.style.display = 'none';
+    },
+    deletePage: (id) => deletePage(id),
+    toggleSidebarSection: (sec) => toggleSidebarSection(sec),
+    shareWeb: () => {
+        const page = appState.pages[appState.activePageId];
+        if (!page) return;
+        const title = page.title || 'Untitled';
+        const text = page.blocks ? page.blocks.map(b => b.content).join('\n') : '';
+        if (navigator.share) {
+            navigator.share({
+                title: title,
+                text: text,
+                url: window.location.href
+            }).catch(() => {});
+        } else {
+            app.copyPageContents();
         }
-        document.getElementById('more-popover').style.display = 'none';
+        const pop = document.getElementById('share-popover');
+        if (pop) pop.style.display = 'none';
     },
     // Chuyển ghi chú từ Inbox vào sổ tay chính
     moveToNotebook: () => {
@@ -1413,6 +1571,231 @@ function serializeBlocks() {
     return blocks;
 }
 
+function setCaretAtStart(el) {
+    if (!el) return;
+    el.focus();
+    const sel = window.getSelection();
+    if (!sel) return;
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+}
+
+function setCaretAtOffset(el, targetOffset) {
+    if (!el) return;
+    el.focus();
+    const sel = window.getSelection();
+    if (!sel) return;
+    let currentOffset = 0;
+    let foundNode = null;
+    let nodeOffset = 0;
+    
+    function traverse(node) {
+        if (foundNode) return;
+        if (node.nodeType === Node.TEXT_NODE) {
+            const len = node.nodeValue.length;
+            if (currentOffset + len >= targetOffset) {
+                foundNode = node;
+                nodeOffset = targetOffset - currentOffset;
+                return;
+            }
+            currentOffset += len;
+        } else {
+            for (let i = 0; i < node.childNodes.length; i++) {
+                traverse(node.childNodes[i]);
+                if (foundNode) return;
+            }
+        }
+    }
+    
+    traverse(el);
+    const range = document.createRange();
+    if (foundNode) {
+        range.setStart(foundNode, Math.min(nodeOffset, foundNode.nodeValue.length));
+    } else {
+        range.selectNodeContents(el);
+        range.collapse(false);
+    }
+    range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+}
+
+function updateNumberPrefixes() {
+    if (!elements.blockEditor) return;
+    const indentCounters = {};
+    elements.blockEditor.querySelectorAll('.block-wrapper').forEach(wrapper => {
+        const type = wrapper.getAttribute('data-type');
+        const indent = parseInt(wrapper.getAttribute('data-indent') || '0', 10);
+        
+        if (type === 'number') {
+            if (!indentCounters[indent]) indentCounters[indent] = 1;
+            const prefixEl = wrapper.querySelector('.block-prefix');
+            if (prefixEl) {
+                prefixEl.innerHTML = `<span class="number-prefix">${indentCounters[indent]}.</span>`;
+                prefixEl.style.display = 'flex';
+            }
+            indentCounters[indent]++;
+            Object.keys(indentCounters).forEach(k => {
+                if (parseInt(k, 10) > indent) delete indentCounters[k];
+            });
+        } else {
+            Object.keys(indentCounters).forEach(k => {
+                if (parseInt(k, 10) >= indent) delete indentCounters[k];
+            });
+        }
+    });
+}
+
+function checkMarkdownShortcuts(target) {
+    const text = target.innerText || target.textContent || '';
+    
+    // 1. Bullet list: "* " or "- "
+    const bulletMatch = text.match(/^(\*|-)\s(.*)/s);
+    if (bulletMatch) {
+        setBlockType(target, 'bullet');
+        target.innerHTML = bulletMatch[2];
+        setCaretAtStart(target);
+        triggerSave();
+        return true;
+    }
+    
+    // 2. Numbered list: "1. " or "1) "
+    const numberMatch = text.match(/^1[\.\)]\s(.*)/s);
+    if (numberMatch) {
+        setBlockType(target, 'number');
+        target.innerHTML = numberMatch[1];
+        setCaretAtStart(target);
+        updateNumberPrefixes();
+        triggerSave();
+        return true;
+    }
+    
+    // 3. To-do list: "[] " or "[ ] "
+    const todoMatch = text.match(/^(\[\]|\[\s\])\s(.*)/s);
+    if (todoMatch) {
+        setBlockType(target, 'todo');
+        target.innerHTML = todoMatch[2];
+        setCaretAtStart(target);
+        triggerSave();
+        return true;
+    }
+    
+    // 4. Heading 1: "# "
+    const h1Match = text.match(/^#\s(.*)/s);
+    if (h1Match) {
+        setBlockType(target, 'h1');
+        target.innerHTML = h1Match[1];
+        setCaretAtStart(target);
+        triggerSave();
+        return true;
+    }
+    
+    // 5. Heading 2: "## "
+    const h2Match = text.match(/^##\s(.*)/s);
+    if (h2Match) {
+        setBlockType(target, 'h2');
+        target.innerHTML = h2Match[1];
+        setCaretAtStart(target);
+        triggerSave();
+        return true;
+    }
+    
+    // 6. Heading 3: "### "
+    const h3Match = text.match(/^###\s(.*)/s);
+    if (h3Match) {
+        setBlockType(target, 'h3');
+        target.innerHTML = h3Match[1];
+        setCaretAtStart(target);
+        triggerSave();
+        return true;
+    }
+    
+    // 7. Quote: "> "
+    const quoteMatch = text.match(/^>\s(.*)/s);
+    if (quoteMatch) {
+        setBlockType(target, 'quote');
+        target.innerHTML = quoteMatch[1];
+        setCaretAtStart(target);
+        triggerSave();
+        return true;
+    }
+    
+    // 8. Divider: "---"
+    if (text.trim() === '---') {
+        setBlockType(target, 'divider');
+        const wrapper = target.closest('.block-wrapper');
+        const newWrapper = createBlockElement('text', '', generateId(), 0);
+        wrapper.parentNode.insertBefore(newWrapper, wrapper.nextSibling);
+        newWrapper.querySelector('.block-content').focus();
+        triggerSave();
+        return true;
+    }
+    
+    // 9. Code block: "```"
+    if (text.trim() === '```') {
+        setBlockType(target, 'code');
+        target.innerHTML = '';
+        setCaretAtStart(target);
+        triggerSave();
+        return true;
+    }
+    
+    return false;
+}
+
+function selectBlockAndShowMenu(wrapper) {
+    const contentEl = wrapper.querySelector('.block-content');
+    if (!contentEl) return;
+    
+    // 1. Highlight / select all contents of this block ("bôi đen cả dòng")
+    contentEl.focus();
+    const range = document.createRange();
+    range.selectNodeContents(contentEl);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    
+    // 2. Set active block state
+    activeBlockId = wrapper.getAttribute('data-id');
+    activeBlockElement = wrapper;
+    const currentType = wrapper.getAttribute('data-type') || 'text';
+    updateBlockTypeBadge(currentType);
+    
+    // 3. Highlight visually
+    wrapper.classList.add('is-focused');
+    
+    // 4. Open Floating Toolbar right above this block
+    const toolbar = document.getElementById('floating-toolbar');
+    if (!toolbar) return;
+    
+    toolbar.style.display = 'flex';
+    const rect = wrapper.getBoundingClientRect();
+    const tbWidth = toolbar.offsetWidth || 340;
+    const tbHeight = toolbar.offsetHeight || 260;
+    
+    let top = rect.top - tbHeight - 10;
+    if (top < 10) {
+        top = rect.bottom + 8;
+    }
+    let left = rect.left + 24;
+    if (left + tbWidth > window.innerWidth - 16) {
+        left = window.innerWidth - tbWidth - 16;
+    }
+    if (left < 16) left = 16;
+    
+    toolbar.style.top = `${top}px`;
+    toolbar.style.left = `${left}px`;
+    
+    // Open type dropdown automatically for instant 1-click conversion
+    const typeDropdown = document.getElementById('nft-type-dropdown');
+    if (typeDropdown) {
+        typeDropdown.style.display = 'block';
+    }
+}
+
 function createBlockElement(type, content, id = generateId(), indent = 0) {
     const wrapper = document.createElement('div');
     wrapper.className = 'block-wrapper';
@@ -1421,12 +1804,13 @@ function createBlockElement(type, content, id = generateId(), indent = 0) {
     wrapper.style.marginLeft = `${indent * 24}px`;
 
     wrapper.innerHTML = `
-        <div class="block-handle" contenteditable="false"><i class="ri-drag-move-2-line"></i></div>
+        <div class="block-handle" contenteditable="false" title="Bấm để chọn dòng hoặc đổi kiểu khối, giữ để kéo"><i class="ri-drag-move-2-line"></i></div>
         <div class="block-prefix" contenteditable="false"></div>
         <div class="block-content" contenteditable="true"></div>
     `;
     
     const contentEl = wrapper.querySelector('.block-content');
+    const handleEl = wrapper.querySelector('.block-handle');
     
     if (type === 'image' && content.includes('<img')) {
         contentEl.innerHTML = content;
@@ -1437,10 +1821,22 @@ function createBlockElement(type, content, id = generateId(), indent = 0) {
 
     setBlockType(contentEl, type, content);
     
+    // Handle click to select line and show block menu
+    if (handleEl) {
+        handleEl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            selectBlockAndShowMenu(wrapper);
+        });
+    }
+
     // Event listeners
     contentEl.addEventListener('keydown', handleBlockKeydown);
     contentEl.addEventListener('input', handleBlockInput);
-    contentEl.addEventListener('focus', () => { activeBlockElement = contentEl; });
+    contentEl.addEventListener('paste', handleBlockPaste);
+    contentEl.addEventListener('focus', () => { 
+        activeBlockElement = contentEl;
+        activeBlockId = id;
+    });
 
     return wrapper;
 }
@@ -1526,6 +1922,7 @@ function focusFirstBlockOrCreate() {
 function handleBlockKeydown(e) {
     const target = e.target;
     const wrapper = target.closest('.block-wrapper');
+    if (!wrapper) return;
     
     // Handle Indentation with Tab
     if (e.key === 'Tab') {
@@ -1538,6 +1935,7 @@ function handleBlockKeydown(e) {
         }
         wrapper.setAttribute('data-indent', indent);
         wrapper.style.marginLeft = `${indent * 24}px`;
+        updateNumberPrefixes();
         triggerSave();
         return;
     }
@@ -1546,18 +1944,20 @@ function handleBlockKeydown(e) {
         e.preventDefault();
         
         let indent = parseInt(wrapper.getAttribute('data-indent') || '0', 10);
+        const type = target.getAttribute('data-type') || 'text';
+        const rawText = target.innerText ? target.innerText.trim() : '';
         
-        // If block is empty
-        if (target.textContent.trim() === '') {
-            const type = target.getAttribute('data-type');
+        // 1. If block is empty
+        if (rawText === '') {
             if (type !== 'text') {
-                // 1. Revert to plain text if it's a special block
+                // Revert to plain text if special block (bullet, number, todo, heading, quote, etc.)
                 setBlockType(target, 'text');
+                updateNumberPrefixes();
                 closeSlashMenu();
                 triggerSave();
                 return;
             } else if (indent > 0) {
-                // 2. Outdent if it's plain text and indented
+                // Outdent if plain text and indented
                 indent = indent - 1;
                 wrapper.setAttribute('data-indent', indent);
                 wrapper.style.marginLeft = `${indent * 24}px`;
@@ -1566,52 +1966,135 @@ function handleBlockKeydown(e) {
             }
         }
         
-        const type = target.getAttribute('data-type');
+        // 2. If block has content, split content at cursor!
+        let beforeHtml = '';
+        let afterHtml = '';
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount) {
+            const range = sel.getRangeAt(0);
+            
+            // Delete selection if user highlighted text
+            range.deleteContents();
+            
+            // Range for content AFTER the cursor
+            const afterRange = document.createRange();
+            afterRange.selectNodeContents(target);
+            afterRange.setStart(range.startContainer, range.startOffset);
+            
+            const afterFragment = afterRange.cloneContents();
+            const tempDiv = document.createElement('div');
+            tempDiv.appendChild(afterFragment);
+            afterHtml = tempDiv.innerHTML;
+            
+            // Delete after content from target
+            afterRange.deleteContents();
+            beforeHtml = target.innerHTML;
+        } else {
+            beforeHtml = target.innerHTML;
+            afterHtml = '';
+        }
+        
+        // Determine type of the new block
+        let newType = 'text';
+        if (type === 'bullet' || type === 'number' || type === 'todo') {
+            newType = type; // Continue list!
+        }
         
         // Auto-indent if creating a new block after a toggle
         if (type === 'toggle' || (type && type.startsWith('toggle-'))) {
             indent = indent + 1;
-            // ensure it's open visually
             const icon = wrapper.querySelector('.toggle-icon');
             if (icon && !icon.classList.contains('open')) {
                 toggleBlockOpen(icon);
             }
         }
         
-        const newWrapper = createBlockElement('text', '', generateId(), indent);
+        // Create the new block with the content after cursor!
+        const newWrapper = createBlockElement(newType, afterHtml, generateId(), indent);
         wrapper.parentNode.insertBefore(newWrapper, wrapper.nextSibling);
-        newWrapper.querySelector('.block-content').focus();
+        
+        if (newType === 'number' || type === 'number') {
+            updateNumberPrefixes();
+        }
+        
+        // Put cursor at the start of the new block
+        const newContent = newWrapper.querySelector('.block-content');
+        if (newContent) {
+            setCaretAtStart(newContent);
+        }
+        
         closeSlashMenu();
         triggerSave();
+        return;
     }
     
     if (e.key === 'Backspace') {
         const sel = window.getSelection();
-        if (sel.anchorOffset === 0 && sel.focusOffset === 0) {
-            // If empty and not basic text, revert to text first
-            const type = target.getAttribute('data-type');
-            if (type !== 'text') {
-                e.preventDefault();
-                setBlockType(target, 'text');
-                closeSlashMenu();
-                triggerSave();
-            } else {
-                const prev = wrapper.previousElementSibling;
-                if (prev) {
+        if (sel && sel.isCollapsed && sel.rangeCount) {
+            const range = sel.getRangeAt(0);
+            
+            // Check if caret is at the beginning of the target
+            let isAtBeginning = false;
+            if (range.startOffset === 0) {
+                if (range.startContainer === target || range.startContainer === target.firstChild || target.childNodes.length === 0) {
+                    isAtBeginning = true;
+                } else {
+                    let prevNode = range.startContainer.previousSibling;
+                    isAtBeginning = true;
+                    while (prevNode) {
+                        if (prevNode.textContent && prevNode.textContent.length > 0) {
+                            isAtBeginning = false;
+                            break;
+                        }
+                        prevNode = prevNode.previousSibling;
+                    }
+                }
+            }
+            
+            if (isAtBeginning) {
+                const type = target.getAttribute('data-type');
+                let indent = parseInt(wrapper.getAttribute('data-indent') || '0', 10);
+                
+                // 1. If not plain text, revert to plain text first (keeps text!)
+                if (type && type !== 'text') {
                     e.preventDefault();
-                    // Merge text
-                    const prevContent = prev.querySelector('.block-content');
-                    const textToMove = target.innerText;
-                    
-                    const range = document.createRange();
-                    range.selectNodeContents(prevContent);
-                    range.collapse(false);
-                    const sel = window.getSelection();
-                    sel.removeAllRanges();
-                    sel.addRange(range);
-                    
-                    wrapper.remove();
+                    setBlockType(target, 'text');
+                    updateNumberPrefixes();
+                    closeSlashMenu();
                     triggerSave();
+                    return;
+                }
+                
+                // 2. If indented, outdent first!
+                if (indent > 0) {
+                    e.preventDefault();
+                    indent = indent - 1;
+                    wrapper.setAttribute('data-indent', indent);
+                    wrapper.style.marginLeft = `${indent * 24}px`;
+                    triggerSave();
+                    return;
+                }
+                
+                // 3. Otherwise merge with previous block!
+                const prev = wrapper.previousElementSibling;
+                if (prev && prev.classList.contains('block-wrapper')) {
+                    e.preventDefault();
+                    const prevContent = prev.querySelector('.block-content');
+                    if (prevContent) {
+                        const prevTextLen = prevContent.innerText ? prevContent.innerText.length : 0;
+                        const currentHtml = target.innerHTML;
+                        
+                        if (currentHtml && currentHtml !== '<br>') {
+                            prevContent.innerHTML += currentHtml;
+                        }
+                        
+                        wrapper.remove();
+                        updateNumberPrefixes();
+                        
+                        setCaretAtOffset(prevContent, prevTextLen);
+                        triggerSave();
+                        return;
+                    }
                 }
             }
         }
@@ -1619,14 +2102,199 @@ function handleBlockKeydown(e) {
 }
 
 function handleBlockInput(e) {
-    const text = e.target.innerText;
+    const target = e.target;
+    
+    // Check for Word/Markdown shortcuts: "- ", "1. ", "[] ", "# ", etc.
+    const converted = checkMarkdownShortcuts(target);
+    if (converted) {
+        closeSlashMenu();
+        return;
+    }
+    
+    const text = target.innerText || target.textContent || '';
     const match = text.match(/\/([a-zA-Z0-9_-]*)$/);
     if (match) {
         const query = match[1].toLowerCase();
-        openSlashMenu(e.target, query);
+        openSlashMenu(target, query);
     } else {
         closeSlashMenu();
     }
+    triggerSave();
+}
+
+function handleBlockPaste(e) {
+    let target = e.target;
+    let wrapper = target.closest('.block-wrapper');
+    if (!wrapper) return;
+
+    // Nếu người dùng đang bôi đen nhiều khối (multi-block selection), xóa các khối đã chọn và thay thế
+    if (typeof selectedBlockWrappers !== 'undefined' && selectedBlockWrappers && selectedBlockWrappers.length > 0) {
+        const firstBlock = selectedBlockWrappers[0];
+        const restBlocks = selectedBlockWrappers.slice(1);
+        restBlocks.forEach(w => w.remove());
+        if (typeof clearBlockSelection === 'function') clearBlockSelection();
+        if (firstBlock) {
+            const firstContent = firstBlock.querySelector('.block-content');
+            if (firstContent) {
+                target = firstContent;
+                wrapper = firstBlock;
+                target.innerHTML = '';
+            }
+        }
+    }
+
+    let text = e.clipboardData ? e.clipboardData.getData('text/plain') : '';
+    const html = e.clipboardData ? e.clipboardData.getData('text/html') : '';
+
+    // Nếu plain text không có \n nhưng HTML có thẻ đoạn/ngắt dòng (copy từ web, Word, tài liệu rich text)
+    if (!text.includes('\n') && html && (/<(p|br|div|li|tr|h[1-6])\b/i.test(html))) {
+        const temp = document.createElement('div');
+        temp.innerHTML = html;
+        temp.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
+        temp.querySelectorAll('p, div, tr, h1, h2, h3, h4, h5, h6').forEach(el => el.append('\n'));
+        temp.querySelectorAll('li').forEach(li => {
+            const prefix = document.createTextNode('\n• ');
+            li.parentNode.insertBefore(prefix, li);
+        });
+        const extracted = temp.innerText || temp.textContent || '';
+        if (extracted.includes('\n')) {
+            text = extracted;
+        }
+    }
+
+    // Chuẩn hóa ngắt dòng và dấu cách không ngắt (non-breaking space \u00A0 thành space thường)
+    text = (text || '').replace(/\r\n?/g, '\n').replace(/\u00A0/g, ' ');
+
+    if (!text) return;
+
+    // Dán 1 dòng thông thường: chèn plain text sạch vào vị trí con trỏ
+    if (!text.includes('\n')) {
+        e.preventDefault();
+        document.execCommand('insertText', false, text);
+        checkMarkdownShortcuts(target);
+        triggerSave();
+        return;
+    }
+
+    // DÁN TÀI LIỆU NHIỀU DÒNG: Tự động xuống dòng và tách thành các block tương ứng
+    e.preventDefault();
+
+    let beforeHtml = '';
+    let afterHtml = '';
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount) {
+        const range = sel.getRangeAt(0);
+        range.deleteContents();
+
+        const afterRange = document.createRange();
+        afterRange.selectNodeContents(target);
+        afterRange.setStart(range.startContainer, range.startOffset);
+
+        const afterFragment = afterRange.cloneContents();
+        const tempDiv = document.createElement('div');
+        tempDiv.appendChild(afterFragment);
+        afterHtml = tempDiv.innerHTML;
+
+        afterRange.deleteContents();
+        beforeHtml = target.innerHTML;
+    } else {
+        beforeHtml = target.innerHTML;
+        afterHtml = '';
+    }
+
+    const lines = text.split('\n');
+    const currentIndent = parseInt(wrapper.getAttribute('data-indent') || '0', 10);
+
+    // 1. Dòng đầu tiên: đưa vào block hiện tại
+    const firstLine = lines[0];
+    let finalFirstHtml = beforeHtml + escapeHtml(firstLine);
+    if (lines.length === 1 && afterHtml) {
+        finalFirstHtml += afterHtml;
+    }
+    target.innerHTML = finalFirstHtml;
+    checkMarkdownShortcuts(target);
+
+    // 2. Các dòng tiếp theo: tạo thành các khối (block) mới nối tiếp
+    let lastWrapper = wrapper;
+    let lastContentEl = target;
+
+    for (let i = 1; i < lines.length; i++) {
+        const rawLine = lines[i];
+        let lineText = rawLine;
+        const isLastLine = (i === lines.length - 1);
+
+        let blockType = 'text';
+        let blockIndent = currentIndent;
+        let m;
+
+        // Tự động nhận diện độ thụt lề nếu có 2 space trở lên
+        const leadingSpaces = (rawLine.match(/^ */) || [''])[0].length;
+        if (leadingSpaces >= 2) {
+            blockIndent = Math.min(4, currentIndent + Math.floor(leadingSpaces / 2));
+            lineText = rawLine.trim();
+        }
+
+        const trimmed = lineText.trim();
+
+        if (trimmed === '---') {
+            blockType = 'divider';
+            lineText = '';
+        } else if ((m = trimmed.match(/^###\s+(.*)$/))) {
+            blockType = 'h3';
+            lineText = m[1];
+        } else if ((m = trimmed.match(/^##\s+(.*)$/))) {
+            blockType = 'h2';
+            lineText = m[1];
+        } else if ((m = trimmed.match(/^#\s+(.*)$/))) {
+            blockType = 'h1';
+            lineText = m[1];
+        } else if ((m = trimmed.match(/^(?:[-*]\s+)?\[( |x|X)?\]\s*(.*)$/))) {
+            blockType = 'todo';
+            lineText = (m[1] && m[1].toLowerCase() === 'x' ? '[x] ' : '') + m[2];
+        } else if ((m = trimmed.match(/^[-*•]\s+(.*)$/))) {
+            blockType = 'bullet';
+            lineText = m[1];
+        } else if ((m = trimmed.match(/^\d+[.)]\s+(.*)$/))) {
+            blockType = 'number';
+            lineText = m[1];
+        } else if ((m = trimmed.match(/^>\s?(.*)$/))) {
+            blockType = 'quote';
+            lineText = m[1];
+        } else if (trimmed.startsWith('```')) {
+            blockType = 'code';
+            lineText = trimmed.replace(/^```/, '');
+        } else {
+            // Kế thừa danh sách nếu block trước là bullet/number/todo
+            const prevType = lastWrapper.getAttribute('data-type');
+            if (prevType === 'bullet' || prevType === 'number' || prevType === 'todo') {
+                if (trimmed) blockType = prevType;
+            }
+        }
+
+        let finalHtml = escapeHtml(lineText);
+        if (isLastLine && afterHtml) {
+            finalHtml += afterHtml;
+        }
+
+        const newWrapper = createBlockElement(blockType, finalHtml, generateId(), blockIndent);
+        lastWrapper.parentNode.insertBefore(newWrapper, lastWrapper.nextSibling);
+        lastWrapper = newWrapper;
+        lastContentEl = newWrapper.querySelector('.block-content');
+    }
+
+    updateNumberPrefixes();
+
+    if (lastContentEl) {
+        lastContentEl.focus();
+        if (lines[lines.length - 1] || afterHtml) {
+            const targetOffset = lines[lines.length - 1].length;
+            setCaretAtOffset(lastContentEl, targetOffset);
+        } else {
+            setCaretAtStart(lastContentEl);
+        }
+    }
+
+    closeSlashMenu();
     triggerSave();
 }
 
@@ -1690,30 +2358,38 @@ function setBlockType(element, type, initialContent = '') {
     if (type === 'todo') {
         const checked = element.style.textDecoration === 'line-through';
         prefix = `<input type="checkbox" class="todo-cb" ${checked ? 'checked' : ''} onclick="toggleTodo(this)">`;
-    } else if (isToggle) {
-        prefix = `<i class="ri-arrow-right-s-line toggle-icon" onclick="toggleBlockOpen(this)"></i>`;
-    } else if (type === 'bullet') {
-        prefix = `<span class="bullet-dot">•</span>`;
-    } else if (type === 'quote') {
-        prefix = `<div class="quote-bar"></div>`;
-    } else if (type === 'callout') {
-        prefix = `<span class="callout-icon">💡</span>`;
-    } else if (type === 'divider') {
-        element.innerHTML = `<hr class="divider-line">`;
-        element.contentEditable = false;
-    } else if (type === 'toc') {
-        renderTableOfContents(element);
-        element.contentEditable = false;
-    } else if (type === 'image') {
-        if (!element.querySelector('img') && !initialContent.includes('<img')) {
-            const url = prompt('Nhập link hình ảnh:');
-            if (url) {
-                element.innerHTML = `<img src="${url}" style="max-width:100%; border-radius:6px; margin-top:8px;">`;
-            } else {
-                type = 'text'; // Fallback
-            }
+    } else {
+        if (element.style.textDecoration === 'line-through') {
+            element.style.textDecoration = 'none';
+            element.style.opacity = '1';
         }
-        element.contentEditable = false;
+        if (isToggle) {
+            prefix = `<i class="ri-arrow-right-s-line toggle-icon" onclick="toggleBlockOpen(this)"></i>`;
+        } else if (type === 'bullet') {
+            prefix = `<span class="bullet-dot">•</span>`;
+        } else if (type === 'number') {
+            prefix = `<span class="number-prefix">1.</span>`;
+        } else if (type === 'quote') {
+            prefix = `<div class="quote-bar"></div>`;
+        } else if (type === 'callout') {
+            prefix = `<span class="callout-icon">💡</span>`;
+        } else if (type === 'divider') {
+            element.innerHTML = `<hr class="divider-line">`;
+            element.contentEditable = false;
+        } else if (type === 'toc') {
+            renderTableOfContents(element);
+            element.contentEditable = false;
+        } else if (type === 'image') {
+            if (!element.querySelector('img') && !initialContent.includes('<img')) {
+                const url = prompt('Nhập link hình ảnh:');
+                if (url) {
+                    element.innerHTML = `<img src="${url}" style="max-width:100%; border-radius:6px; margin-top:8px;">`;
+                } else {
+                    type = 'text'; // Fallback
+                }
+            }
+            element.contentEditable = false;
+        }
     }
     
     if (type !== 'divider' && type !== 'image' && type !== 'toc') {
@@ -1744,6 +2420,8 @@ function setBlockType(element, type, initialContent = '') {
     if (type === 'h1' || type === 'toggle-h1') placeholder = "Heading 1";
     if (type === 'h2' || type === 'toggle-h2') placeholder = "Heading 2";
     if (type === 'h3' || type === 'toggle-h3') placeholder = "Heading 3";
+    if (type === 'bullet') placeholder = "Danh sách chấm";
+    if (type === 'number') placeholder = "Danh sách số";
     if (type === 'todo') placeholder = "To-do";
     if (type === 'code') placeholder = "Code snippet";
     if (type === 'quote') placeholder = "Empty quote";
@@ -2483,14 +3161,12 @@ function initFloatingToolbar() {
 
             // Identify active block if in editor
             if (inEditor) {
-                const blockEl = container.closest('.block');
+                const blockEl = container.closest('.block-wrapper');
                 if (blockEl) {
                     activeBlockId = blockEl.getAttribute('data-id');
                     activeBlockElement = blockEl;
-                    const blockData = appState.pages[appState.activePageId]?.blocks.find(b => b.id === activeBlockId);
-                    if (blockData) {
-                        updateBlockTypeBadge(blockData.type);
-                    }
+                    const blockType = blockEl.getAttribute('data-type') || 'text';
+                    updateBlockTypeBadge(blockType);
                 } else {
                     activeBlockId = null;
                     activeBlockElement = null;
@@ -2561,15 +3237,189 @@ function updateBlockTypeBadge(type) {
     iconEl.className = cfg.icon;
 }
 
+function getBlockTypeName(type) {
+    const names = {
+        text: 'Text',
+        h1: 'Heading 1',
+        h2: 'Heading 2',
+        h3: 'Heading 3',
+        bullet: 'Danh sách chấm',
+        number: 'Danh sách số',
+        todo: 'To-do list',
+        quote: 'Trích dẫn',
+        code: 'Khối code',
+        divider: 'Đường kẻ',
+        toggle: 'Toggle'
+    };
+    return names[type] || (type ? type.toUpperCase() : 'Khối');
+}
+
 function convertBlockType(blockId, newType) {
-    const page = appState.pages[appState.activePageId];
-    if (!page) return;
-    const block = page.blocks.find(b => b.id === blockId);
-    if (!block) return;
-    block.type = newType;
-    renderBlocks(page.blocks);
+    let wrapper = null;
+    if (blockId) {
+        wrapper = document.querySelector(`.block-wrapper[data-id="${blockId}"]`);
+    }
+    if (!wrapper && activeBlockElement) {
+        wrapper = activeBlockElement.closest('.block-wrapper');
+    }
+    if (!wrapper) {
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount) {
+            let container = sel.getRangeAt(0).commonAncestorContainer;
+            if (container.nodeType === Node.TEXT_NODE) container = container.parentElement;
+            wrapper = container.closest('.block-wrapper');
+        }
+    }
+    if (!wrapper) return;
+    
+    const contentEl = wrapper.querySelector('.block-content');
+    if (!contentEl) return;
+    
+    setBlockType(contentEl, newType);
+    if (newType === 'number') {
+        updateNumberPrefixes();
+    }
+    updateBlockTypeBadge(newType);
     triggerSave();
-    showToast(`Đã chuyển khối thành ${newType.toUpperCase()}`);
+    contentEl.focus();
+    
+    const typeDropdown = document.getElementById('nft-type-dropdown');
+    if (typeDropdown) typeDropdown.style.display = 'none';
+    
+    showToast(`Đã chuyển thành ${getBlockTypeName(newType)}`);
+}
+
+// Multi-Block Selection System
+let selectedBlockWrappers = [];
+
+function clearBlockSelection() {
+    if (selectedBlockWrappers && selectedBlockWrappers.length) {
+        selectedBlockWrappers.forEach(w => w.classList.remove('is-block-selected'));
+        selectedBlockWrappers = [];
+    }
+}
+
+function selectAllBlocks() {
+    if (!elements.blockEditor) return;
+    const wrappers = elements.blockEditor.querySelectorAll('.block-wrapper');
+    if (!wrappers.length) return;
+    clearBlockSelection();
+    wrappers.forEach(w => w.classList.add('is-block-selected'));
+    selectedBlockWrappers = Array.from(wrappers);
+    showToast(`Đã chọn toàn bộ ${wrappers.length} dòng (Ctrl+C để sao chép, Backspace để xóa)`);
+}
+
+function initMultiBlockSelection() {
+    let isMouseDown = false;
+    let dragStartWrapper = null;
+
+    if (!elements.blockEditor) return;
+
+    elements.blockEditor.addEventListener('mousedown', (e) => {
+        if (e.target.closest('.block-handle') || e.target.closest('.todo-cb') || e.target.closest('.toggle-icon')) {
+            return;
+        }
+        isMouseDown = true;
+        dragStartWrapper = e.target.closest('.block-wrapper');
+        if (!e.shiftKey && !e.target.closest('.is-block-selected')) {
+            clearBlockSelection();
+        }
+    });
+
+    elements.blockEditor.addEventListener('mousemove', (e) => {
+        if (!isMouseDown || !dragStartWrapper) return;
+        const currentWrapper = e.target.closest('.block-wrapper');
+        if (currentWrapper && currentWrapper !== dragStartWrapper) {
+            const allWrappers = Array.from(elements.blockEditor.querySelectorAll('.block-wrapper'));
+            const idx1 = allWrappers.indexOf(dragStartWrapper);
+            const idx2 = allWrappers.indexOf(currentWrapper);
+            if (idx1 !== -1 && idx2 !== -1) {
+                const start = Math.min(idx1, idx2);
+                const end = Math.max(idx1, idx2);
+                allWrappers.forEach((w, idx) => {
+                    if (idx >= start && idx <= end) {
+                        w.classList.add('is-block-selected');
+                    } else {
+                        w.classList.remove('is-block-selected');
+                    }
+                });
+                selectedBlockWrappers = allWrappers.slice(start, end + 1);
+            }
+        }
+    });
+
+    document.addEventListener('mouseup', () => {
+        isMouseDown = false;
+        dragStartWrapper = null;
+    });
+
+    // Keyboard handlers when multiple blocks are selected
+    document.addEventListener('keydown', (e) => {
+        // Ctrl+A handling
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+            const activeEl = document.activeElement;
+            const inEditor = activeEl && activeEl.closest('#editor-container, .block-editor');
+            if (inEditor) {
+                const blockContent = activeEl.closest('.block-content');
+                if (blockContent) {
+                    const sel = window.getSelection();
+                    const textLen = (blockContent.innerText || '').trim().length;
+                    const selLen = (sel ? sel.toString() : '').trim().length;
+                    // If single line already selected or empty, select all blocks!
+                    if (selLen >= textLen || textLen === 0) {
+                        e.preventDefault();
+                        selectAllBlocks();
+                        return;
+                    }
+                } else {
+                    e.preventDefault();
+                    selectAllBlocks();
+                    return;
+                }
+            }
+        }
+
+        // Multi-block actions
+        if (selectedBlockWrappers && selectedBlockWrappers.length > 0) {
+            if (e.key === 'Escape') {
+                clearBlockSelection();
+                return;
+            }
+
+            // Copy multi-block text
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+                const combinedText = selectedBlockWrappers
+                    .map(w => {
+                        const contentEl = w.querySelector('.block-content');
+                        return contentEl ? (contentEl.innerText || '').trim() : '';
+                    })
+                    .join('\n');
+                navigator.clipboard.writeText(combinedText);
+                showToast(`Đã sao chép ${selectedBlockWrappers.length} dòng`);
+                return;
+            }
+
+            // Delete multi-block text
+            if (e.key === 'Backspace' || e.key === 'Delete') {
+                e.preventDefault();
+                const firstBlock = selectedBlockWrappers[0];
+                const restBlocks = selectedBlockWrappers.slice(1);
+                restBlocks.forEach(w => w.remove());
+                if (firstBlock) {
+                    const contentEl = firstBlock.querySelector('.block-content');
+                    setBlockType(contentEl, 'text');
+                    contentEl.innerHTML = '';
+                    firstBlock.classList.remove('is-block-selected');
+                    contentEl.focus();
+                }
+                selectedBlockWrappers = [];
+                updateNumberPrefixes();
+                triggerSave();
+                showToast('Đã xóa các dòng đã chọn');
+                return;
+            }
+        }
+    });
 }
 
 function executeFormatAction(action) {
@@ -2735,6 +3585,14 @@ window.addEventListener('DOMContentLoaded', () => {
     const hashId = decodeURIComponent(location.hash.slice(1));
     if (hashId && appState.pages[hashId]) openPage(hashId);
 });
+
+function escapeHtml(str) {
+    return String(str == null ? '' : str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
 
 function escapeJs(str) {
     if (!str) return '';

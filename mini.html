@@ -334,6 +334,9 @@
             line-height: 1.6;
             resize: none;
             user-select: text;
+            white-space: pre-wrap;
+            word-break: break-word;
+            overflow-wrap: break-word;
         }
         .tags-wrapper {
             display: flex;
@@ -581,7 +584,7 @@
             <!-- Standard Note / Todo Card -->
             <div class="editor-card" id="note-card">
                 <input type="text" id="note-title" class="title-input" placeholder="Tiêu đề (tùy chọn)..." autocomplete="off">
-                <textarea id="note-content" class="content-input" placeholder="Nhập nội dung ghi chú... (Hỗ trợ markdown: # tiêu đề, - danh sách, [] việc cần làm)"></textarea>
+                <textarea id="note-content" class="content-input" wrap="soft" placeholder="Nhập nội dung ghi chú... (Hỗ trợ markdown: # tiêu đề, - danh sách, [] việc cần làm)"></textarea>
                 <div class="tags-wrapper">
                     <i class="ri-price-tag-3-line"></i>
                     <input type="text" id="note-tags" class="tags-input" placeholder="Thẻ phân loại: work, idea, toan...">
@@ -886,6 +889,57 @@
         }
         [titleIn, contentIn, tagsIn, vWord, vPhonetic, vMeaning, vTag, vExample].forEach(el => {
             el.addEventListener('input', onInput);
+        });
+
+        // Hỗ trợ copy/paste tài liệu nhiều dòng tự động xuống dòng và chuẩn hoá khoảng trắng
+        contentIn.addEventListener('paste', (e) => {
+            let text = e.clipboardData ? e.clipboardData.getData('text/plain') : '';
+            const html = e.clipboardData ? e.clipboardData.getData('text/html') : '';
+
+            // Nếu plain text bị dính liền nhưng HTML có thẻ đoạn/xuống dòng (khi copy từ web, word)
+            if (!text.includes('\n') && html && (/<(p|br|div|li|tr|h[1-6])\b/i.test(html))) {
+                const temp = document.createElement('div');
+                temp.innerHTML = html;
+                temp.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
+                temp.querySelectorAll('p, div, tr, h1, h2, h3, h4, h5, h6').forEach(el => el.append('\n'));
+                temp.querySelectorAll('li').forEach(li => {
+                    const prefix = document.createTextNode('\n• ');
+                    li.parentNode.insertBefore(prefix, li);
+                });
+                const extracted = temp.innerText || temp.textContent || '';
+                if (extracted.includes('\n')) {
+                    text = extracted;
+                }
+            }
+
+            // Chuẩn hóa ngắt dòng và dấu cách không ngắt (non-breaking space \u00A0 thành space thường)
+            text = (text || '').replace(/\r\n?/g, '\n').replace(/\u00A0/g, ' ');
+
+            if (text) {
+                e.preventDefault();
+                const start = contentIn.selectionStart;
+                const end = contentIn.selectionEnd;
+                const currentVal = contentIn.value;
+                contentIn.value = currentVal.substring(0, start) + text + currentVal.substring(end);
+                contentIn.selectionStart = contentIn.selectionEnd = start + text.length;
+                onInput();
+            }
+        });
+
+        titleIn.addEventListener('paste', (e) => {
+            let text = e.clipboardData ? e.clipboardData.getData('text/plain') : '';
+            text = (text || '').replace(/\r\n?/g, '\n').replace(/\u00A0/g, ' ');
+            if (text.includes('\n')) {
+                e.preventDefault();
+                const lines = text.split('\n');
+                const firstLine = lines[0].trim();
+                const rest = lines.slice(1).join('\n').trim();
+                titleIn.value = firstLine;
+                if (rest) {
+                    contentIn.value = contentIn.value ? contentIn.value + '\n\n' + rest : rest;
+                }
+                onInput();
+            }
         });
 
         // --- SEND LOGIC ---

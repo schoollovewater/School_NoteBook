@@ -63,36 +63,49 @@
                 </button>
             </div>
 
-            <div class="sidebar-section sidebar-section-inbox" id="inbox-section" style="display: none;">
-                <div class="section-title">
-                    <span>📥 INBOX</span>
-                    <span class="inbox-count" id="inbox-count">0</span>
-                </div>
-                <ul class="page-tree" id="inbox-list"></ul>
-            </div>
-
-            <div class="sidebar-section">
-                <div class="section-title">
-                    <span>PRIVATE</span>
-                    <i class="ri-add-line add-icon" onclick="app.createNewPage()"></i>
-                </div>
-                <ul class="page-tree" id="page-list">
-                    <!-- Pages will be rendered here -->
-                </ul>
-            </div>
-
-            <div class="sidebar-section">
-                <div class="section-title">
-                    <span>TOOLS</span>
-                </div>
-                <ul class="page-tree">
-                    <li class="page-item" onclick="app.showVocab(); closeMobileSidebar();">
-                        <div class="page-item-content">
-                            <span class="page-icon">📚</span>
-                            <span class="page-title">Kho từ vựng</span>
+            <div class="sidebar-body" id="sidebar-body">
+                <div class="sidebar-section sidebar-section-inbox" id="inbox-section" style="display: none;">
+                    <div class="section-title" id="title-inbox-section" onclick="app.toggleSidebarSection('inbox')">
+                        <div class="section-title-left">
+                            <i class="ri-arrow-down-s-line section-collapse-icon" id="collapse-icon-inbox"></i>
+                            <span>📥 INBOX</span>
                         </div>
-                    </li>
-                </ul>
+                        <span class="inbox-count" id="inbox-count">0</span>
+                    </div>
+                    <ul class="page-tree" id="inbox-list"></ul>
+                </div>
+
+                <div class="sidebar-section sidebar-section-private" id="private-section">
+                    <div class="section-title" id="title-private-section" onclick="app.toggleSidebarSection('private')">
+                        <div class="section-title-left">
+                            <i class="ri-arrow-down-s-line section-collapse-icon" id="collapse-icon-private"></i>
+                            <span>PRIVATE</span>
+                        </div>
+                        <div class="section-title-actions">
+                            <i class="ri-add-line add-icon" onclick="event.stopPropagation(); app.createNewPage()" title="Thêm trang mới"></i>
+                        </div>
+                    </div>
+                    <ul class="page-tree" id="page-list">
+                        <!-- Pages will be rendered here -->
+                    </ul>
+                </div>
+
+                <div class="sidebar-section sidebar-section-tools" id="tools-section">
+                    <div class="section-title" id="title-tools-section" onclick="app.toggleSidebarSection('tools')">
+                        <div class="section-title-left">
+                            <i class="ri-arrow-down-s-line section-collapse-icon" id="collapse-icon-tools"></i>
+                            <span>TOOLS</span>
+                        </div>
+                    </div>
+                    <ul class="page-tree" id="tools-list">
+                        <li class="page-item" onclick="app.showVocab(); closeMobileSidebar();">
+                            <div class="page-item-content">
+                                <span class="page-icon">📚</span>
+                                <span class="page-title">Kho từ vựng</span>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
             </div>
 
             <div class="sidebar-footer">
@@ -102,6 +115,7 @@
                     <kbd>Ctrl+N</kbd>
                 </button>
             </div>
+            <div class="sidebar-resizer" id="sidebar-resizer" title="Kéo để điều chỉnh độ rộng menu"></div>
         </aside>
 
         <!-- Main Content -->
@@ -125,10 +139,10 @@
                     <button class="icon-btn" id="theme-toggle" title="Toggle theme">
                         <i class="ri-moon-line"></i>
                     </button>
-                    <button class="icon-btn" title="Share">
+                    <button class="icon-btn" id="topbar-share-btn" title="Chia sẻ trang">
                         <i class="ri-share-forward-line"></i>
                     </button>
-                    <button class="icon-btn" title="More">
+                    <button class="icon-btn" id="topbar-more-btn" title="Thêm tùy chọn (More)">
                         <i class="ri-more-fill"></i>
                     </button>
                 </div>
@@ -337,6 +351,13 @@
                 <div class="item-desc">Create a simple bulleted list.</div>
             </div>
         </div>
+        <div class="slash-menu-item" data-type="number">
+            <div class="item-icon"><i class="ri-list-ordered"></i></div>
+            <div class="item-info">
+                <div class="item-title">Numbered list</div>
+                <div class="item-desc">Create an ordered numbered list.</div>
+            </div>
+        </div>
         <div class="slash-menu-item" data-type="todo">
             <div class="item-icon"><i class="ri-checkbox-line"></i></div>
             <div class="item-info">
@@ -510,6 +531,31 @@
             <div class="cover-link-preview" id="cover-link-preview" style="display: none;">
                 <img id="cover-preview-img" src="" alt="Preview">
             </div>
+        </div>
+    </div>
+
+    <!-- Share Popover -->
+    <div class="custom-popover" id="share-popover" style="display: none;">
+        <div class="popover-header-row">
+            <span class="popover-header-title"><i class="ri-share-forward-line"></i> Chia sẻ trang</span>
+            <button class="popover-close-btn" onclick="document.getElementById('share-popover').style.display='none'"><i class="ri-close-line"></i></button>
+        </div>
+        <div class="menu-item" onclick="app.copyPageLink()">
+            <i class="ri-link"></i>
+            <span>Sao chép liên kết</span>
+            <kbd class="menu-shortcut">Ctrl+L</kbd>
+        </div>
+        <div class="menu-item" onclick="app.copyPageContents()">
+            <i class="ri-file-copy-line"></i>
+            <span>Sao chép toàn bộ nội dung</span>
+        </div>
+        <div class="menu-item" onclick="app.exportToTxt()">
+            <i class="ri-download-line"></i>
+            <span>Xuất file văn bản (.txt)</span>
+        </div>
+        <div class="menu-item" onclick="app.shareWeb()">
+            <i class="ri-share-line"></i>
+            <span>Chia sẻ qua ứng dụng khác</span>
         </div>
     </div>
 
