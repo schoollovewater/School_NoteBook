@@ -3,20 +3,23 @@
  * Hỗ trợ offline đầy đủ cho cả Sổ tay chính và Mini Note.
  */
 
-const CACHE_NAME = 'schooldb-v3.4';
+const CACHE_NAME = 'schooldb-v3.5';
 
 const PRECACHE_URLS = [
     './',
     './index.html',
     './mini.html',
-    './styles.css?v=3.4',
-    './app.js?v=3.4',
-    './shared/note-schema.js?v=3.4',
+    './styles.css?v=3.5',
+    './app.js?v=3.5',
+    './shared/note-schema.js?v=3.5',
     './firebase-config.js',
     './manifest.json',
     './manifest-mini.json',
     './icons/icon-192.png',
-    './icons/icon-512.png'
+    './icons/icon-512.png',
+    'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css',
+    'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js',
+    'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js'
 ];
 
 // Install: Cache các file tĩnh cốt lõi

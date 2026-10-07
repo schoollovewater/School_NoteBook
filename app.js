@@ -1763,6 +1763,18 @@ function serializeBlocks() {
             return;
         }
 
+        // Lưu trữ khối công thức toán học (Math / LaTeX)
+        if (type === 'math') {
+            const latex = contentEl.dataset.latex || '';
+            blocks.push({
+                id: wrapper.getAttribute('data-id'),
+                type: 'math',
+                content: latex,
+                indent: parseInt(wrapper.getAttribute('data-indent') || '0', 10)
+            });
+            return;
+        }
+
         let content = contentEl.innerHTML !== undefined ? contentEl.innerHTML : (contentEl.innerText || '');
         if (content === '<br>' || content === '<div><br></div>') {
             content = '';
@@ -1880,6 +1892,16 @@ function updateNumberPrefixes() {
 
 function checkMarkdownShortcuts(target) {
     const text = target.innerText || target.textContent || '';
+
+    // 0. Math Equation Block: "$$ " or "$$formula$$"
+    const mathMatch = text.match(/^\$\$(.*?)(?:\$\$)?$/s);
+    if (mathMatch && (text.startsWith('$$ ') || text.endsWith('$$') || text.trim() === '$$')) {
+        EditorHistory.recordBeforeAction();
+        const formula = mathMatch[1].trim();
+        setBlockType(target, 'math', formula);
+        triggerSave();
+        return true;
+    }
     
     // 1. Bullet list: "* " or "- "
     const bulletMatch = text.match(/^(\*|-)\s(.*)/s);
@@ -2075,7 +2097,7 @@ function createBlockElement(type, content, id = generateId(), indent = 0) {
     const contentEl = wrapper.querySelector('.block-content');
     const handleEl = wrapper.querySelector('.block-handle');
     
-    if (type !== 'image') {
+    if (type !== 'image' && type !== 'math') {
         contentEl.innerHTML = content;
     }
 
@@ -2363,8 +2385,8 @@ function handleBlockKeydown(e) {
                 const prev = wrapper.previousElementSibling;
                 if (prev && prev.classList.contains('block-wrapper')) {
                     const prevType = prev.getAttribute('data-type');
-                    // Nếu block phía trước là ảnh hoặc divider -> Xóa ngay dòng ảnh/divider phía trước
-                    if (prevType === 'image' || prevType === 'divider') {
+                    // Nếu block phía trước là ảnh, divider hoặc math -> Xóa ngay dòng phía trước
+                    if (prevType === 'image' || prevType === 'divider' || prevType === 'math') {
                         e.preventDefault();
                         EditorHistory.recordBeforeAction();
                         prev.remove();
@@ -2398,7 +2420,7 @@ function handleBlockKeydown(e) {
         }
     }
 
-    // Forward Delete key handler: xóa dòng ảnh hoặc dòng phân cách phía dưới nếu con trỏ ở cuối dòng
+    // Forward Delete key handler: xóa dòng ảnh, divider hoặc math phía dưới nếu con trỏ ở cuối dòng
     if (e.key === 'Delete') {
         const sel = window.getSelection();
         if (sel && sel.isCollapsed && sel.rangeCount) {
@@ -2419,7 +2441,7 @@ function handleBlockKeydown(e) {
                 const next = wrapper.nextElementSibling;
                 if (next && next.classList.contains('block-wrapper')) {
                     const nextType = next.getAttribute('data-type');
-                    if (nextType === 'image' || nextType === 'divider') {
+                    if (nextType === 'image' || nextType === 'divider' || nextType === 'math') {
                         e.preventDefault();
                         EditorHistory.record(true);
                         next.remove();
@@ -2478,13 +2500,187 @@ function extractCleanInlineHtml(html) {
     return '';
 }
 
+function formatInlineMarkdown(text) {
+    if (!text) return '';
+    let res = escapeHtml(text);
+    // Chuyển `code` thành <code class="inline-code">code</code>
+    res = res.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
+    // Chuyển **bold** thành <strong>bold</strong>
+    res = res.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    return res;
+}
+
+function preprocessClipboardHtml(html) {
+    if (!html) return '';
+    try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        
+        // Chuyển các thẻ code inline thành dạng `code`
+        doc.querySelectorAll('code, pre').forEach(c => {
+            const codeText = c.textContent || '';
+            if (codeText && !codeText.includes('\n')) {
+                c.replaceWith(document.createTextNode(' `' + codeText.trim() + '` '));
+            }
+        });
+
+        // Bóc tách các công thức KaTeX / MathML / LaTeX từ ChatGPT, Claude, DeepSeek, Wikipedia
+        let foundMath = false;
+        doc.querySelectorAll('.katex-display, .katex, math, .mwe-math-element, [data-latex]').forEach(mathEl => {
+            const ann = mathEl.querySelector('annotation[encoding*="tex"]') || mathEl.querySelector('annotation');
+            let tex = '';
+            if (mathEl.getAttribute('data-latex')) {
+                tex = mathEl.getAttribute('data-latex');
+            } else if (ann) {
+                tex = ann.textContent || '';
+            } else if (mathEl.getAttribute('alt')) {
+                tex = mathEl.getAttribute('alt');
+            } else if (mathEl.dataset && mathEl.dataset.tex) {
+                tex = mathEl.dataset.tex;
+            }
+            if (tex) {
+                foundMath = true;
+                tex = tex.trim();
+                const isDisplay = mathEl.classList.contains('katex-display') || 
+                                  mathEl.closest('.katex-display') || 
+                                  mathEl.getAttribute('display') === 'block' ||
+                                  tex.includes('\\begin{') || tex.includes('\\\\') || tex.length > 50;
+                const node = document.createTextNode(isDisplay ? `\n\n$$${tex}$$\n\n` : ` $${tex}$ `);
+                mathEl.replaceWith(node);
+            }
+        });
+
+        // Thêm dấu ngắt dòng cho các thẻ khối
+        doc.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
+        doc.querySelectorAll('p, div, tr, h1, h2, h3, h4, h5, h6').forEach(el => el.append('\n'));
+        doc.querySelectorAll('li').forEach(li => {
+            li.parentNode.insertBefore(document.createTextNode('\n• '), li);
+        });
+
+        return (doc.body ? (doc.body.innerText || doc.body.textContent || '') : '').replace(/\r\n?/g, '\n').replace(/\u00A0/g, ' ');
+    } catch (e) {
+        return '';
+    }
+}
+
+function parsePastedContentToBlocks(rawText, baseIndent = 0) {
+    let text = (rawText || '').replace(/\r\n?/g, '\n').replace(/\u00A0/g, ' ');
+    // Chuẩn hóa ký hiệu LaTeX display \[ ... \] thành $$ ... $$
+    text = text.replace(/\\\[([\s\S]*?)\\\]/g, '$$$$$1$$$$');
+    // Tự động bọc các môi trường ma trận / mảng phép tính đứng riêng vào $$
+    text = text.replace(/(?<!\$)(?:\\begin\{(array|align|matrix|pmatrix|bmatrix|cases|equation|gather)\}[\s\S]*?\\end\{\1\})(?!\$)/g, (m) => `\n$$${m}$$\n`);
+
+    const blocks = [];
+    const pattern = /\$\$([\s\S]*?)\$\$/g;
+    let lastIdx = 0;
+    let match;
+
+    function parseTextChunk(chunk) {
+        if (!chunk) return;
+        const rawLines = chunk.split('\n');
+        for (let i = 0; i < rawLines.length; i++) {
+            const rawLine = rawLines[i];
+            const trimmed = rawLine.trim();
+            if (!trimmed) continue;
+
+            let blockType = 'text';
+            let blockIndent = baseIndent;
+            let m;
+
+            const leadingSpaces = (rawLine.match(/^ */) || [''])[0].length;
+            if (leadingSpaces >= 2) {
+                blockIndent = Math.min(4, baseIndent + Math.floor(leadingSpaces / 2));
+            }
+
+            let blockContent = '';
+            if ((m = trimmed.match(/^!\[(.*?)\]\((.+?)\)$/))) {
+                blockType = 'image';
+                blockContent = JSON.stringify({ src: m[2], caption: m[1] || '', width: 'fit-content', align: 'center', frameStyle: 'standard' });
+            } else if (trimmed === '---') {
+                blockType = 'divider';
+                blockContent = '';
+            } else if ((m = trimmed.match(/^###\s+(.*)$/))) {
+                blockType = 'h3';
+                blockContent = formatInlineMarkdown(m[1]);
+            } else if ((m = trimmed.match(/^##\s+(.*)$/))) {
+                blockType = 'h2';
+                blockContent = formatInlineMarkdown(m[1]);
+            } else if ((m = trimmed.match(/^#\s+(.*)$/))) {
+                blockType = 'h1';
+                blockContent = formatInlineMarkdown(m[1]);
+            } else if ((m = trimmed.match(/^(?:[-*]\s+)?\[( |x|X)?\]\s*(.*)$/))) {
+                blockType = 'todo';
+                blockContent = (m[1] && m[1].toLowerCase() === 'x' ? '[x] ' : '') + formatInlineMarkdown(m[2]);
+            } else if ((m = trimmed.match(/^[-*•]\s+(.*)$/))) {
+                blockType = 'bullet';
+                blockContent = formatInlineMarkdown(m[1]);
+            } else if ((m = trimmed.match(/^\d+[.)]\s+(.*)$/))) {
+                blockType = 'number';
+                blockContent = formatInlineMarkdown(m[1]);
+            } else if ((m = trimmed.match(/^>\s?(.*)$/))) {
+                blockType = 'quote';
+                blockContent = formatInlineMarkdown(m[1]);
+            } else if (trimmed.startsWith('```')) {
+                blockType = 'code';
+                blockContent = escapeHtml(trimmed.replace(/^```/, ''));
+            } else {
+                blockContent = formatInlineMarkdown(trimmed);
+            }
+
+            blocks.push({
+                type: blockType,
+                content: blockContent,
+                indent: blockIndent
+            });
+        }
+    }
+
+    while ((match = pattern.exec(text)) !== null) {
+        const textBefore = text.substring(lastIdx, match.index);
+        parseTextChunk(textBefore);
+
+        const formula = match[1].trim();
+        if (formula) {
+            blocks.push({
+                type: 'math',
+                content: formula,
+                indent: baseIndent
+            });
+        }
+        lastIdx = pattern.lastIndex;
+    }
+
+    const textAfter = text.substring(lastIdx);
+    parseTextChunk(textAfter);
+
+    return blocks;
+}
+
 function handleBlockPaste(e) {
     let target = e.target;
-    let wrapper = target.closest('.block-wrapper');
+
+    // Nếu người dùng đang dán trực tiếp vào ô nhập công thức LaTeX (.math-latex-input)
+    if (target && target.classList && target.classList.contains('math-latex-input')) {
+        let pastedText = e.clipboardData ? e.clipboardData.getData('text/plain') : '';
+        if (pastedText) {
+            pastedText = pastedText.trim()
+                .replace(/^\\\[\s*/, '').replace(/\s*\\\]$/, '')
+                .replace(/^\$\$\s*/, '').replace(/\s*\$\$$/, '')
+                .replace(/^\$\s*/, '').replace(/\s*\$$/, '');
+            e.preventDefault();
+            document.execCommand('insertText', false, pastedText);
+            const inputEvt = new Event('input', { bubbles: true });
+            target.dispatchEvent(inputEvt);
+            return;
+        }
+        return;
+    }
+
+    let wrapper = target ? target.closest('.block-wrapper') : null;
     if (!wrapper) return;
     EditorHistory.record(true);
 
-    // Nếu người dùng đang bôi đen nhiều khối (multi-block selection), chỉ xóa và thay thế nếu vị trí dán nằm trong khối đã chọn
+    // Multi-block selection paste replacement
     if (typeof selectedBlockWrappers !== 'undefined' && selectedBlockWrappers && selectedBlockWrappers.length > 0) {
         if (selectedBlockWrappers.includes(wrapper)) {
             const firstBlock = selectedBlockWrappers[0];
@@ -2504,7 +2700,7 @@ function handleBlockPaste(e) {
         }
     }
 
-    // 1. Kiểm tra dán ảnh trực tiếp từ clipboard (Messenger, Win+Shift+S, Snipping Tool, copy ảnh web)
+    // 1. Kiểm tra dán ảnh trực tiếp từ clipboard (Messenger, Snipping Tool, Win+Shift+S)
     const cbItems = e.clipboardData ? e.clipboardData.items : null;
     let pastedImageFile = null;
     if (cbItems) {
@@ -2534,47 +2730,81 @@ function handleBlockPaste(e) {
     let text = e.clipboardData ? e.clipboardData.getData('text/plain') : '';
     const html = e.clipboardData ? e.clipboardData.getData('text/html') : '';
 
-    // Nếu plain text không có \n nhưng HTML có thẻ đoạn/ngắt dòng (copy từ web, Word, tài liệu rich text)
-    if (!text.includes('\n') && html && (/<(p|br|div|li|tr|h[1-6])\b/i.test(html))) {
-        const temp = document.createElement('div');
-        temp.innerHTML = html;
-        temp.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
-        temp.querySelectorAll('p, div, tr, h1, h2, h3, h4, h5, h6').forEach(el => el.append('\n'));
-        temp.querySelectorAll('li').forEach(li => {
-            const prefix = document.createTextNode('\n• ');
-            li.parentNode.insertBefore(prefix, li);
-        });
-        const extracted = temp.innerText || temp.textContent || '';
-        if (extracted.includes('\n')) {
-            text = extracted;
-        }
+    // 2. Tiền xử lý clipboard: Khôi phục công thức LaTeX & code pills nếu copy từ ChatGPT, Claude, DeepSeek, Wikipedia
+    const preprocessedFromHtml = preprocessClipboardHtml(html);
+    if (preprocessedFromHtml && (preprocessedFromHtml.includes('$$') || preprocessedFromHtml.includes('`') || preprocessedFromHtml.includes('\n'))) {
+        text = preprocessedFromHtml;
     }
 
-    // Chuẩn hóa ngắt dòng và dấu cách không ngắt (non-breaking space \u00A0 thành space thường)
     text = (text || '').replace(/\r\n?/g, '\n').replace(/\u00A0/g, ' ');
-
     if (!text && !html) return;
 
-    // Tách thành các dòng, loại bỏ trailing newline đơn lẻ
-    let lines = text.split('\n');
-    if (lines.length > 1 && lines[lines.length - 1] === '') {
-        lines.pop();
+    const trimmedAll = text.trim();
+
+    // 3. Kiểm tra nếu người dùng dán ĐƠN MỘT CÔNG THỨC TOÁN (Single Math Formula)
+    const isSingleMathFormula = (
+        (trimmedAll.startsWith('$$') && trimmedAll.endsWith('$$') && trimmedAll.length > 4 && !trimmedAll.slice(2, -2).includes('$$')) ||
+        (trimmedAll.startsWith('\\[') && trimmedAll.endsWith('\\]') && trimmedAll.length > 4) ||
+        (/^\\[a-zA-Z]+/.test(trimmedAll) && (trimmedAll.includes('\\neq') || trimmedAll.includes('\\implies') || trimmedAll.includes('\\frac') || trimmedAll.includes('\\begin{array}') || trimmedAll.includes('\\times') || trimmedAll.includes('&') || trimmedAll.includes('=')))
+    );
+
+    if (isSingleMathFormula) {
+        e.preventDefault();
+        EditorHistory.recordBeforeAction();
+        const cleanFormula = trimmedAll
+            .replace(/^\\\[\s*/, '').replace(/\s*\\\]$/, '')
+            .replace(/^\$\$\s*/, '').replace(/\s*\$\$$/, '');
+        setBlockType(target, 'math', cleanFormula);
+        selectSingleBlock(wrapper);
+        triggerSave();
+        EditorHistory.updateLastSnapshot();
+        return;
     }
 
-    // Dán 1 dòng hoặc đoạn văn bản đơn dòng (giữ nguyên bôi đen / highlight / style)
-    if (lines.length <= 1) {
-        const trimmed = (lines[0] !== undefined ? lines[0] : text).trim();
-        const imgMatch = trimmed.match(/^!\[(.*?)\]\((.+?)\)$/);
-        if (imgMatch) {
-            e.preventDefault();
-            EditorHistory.recordBeforeAction();
-            setBlockType(target, 'image', JSON.stringify({ src: imgMatch[2], caption: imgMatch[1] || '', width: 'fit-content', align: 'center', frameStyle: 'standard' }));
-            selectSingleBlock(wrapper);
-            triggerSave();
-            EditorHistory.updateLastSnapshot();
-            return;
+    // 4. Phân tích nội dung clipboard thành danh sách khối hoàn chỉnh
+    const currentIndent = parseInt(wrapper.getAttribute('data-indent') || '0', 10);
+    const parsedBlocks = parsePastedContentToBlocks(text, currentIndent);
+
+    if (parsedBlocks.length > 1 || (parsedBlocks.length === 1 && parsedBlocks[0].type !== 'text')) {
+        e.preventDefault();
+        EditorHistory.recordBeforeAction();
+
+        // Khối đầu tiên: cập nhật trực tiếp vào khối hiện tại
+        const firstBlock = parsedBlocks[0];
+        setBlockType(target, firstBlock.type, firstBlock.content);
+        if (firstBlock.indent !== undefined) {
+            wrapper.setAttribute('data-indent', firstBlock.indent);
+            wrapper.style.marginLeft = `${firstBlock.indent * 24}px`;
         }
 
+        // Các khối tiếp theo: chèn nối tiếp bên dưới
+        let lastWrapper = wrapper;
+        let lastContentEl = target;
+
+        for (let i = 1; i < parsedBlocks.length; i++) {
+            const b = parsedBlocks[i];
+            const newWrapper = createBlockElement(b.type, b.content, generateId(), b.indent || currentIndent);
+            lastWrapper.parentNode.insertBefore(newWrapper, lastWrapper.nextSibling);
+            lastWrapper = newWrapper;
+            lastContentEl = newWrapper.querySelector('.block-content');
+        }
+
+        updateNumberPrefixes();
+
+        if (lastContentEl) {
+            lastContentEl.focus();
+            setCaretAtEnd(lastContentEl);
+        }
+
+        closeSlashMenu();
+        triggerSave();
+        EditorHistory.updateLastSnapshot();
+        return;
+    }
+
+    // 5. Nếu chỉ là đoạn text ngắn 1 dòng thông thường: giữ nguyên chèn tự nhiên
+    const lines = text.split('\n');
+    if (lines.length <= 1) {
         const cleanInlineHtml = extractCleanInlineHtml(html);
         if (cleanInlineHtml && (cleanInlineHtml.includes('<') || cleanInlineHtml.includes('style='))) {
             e.preventDefault();
@@ -2595,133 +2825,6 @@ function handleBlockPaste(e) {
         return;
     }
 
-    // DÁN TÀI LIỆU NHIỀU DÒNG: Tự động xuống dòng và tách thành các block tương ứng
-    e.preventDefault();
-
-    let beforeHtml = '';
-    let afterHtml = '';
-    const sel = window.getSelection();
-    if (sel && sel.rangeCount) {
-        const range = sel.getRangeAt(0);
-        range.deleteContents();
-
-        const afterRange = document.createRange();
-        afterRange.selectNodeContents(target);
-        afterRange.setStart(range.startContainer, range.startOffset);
-
-        const afterFragment = afterRange.cloneContents();
-        const tempDiv = document.createElement('div');
-        tempDiv.appendChild(afterFragment);
-        afterHtml = tempDiv.innerHTML;
-
-        afterRange.deleteContents();
-        beforeHtml = target.innerHTML;
-    } else {
-        beforeHtml = target.innerHTML;
-        afterHtml = '';
-    }
-
-    const currentIndent = parseInt(wrapper.getAttribute('data-indent') || '0', 10);
-
-    // 1. Dòng đầu tiên: đưa vào block hiện tại
-    const firstLine = lines[0];
-    const firstTrimmed = firstLine.trim();
-    const firstImgMatch = firstTrimmed.match(/^!\[(.*?)\]\((.+?)\)$/);
-    if (firstImgMatch) {
-        setBlockType(target, 'image', JSON.stringify({ src: firstImgMatch[2], caption: firstImgMatch[1] || '', width: '100%', align: 'center' }));
-    } else {
-        let finalFirstHtml = beforeHtml + escapeHtml(firstLine);
-        if (lines.length === 1 && afterHtml) {
-            finalFirstHtml += afterHtml;
-        }
-        target.innerHTML = finalFirstHtml;
-        checkMarkdownShortcuts(target);
-    }
-
-    // 2. Các dòng tiếp theo: tạo thành các khối (block) mới nối tiếp
-    let lastWrapper = wrapper;
-    let lastContentEl = target;
-
-    for (let i = 1; i < lines.length; i++) {
-        const rawLine = lines[i];
-        let lineText = rawLine;
-        const isLastLine = (i === lines.length - 1);
-
-        let blockType = 'text';
-        let blockIndent = currentIndent;
-        let m;
-
-        // Tự động nhận diện độ thụt lề nếu có 2 space trở lên
-        const leadingSpaces = (rawLine.match(/^ */) || [''])[0].length;
-        if (leadingSpaces >= 2) {
-            blockIndent = Math.min(4, currentIndent + Math.floor(leadingSpaces / 2));
-            lineText = rawLine.trim();
-        }
-
-        const trimmed = lineText.trim();
-        let blockContent = '';
-
-        if ((m = trimmed.match(/^!\[(.*?)\]\((.+?)\)$/))) {
-            blockType = 'image';
-            blockContent = JSON.stringify({ src: m[2], caption: m[1] || '', width: '100%', align: 'center' });
-        } else if (trimmed === '---') {
-            blockType = 'divider';
-            blockContent = '';
-        } else if ((m = trimmed.match(/^###\s+(.*)$/))) {
-            blockType = 'h3';
-            blockContent = escapeHtml(m[1]);
-        } else if ((m = trimmed.match(/^##\s+(.*)$/))) {
-            blockType = 'h2';
-            blockContent = escapeHtml(m[1]);
-        } else if ((m = trimmed.match(/^#\s+(.*)$/))) {
-            blockType = 'h1';
-            blockContent = escapeHtml(m[1]);
-        } else if ((m = trimmed.match(/^(?:[-*]\s+)?\[( |x|X)?\]\s*(.*)$/))) {
-            blockType = 'todo';
-            blockContent = escapeHtml((m[1] && m[1].toLowerCase() === 'x' ? '[x] ' : '') + m[2]);
-        } else if ((m = trimmed.match(/^[-*•]\s+(.*)$/))) {
-            blockType = 'bullet';
-            blockContent = escapeHtml(m[1]);
-        } else if ((m = trimmed.match(/^\d+[.)]\s+(.*)$/))) {
-            blockType = 'number';
-            blockContent = escapeHtml(m[1]);
-        } else if ((m = trimmed.match(/^>\s?(.*)$/))) {
-            blockType = 'quote';
-            blockContent = escapeHtml(m[1]);
-        } else if (trimmed.startsWith('```')) {
-            blockType = 'code';
-            blockContent = escapeHtml(trimmed.replace(/^```/, ''));
-        } else {
-            // Kế thừa danh sách nếu block trước là bullet/number/todo
-            const prevType = lastWrapper.getAttribute('data-type');
-            if (prevType === 'bullet' || prevType === 'number' || prevType === 'todo') {
-                if (trimmed) blockType = prevType;
-            }
-            blockContent = escapeHtml(lineText);
-        }
-
-        if (isLastLine && afterHtml && blockType !== 'image' && blockType !== 'divider') {
-            blockContent += afterHtml;
-        }
-
-        const newWrapper = createBlockElement(blockType, blockContent, generateId(), blockIndent);
-        lastWrapper.parentNode.insertBefore(newWrapper, lastWrapper.nextSibling);
-        lastWrapper = newWrapper;
-        lastContentEl = newWrapper.querySelector('.block-content');
-    }
-
-    updateNumberPrefixes();
-
-    if (lastContentEl) {
-        lastContentEl.focus();
-        if (lines[lines.length - 1] || afterHtml) {
-            const targetOffset = lines[lines.length - 1].length;
-            setCaretAtOffset(lastContentEl, targetOffset);
-        } else {
-            setCaretAtStart(lastContentEl);
-        }
-    }
-
     closeSlashMenu();
     triggerSave();
 }
@@ -2738,7 +2841,8 @@ function openSlashMenu(target, query = '') {
     items.forEach(item => {
         const title = item.querySelector('.item-title').textContent.toLowerCase();
         const type = (item.getAttribute('data-type') || '').toLowerCase();
-        if (title.includes(query) || type.includes(query)) {
+        const keywords = (item.getAttribute('data-keywords') || '').toLowerCase();
+        if (title.includes(query) || type.includes(query) || keywords.includes(query)) {
             item.style.display = 'flex';
             hasVisible = true;
         } else {
@@ -2764,6 +2868,19 @@ function applySlashCommand(type) {
         if (type === 'image') {
             closeSlashMenu();
             openImageModalForTarget(wrapper);
+            return;
+        }
+
+        if (type === 'math') {
+            closeSlashMenu();
+            setBlockType(activeBlockElement, 'math', '');
+            const editorPanel = activeBlockElement.querySelector('.math-editor-panel');
+            if (editorPanel) {
+                editorPanel.style.display = 'block';
+                const input = editorPanel.querySelector('.math-latex-input');
+                if (input) setTimeout(() => input.focus(), 60);
+            }
+            triggerSave();
             return;
         }
 
@@ -2824,6 +2941,9 @@ function setBlockType(element, type, initialContent = '') {
         } else if (type === 'image') {
             renderImageBlock(element, initialContent);
             element.contentEditable = false;
+        } else if (type === 'math') {
+            renderMathBlock(element, initialContent);
+            element.contentEditable = false;
         }
     }
     
@@ -2847,7 +2967,7 @@ function setBlockType(element, type, initialContent = '') {
         }
     }
 
-    if (type !== 'divider' && type !== 'image' && type !== 'toc') {
+    if (type !== 'divider' && type !== 'image' && type !== 'toc' && type !== 'math') {
         const page = appState.pages[appState.activePageId];
         const isLocked = page && page.locked;
         element.contentEditable = !isLocked;
@@ -2881,7 +3001,7 @@ function setBlockType(element, type, initialContent = '') {
     if (type === 'code') placeholder = "Code snippet";
     if (type === 'quote') placeholder = "Empty quote";
     if (type === 'toggle') placeholder = "Toggle";
-    if (type === 'image' || type === 'divider' || type === 'toc') {
+    if (type === 'image' || type === 'divider' || type === 'toc' || type === 'math') {
         element.removeAttribute('data-placeholder');
     } else {
         element.setAttribute('data-placeholder', placeholder);
@@ -3722,7 +3842,8 @@ function updateBlockTypeBadge(type) {
         number: { label: 'Số thứ tự', icon: 'ri-list-ordered' },
         todo: { label: 'To-do', icon: 'ri-checkbox-line' },
         quote: { label: 'Trích dẫn', icon: 'ri-double-quotes-l' },
-        code: { label: 'Code', icon: 'ri-code-box-line' }
+        code: { label: 'Code', icon: 'ri-code-box-line' },
+        math: { label: 'Toán học', icon: 'ri-functions' }
     };
 
     const cfg = typeConfig[type] || typeConfig.text;
@@ -3745,7 +3866,8 @@ function getBlockTypeName(type) {
         todo: 'To-do list',
         quote: 'Trích dẫn',
         code: 'Khối code',
-        divider: 'Đường kẻ'
+        divider: 'Đường kẻ',
+        math: 'Công thức toán (Math)'
     };
     return names[type] || (type ? type.toUpperCase() : 'Khối');
 }
@@ -3853,6 +3975,11 @@ function blockToMarkdown(wrapper) {
         return `${indentStr}![${caption || 'Hình ảnh'}](${src})\n`;
     }
 
+    if (type === 'math') {
+        const latex = contentEl ? (contentEl.dataset.latex || '') : '';
+        return `${indentStr}$$\n${latex}\n$$\n`;
+    }
+
     const rawText = contentEl ? (contentEl.innerText !== undefined ? contentEl.innerText : (contentEl.textContent || '')) : '';
     const text = rawText.trim();
 
@@ -3881,6 +4008,10 @@ function blockToHtml(wrapper) {
         const src = img ? (img.getAttribute('src') || '') : '';
         const caption = cap ? (cap.innerText || cap.textContent || '').trim() : '';
         return `<p><img src="${src}" alt="${escapeHtml(caption)}"></p>`;
+    }
+    if (type === 'math') {
+        const latex = contentEl ? (contentEl.dataset.latex || '') : '';
+        return `<div class="math-block" data-latex="${escapeHtml(latex)}"><p>$$ ${escapeHtml(latex)} $$</p></div>`;
     }
     const html = contentEl ? contentEl.innerHTML : '';
     if (type === 'h1') return `<h1>${html}</h1>`;
@@ -5096,6 +5227,232 @@ window.closeImageLightbox = closeImageLightbox;
 window.openImageModalForTarget = openImageModalForTarget;
 window.closeImageModal = closeImageModal;
 
+// ==========================================================================
+// MATH EQUATION MODULE (KaTeX / LaTeX) - Notion Style
+// ==========================================================================
+
+function sanitizeLatexForKatex(latex) {
+    if (!latex) return '';
+    let res = latex.trim();
+    // Strip accidental outer $$ or \[ \] if present
+    res = res.replace(/^\\\[\s*/, '').replace(/\s*\\\]$/, '');
+    res = res.replace(/^\$\$\s*/, '').replace(/\s*\$\$$/, '');
+    res = res.replace(/^\$\s*/, '').replace(/\s*\$$/, '');
+    
+    // Auto-escape solitary & if not in a table / array / matrix / align environment and not already escaped
+    const hasEnvironment = /\\begin\{(array|matrix|pmatrix|bmatrix|vmatrix|align|alignat|gather|cases)\}/.test(res);
+    if (!hasEnvironment) {
+        res = res.replace(/(?<!\\)&/g, '\\&');
+    }
+    return res;
+}
+
+function renderMathBlock(contentEl, initialFormula = '') {
+    contentEl.contentEditable = false;
+    contentEl.setAttribute('data-type', 'math');
+    
+    let formula = (typeof initialFormula === 'string' ? initialFormula : '').trim();
+    // Clean outer delimiters
+    formula = formula.replace(/^\\\[\s*/, '').replace(/\s*\\\]$/, '')
+                     .replace(/^\$\$\s*/, '').replace(/\s*\$\$$/, '');
+    contentEl.dataset.latex = formula;
+
+    contentEl.innerHTML = `
+        <div class="math-block-container" contenteditable="false">
+            <div class="math-render-area" title="Nhấp hoặc bấm Sửa để chỉnh sửa công thức"></div>
+            <div class="math-toolbar" contenteditable="false">
+                <button type="button" class="math-btn" data-action="edit" title="Chỉnh sửa công thức (LaTeX)"><i class="ri-edit-line"></i> Sửa</button>
+                <button type="button" class="math-btn" data-action="copy" title="Sao chép mã LaTeX"><i class="ri-file-copy-line"></i> Copy TeX</button>
+                <button type="button" class="math-btn danger" data-action="delete" title="Xóa khối công thức"><i class="ri-delete-bin-line"></i></button>
+            </div>
+            <div class="math-editor-panel" style="display: none;">
+                <div class="math-editor-header">
+                    <span><i class="ri-functions"></i> Công thức toán học (LaTeX / KaTeX)</span>
+                    <button type="button" class="math-close-btn" data-action="close" title="Đóng">&times;</button>
+                </div>
+                <div class="math-quick-symbols">
+                    <button type="button" class="math-sym-btn" data-latex="\\frac{a}{b}" title="Phân số">a/b</button>
+                    <button type="button" class="math-sym-btn" data-latex="\\sqrt{x}" title="Căn bậc 2">√x</button>
+                    <button type="button" class="math-sym-btn" data-latex="^{2}" title="Số mũ">x²</button>
+                    <button type="button" class="math-sym-btn" data-latex="_{1}" title="Chỉ số dưới">x₁</button>
+                    <button type="button" class="math-sym-btn" data-latex="\\neq" title="Khác (≠)">≠</button>
+                    <button type="button" class="math-sym-btn" data-latex="\\implies" title="Suy ra (⟹)">⟹</button>
+                    <button type="button" class="math-sym-btn" data-latex="\\times" title="Nhân (×)">×</button>
+                    <button type="button" class="math-sym-btn" data-latex="\\pm" title="Cộng trừ (±)">±</button>
+                    <button type="button" class="math-sym-btn" data-latex="\\text{chữ}" title="Chữ tiếng Việt / Text">\\text{chữ}</button>
+                    <button type="button" class="math-sym-btn" data-latex="\\begin{array}{rll}& 0000\\ 0101b & (\\text{Lỗi A}) \\\\\\ & 0000\\ 1000b & (\\text{Mask 0x08}) \\\\\\ \\hline = & 0000\\ 0000b \\implies \\mathbf{0} & (\\text{Kết quả})\\end{array}" title="Phép tính AND bit / Ma trận">Bảng tính dọc</button>
+                    <button type="button" class="math-sym-btn" data-latex="\\hline" title="Gạch ngang">\\hline</button>
+                    <button type="button" class="math-sym-btn" data-latex="\\mathbf{0}" title="In đậm">\\mathbf{0}</button>
+                </div>
+                <textarea class="math-latex-input" placeholder="Nhập công thức LaTeX (ví dụ: \\text{Điều kiện khớp} = (A \\& B) \\neq 0)..." rows="3"></textarea>
+                <div class="math-preview-label">Xem trước trực tiếp:</div>
+                <div class="math-preview-box"></div>
+                <div class="math-editor-actions">
+                    <span class="math-tip">Mẹo: Nhấn Ctrl+Enter để lưu nhanh</span>
+                    <div class="math-action-btns">
+                        <button type="button" class="math-act-btn secondary" data-action="cancel">Hủy</button>
+                        <button type="button" class="math-act-btn primary" data-action="save">Hoàn tất</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `.trim();
+
+    const renderArea = contentEl.querySelector('.math-render-area');
+    const editorPanel = contentEl.querySelector('.math-editor-panel');
+    const textarea = contentEl.querySelector('.math-latex-input');
+    const previewBox = contentEl.querySelector('.math-preview-box');
+    const wrapper = contentEl.closest('.block-wrapper');
+
+    function renderDisplayFormula(rawTex) {
+        const tex = sanitizeLatexForKatex(rawTex);
+        if (!tex) {
+            renderArea.innerHTML = `<div class="math-placeholder"><i class="ri-functions"></i><span>Nhấp để nhập công thức toán (LaTeX / KaTeX)...</span></div>`;
+            return;
+        }
+
+        if (typeof window.katex !== 'undefined') {
+            try {
+                katex.render(tex, renderArea, {
+                    displayMode: true,
+                    throwOnError: false,
+                    trust: true
+                });
+            } catch (err) {
+                renderArea.innerHTML = `<div class="math-error">Lỗi KaTeX: ${escapeHtml(err.message)}</div>`;
+            }
+        } else {
+            renderArea.innerHTML = `<div class="math-fallback">$$\n${escapeHtml(tex)}\n$$</div>`;
+        }
+    }
+
+    function renderPreviewFormula(rawTex) {
+        const tex = sanitizeLatexForKatex(rawTex);
+        if (!tex) {
+            previewBox.innerHTML = `<span style="color: var(--text-placeholder); font-size: 13px; font-style: italic;">Chưa có công thức</span>`;
+            return;
+        }
+        if (typeof window.katex !== 'undefined') {
+            try {
+                katex.render(tex, previewBox, {
+                    displayMode: true,
+                    throwOnError: false,
+                    trust: true
+                });
+            } catch (err) {
+                previewBox.innerHTML = `<div class="math-error" style="font-size: 11px;">${escapeHtml(err.message)}</div>`;
+            }
+        } else {
+            previewBox.textContent = tex;
+        }
+    }
+
+    function openEditor() {
+        editorPanel.style.display = 'block';
+        textarea.value = contentEl.dataset.latex || '';
+        renderPreviewFormula(textarea.value);
+        setTimeout(() => {
+            textarea.focus();
+            textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+        }, 50);
+    }
+
+    function closeEditor() {
+        editorPanel.style.display = 'none';
+    }
+
+    function saveFormula() {
+        const newTex = sanitizeLatexForKatex(textarea.value);
+        contentEl.dataset.latex = newTex;
+        renderDisplayFormula(newTex);
+        closeEditor();
+        triggerSave();
+        EditorHistory.updateLastSnapshot();
+    }
+
+    // Initial render
+    renderDisplayFormula(formula);
+
+    // Event listeners
+    renderArea.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openEditor();
+    });
+
+    contentEl.querySelector('[data-action="edit"]').addEventListener('click', (e) => {
+        e.stopPropagation();
+        openEditor();
+    });
+
+    contentEl.querySelector('[data-action="copy"]').addEventListener('click', (e) => {
+        e.stopPropagation();
+        const curTex = contentEl.dataset.latex || '';
+        if (navigator.clipboard && curTex) {
+            navigator.clipboard.writeText(curTex).then(() => {
+                showToast('📋 Đã sao chép mã LaTeX vào clipboard!');
+            });
+        }
+    });
+
+    contentEl.querySelector('[data-action="delete"]').addEventListener('click', (e) => {
+        e.stopPropagation();
+        EditorHistory.recordBeforeAction();
+        if (wrapper) wrapper.remove();
+        updateNumberPrefixes();
+        triggerSave();
+        EditorHistory.updateLastSnapshot();
+        showToast('🗑️ Đã xóa khối công thức');
+    });
+
+    contentEl.querySelector('[data-action="close"]').addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeEditor();
+    });
+
+    contentEl.querySelector('[data-action="cancel"]').addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeEditor();
+    });
+
+    contentEl.querySelector('[data-action="save"]').addEventListener('click', (e) => {
+        e.stopPropagation();
+        saveFormula();
+    });
+
+    textarea.addEventListener('input', () => {
+        renderPreviewFormula(textarea.value);
+    });
+
+    textarea.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+            e.preventDefault();
+            saveFormula();
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            closeEditor();
+        }
+    });
+
+    // Quick symbol buttons insertion
+    contentEl.querySelectorAll('.math-sym-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const symbol = btn.getAttribute('data-latex') || '';
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const current = textarea.value;
+            textarea.value = current.substring(0, start) + symbol + current.substring(end);
+            textarea.focus();
+            const newCursor = start + symbol.length;
+            textarea.setSelectionRange(newCursor, newCursor);
+            renderPreviewFormula(textarea.value);
+        });
+    });
+}
+
+window.renderMathBlock = renderMathBlock;
+window.sanitizeLatexForKatex = sanitizeLatexForKatex;
 
 function escapeHtml(str) {
     return String(str == null ? '' : str)

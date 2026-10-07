@@ -3355,4 +3355,334 @@ body.is-dragging {
     cursor: zoom-out;
 }
 
+/* ==========================================================================
+   MATH EQUATION BLOCK (KaTeX / LaTeX) - Notion Style
+   ========================================================================== */
+
+.block-type-math {
+    width: 100%;
+    margin: 4px 0;
+    user-select: none;
+}
+
+.math-block-container {
+    position: relative;
+    width: 100%;
+    border-radius: 8px;
+    padding: 8px 14px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid transparent;
+    transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    user-select: none;
+    box-sizing: border-box;
+}
+
+.math-block-container:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: var(--border-color);
+}
+
+:root[data-theme="light"] .math-block-container {
+    background: rgba(0, 0, 0, 0.015);
+}
+:root[data-theme="light"] .math-block-container:hover {
+    background: rgba(0, 0, 0, 0.035);
+    border-color: var(--border-color);
+}
+
+.is-block-selected .math-block-container {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+}
+
+/* Math Render Area */
+.math-render-area {
+    width: 100%;
+    min-height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 6px 0;
+    transition: opacity 0.15s ease;
+}
+
+.math-render-area:hover {
+    opacity: 0.92;
+}
+
+.math-render-area .katex {
+    color: var(--text-primary) !important;
+    font-size: 1.18em;
+}
+
+.math-render-area .katex-display {
+    margin: 0 !important;
+    width: 100%;
+    text-align: center;
+}
+
+/* KaTeX Global Font Color in App */
+.katex {
+    color: var(--text-primary) !important;
+}
+
+/* Placeholder when math block is empty */
+.math-placeholder {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-placeholder);
+    font-size: 14px;
+    font-style: italic;
+    padding: 8px 12px;
+}
+.math-placeholder i {
+    font-size: 18px;
+    color: var(--accent);
+}
+
+/* Error fallback */
+.math-error {
+    color: #f87171;
+    font-size: 13px;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-family: 'Fira Code', monospace;
+}
+
+.math-fallback {
+    font-family: 'Fira Code', monospace;
+    font-size: 13px;
+    color: var(--text-secondary);
+    padding: 8px 12px;
+    background: var(--bg-surface);
+    border-radius: 6px;
+    white-space: pre-wrap;
+}
+
+/* Math Floating Toolbar (Hover) */
+.math-toolbar {
+    position: absolute;
+    top: -12px;
+    right: 12px;
+    display: none;
+    align-items: center;
+    gap: 4px;
+    background: var(--bg-surface);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+    padding: 3px 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    z-index: 20;
+}
+
+.math-block-container:hover .math-toolbar {
+    display: flex;
+}
+
+.math-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    padding: 3px 6px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.math-btn:hover {
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+}
+
+.math-btn.danger:hover {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+}
+
+/* Math Editor Panel (Notion-style drawer/popover) */
+.math-editor-panel {
+    margin-top: 10px;
+    padding: 14px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-strong);
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    animation: fadeInMathPanel 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes fadeInMathPanel {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.math-editor-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+.math-editor-header span {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--accent);
+}
+.math-close-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+.math-close-btn:hover {
+    color: var(--text-primary);
+    background: var(--bg-elevated);
+}
+
+/* Quick Symbols Toolbar */
+.math-quick-symbols {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.math-sym-btn {
+    background: var(--bg-sidebar);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    padding: 4px 8px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    font-family: 'Fira Code', 'Inter', monospace;
+}
+
+.math-sym-btn:hover {
+    background: var(--accent);
+    color: #ffffff;
+    border-color: var(--accent);
+    transform: translateY(-1px);
+}
+
+/* LaTeX Input Textarea */
+.math-latex-input {
+    width: 100%;
+    background: var(--bg-base);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 9px 12px;
+    font-family: 'Fira Code', Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    resize: vertical;
+    outline: none;
+    box-sizing: border-box;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    min-height: 70px;
+}
+
+.math-latex-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+}
+
+/* Live Preview */
+.math-preview-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-top: 10px;
+    margin-bottom: 4px;
+}
+
+.math-preview-box {
+    min-height: 48px;
+    padding: 10px;
+    background: var(--bg-base);
+    border: 1px dashed var(--border-color);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow-x: auto;
+}
+.math-preview-box .katex {
+    color: var(--text-primary);
+    font-size: 1.18em;
+}
+
+/* Editor Action Bar */
+.math-editor-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 12px;
+    gap: 8px;
+}
+
+.math-tip {
+    font-size: 11px;
+    color: var(--text-placeholder);
+}
+
+.math-action-btns {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.math-act-btn {
+    border: none;
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s, opacity 0.15s;
+}
+
+.math-act-btn.primary {
+    background: var(--accent);
+    color: #ffffff;
+}
+.math-act-btn.primary:hover {
+    background: var(--accent-hover);
+}
+
+.math-act-btn.secondary {
+    background: var(--bg-elevated);
+    color: var(--text-secondary);
+}
+.math-act-btn.secondary:hover {
+    color: var(--text-primary);
+}
+
+
 
