@@ -656,6 +656,18 @@ body {
 .block-type-h3 { font-size: 20px; font-weight: 600; margin-top: 0.6em; }
 .block-type-quote { border-left: 3px solid var(--text-primary); padding-left: 14px; font-size: 18px; }
 
+/* Heading indentation constraints */
+.block-wrapper[data-type="h1"],
+.block-wrapper[data-type="toggle-h1"] {
+    margin-left: 0 !important;
+}
+.block-wrapper[data-type="h2"][data-indent="0"],
+.block-wrapper[data-type="toggle-h2"][data-indent="0"],
+.block-wrapper[data-type="h3"][data-indent="0"],
+.block-wrapper[data-type="toggle-h3"][data-indent="0"] {
+    margin-left: 0 !important;
+}
+
 /* Slash Menu */
 .slash-menu {
     position: fixed;
@@ -2497,8 +2509,8 @@ body.is-dragging {
     border-radius: 8px;
     box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
     z-index: 100005;
-    width: 170px;
-    max-height: 220px;
+    width: 200px;
+    max-height: 290px;
     overflow-y: auto;
     padding: 4px;
 }
@@ -2718,8 +2730,8 @@ body.is-dragging {
     background: var(--bg-elevated);
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    padding: 10px;
-    width: 180px;
+    padding: 10px 12px;
+    width: 250px;
     box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
     z-index: 10001;
     display: flex;
@@ -2733,26 +2745,54 @@ body.is-dragging {
     color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    margin-top: 2px;
 }
 
-.color-options-row {
-    display: flex;
-    gap: 8px;
+.color-options-row.color-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
     align-items: center;
-    margin-bottom: 6px;
+    justify-items: center;
+    margin-bottom: 8px;
 }
 
 .color-dot {
-    width: 20px;
-    height: 20px;
+    width: 22px;
+    height: 22px;
     border-radius: 50%;
     cursor: pointer;
-    transition: transform 0.2s;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
     border: 1px solid var(--border-color);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    box-sizing: border-box;
 }
 
 .color-dot:hover {
-    transform: scale(1.2);
+    transform: scale(1.22);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    z-index: 2;
+}
+
+.color-dot-default {
+    background: var(--text-primary);
+    border: 2px solid var(--border-color);
+}
+
+.custom-picker-btn {
+    background: var(--bg-surface);
+    color: var(--text-secondary);
+    font-size: 12px;
+    border: 1px dashed var(--text-placeholder);
+    cursor: pointer;
+}
+
+.custom-picker-btn:hover {
+    color: var(--accent);
+    border-color: var(--accent);
 }
 
 .inline-code {
@@ -2844,27 +2884,143 @@ body.is-dragging {
 
 .image-block-container {
     position: relative;
+    max-width: 100%;
     width: 100%;
     display: flex;
     flex-direction: column;
     align-items: center;
     border-radius: 8px;
     padding: 0;
-    margin: 1px 0;
+    margin: 3px 0;
     transition: all 0.2s ease;
 }
 
 .image-block-container:hover {
-    background: rgba(255, 255, 255, 0.02);
+    background: transparent;
 }
 
-/* Floating Image Toolbar */
+/* Image Media Display & Notion-like Frame Resizing */
+.image-media-wrapper {
+    position: relative;
+    max-width: 100%;
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    border-radius: 8px;
+    transition: width 0.15s ease;
+    user-select: none;
+}
+
+.image-inner-frame {
+    position: relative;
+    max-width: 100%;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-radius: inherit;
+    overflow: hidden;
+}
+
+.note-image {
+    max-width: 100%;
+    max-height: 60vh;
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+    display: block;
+    cursor: zoom-in;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* When image width is fit-content or auto, let image use natural dimensions without blowing up or leaving huge voids */
+.image-media-wrapper[style*="fit-content"] .note-image,
+.image-media-wrapper.is-fit .note-image {
+    width: auto;
+    max-width: 100%;
+}
+
+/* Image Frame Styles (Khung ảnh) */
+.image-media-wrapper.frame-standard .image-inner-frame {
+    border: 1px solid var(--border-color);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+}
+.image-media-wrapper.frame-shadow .image-inner-frame {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+    border-radius: 12px;
+}
+.image-media-wrapper.frame-rounded .image-inner-frame {
+    border: 2px solid var(--border-color);
+    border-radius: 20px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+.image-media-wrapper.frame-clean .image-inner-frame {
+    border: none;
+    box-shadow: none;
+    border-radius: 4px;
+}
+
+/* Interactive Resize Handles on Left & Right */
+.image-resize-handle {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 8px;
+    height: 48px;
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    cursor: ew-resize;
+    opacity: 0;
+    transition: opacity 0.2s ease, background 0.15s ease, transform 0.15s ease;
+    z-index: 20;
+    touch-action: none;
+}
+.image-resize-handle:hover,
+.image-resize-handle.is-resizing {
+    background: var(--accent);
+    opacity: 1 !important;
+    transform: translateY(-50%) scaleY(1.15);
+}
+.image-resize-handle.handle-left {
+    left: -5px;
+}
+.image-resize-handle.handle-right {
+    right: -5px;
+}
+.image-media-wrapper:hover .image-resize-handle,
+.image-block-container:hover .image-resize-handle {
+    opacity: 0.75;
+}
+
+/* Resize Tooltip */
+.image-resize-badge {
+    position: absolute;
+    bottom: -28px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(15, 23, 42, 0.95);
+    color: #ffffff;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    pointer-events: none;
+    z-index: 30;
+    white-space: nowrap;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* Floating Image Toolbar Directly Attached to Media Wrapper */
 .image-toolbar {
     position: absolute;
     top: 8px;
-    right: 10px;
-    background: rgba(15, 23, 42, 0.92);
-    backdrop-filter: blur(8px);
+    right: 8px;
+    background: rgba(15, 23, 42, 0.94);
+    backdrop-filter: blur(10px);
     border: 1px solid var(--border-color);
     border-radius: 8px;
     padding: 2px 5px;
@@ -2875,16 +3031,21 @@ body.is-dragging {
     pointer-events: none;
     transform: translateY(-4px);
     transition: opacity 0.2s ease, transform 0.2s ease;
-    z-index: 10;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+    z-index: 25;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
 }
 
-.image-block-container:hover .image-toolbar,
-.image-block-container:focus-within .image-toolbar {
+.image-media-wrapper:hover .image-toolbar,
+.image-media-wrapper:focus-within .image-toolbar,
+.image-block-container:hover .image-toolbar {
     opacity: 1;
     pointer-events: auto;
     transform: translateY(0);
 }
+
+.image-block-container.align-left { align-items: flex-start; }
+.image-block-container.align-center { align-items: center; }
+.image-block-container.align-right { align-items: flex-end; }
 
 .img-btn {
     background: transparent;
@@ -2923,37 +3084,6 @@ body.is-dragging {
     height: 14px;
     background: var(--border-color);
     margin: 0 2px;
-}
-
-/* Image Media Display */
-.image-media-wrapper {
-    max-width: 100%;
-    display: flex;
-    justify-content: center;
-    border-radius: 8px;
-    overflow: hidden;
-    transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.image-block-container.align-left { align-items: flex-start; }
-.image-block-container.align-center { align-items: center; }
-.image-block-container.align-right { align-items: flex-end; }
-
-.note-image {
-    max-width: 100%;
-    max-height: 55vh;
-    height: auto;
-    object-fit: contain;
-    border-radius: 8px;
-    border: 1px solid var(--border-color);
-    box-shadow: 0 3px 14px rgba(0, 0, 0, 0.12);
-    cursor: zoom-in;
-    display: block;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.note-image:hover {
-    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
 }
 
 /* Editable Caption */

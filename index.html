@@ -21,7 +21,7 @@
     <!-- Icons -->
     <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
     
-    <link rel="stylesheet" href="styles.css?v=3.2">
+    <link rel="stylesheet" href="styles.css?v=3.3">
 </head>
 <body>
     <div class="app-background">
@@ -675,6 +675,10 @@
                     <div class="nft-dropdown-item" data-type="h1"><i class="ri-h-1"></i> Heading 1</div>
                     <div class="nft-dropdown-item" data-type="h2"><i class="ri-h-2"></i> Heading 2</div>
                     <div class="nft-dropdown-item" data-type="h3"><i class="ri-h-3"></i> Heading 3</div>
+                    <div class="nft-dropdown-item" data-type="toggle"><i class="ri-arrow-right-s-line"></i> Toggle list</div>
+                    <div class="nft-dropdown-item" data-type="toggle-h1"><i class="ri-arrow-right-s-line"></i> Toggle Heading 1</div>
+                    <div class="nft-dropdown-item" data-type="toggle-h2"><i class="ri-arrow-right-s-line"></i> Toggle Heading 2</div>
+                    <div class="nft-dropdown-item" data-type="toggle-h3"><i class="ri-arrow-right-s-line"></i> Toggle Heading 3</div>
                     <div class="nft-dropdown-item" data-type="bullet"><i class="ri-list-unordered"></i> Danh sách chấm</div>
                     <div class="nft-dropdown-item" data-type="number"><i class="ri-list-ordered"></i> Danh sách số</div>
                     <div class="nft-dropdown-item" data-type="todo"><i class="ri-checkbox-line"></i> To-do list</div>
@@ -695,22 +699,41 @@
                     </button>
                     <div class="bubble-color-dropdown" id="bubble-color-dropdown" style="display: none;">
                         <div class="color-dropdown-title">Màu chữ</div>
-                        <div class="color-options-row">
-                            <span class="color-dot text-color" data-color="#f8fafc" style="background: #f8fafc;" title="Mặc định"></span>
-                            <span class="color-dot text-color" data-color="#ef4444" style="background: #ef4444;" title="Đỏ"></span>
-                            <span class="color-dot text-color" data-color="#3b82f6" style="background: #3b82f6;" title="Xanh"></span>
-                            <span class="color-dot text-color" data-color="#10b981" style="background: #10b981;" title="Xanh lá"></span>
-                            <span class="color-dot text-color" data-color="#f59e0b" style="background: #f59e0b;" title="Vàng"></span>
-                            <span class="color-dot text-color" data-color="#a855f7" style="background: #a855f7;" title="Tím"></span>
+                        <div class="color-options-row color-grid">
+                            <span class="color-dot text-color color-dot-default" data-color="default" title="Mặc định (Theo nền)"></span>
+                            <span class="color-dot text-color" data-color="#000000" style="background: #000000;" title="Đen (Black)"></span>
+                            <span class="color-dot text-color" data-color="#64748b" style="background: #64748b;" title="Xám"></span>
+                            <span class="color-dot text-color" data-color="#78350f" style="background: #78350f;" title="Nâu"></span>
+                            <span class="color-dot text-color" data-color="#ea580c" style="background: #ea580c;" title="Cam"></span>
+                            <span class="color-dot text-color" data-color="#d97706" style="background: #d97706;" title="Vàng"></span>
+                            <span class="color-dot text-color" data-color="#16a34a" style="background: #16a34a;" title="Xanh lá"></span>
+                            <span class="color-dot text-color" data-color="#0d9488" style="background: #0d9488;" title="Xanh ngọc"></span>
+                            <span class="color-dot text-color" data-color="#2563eb" style="background: #2563eb;" title="Xanh dương"></span>
+                            <span class="color-dot text-color" data-color="#9333ea" style="background: #9333ea;" title="Tím"></span>
+                            <span class="color-dot text-color" data-color="#db2777" style="background: #db2777;" title="Hồng"></span>
+                            <span class="color-dot text-color" data-color="#dc2626" style="background: #dc2626;" title="Đỏ"></span>
+                            <label class="color-dot custom-picker-btn text-color" title="Tự chọn màu chữ...">
+                                <i class="ri-palette-line"></i>
+                                <input type="color" id="custom-text-color-picker" style="opacity: 0; width: 0; height: 0; position: absolute;">
+                            </label>
                         </div>
                         <div class="color-dropdown-title">Màu nền Highlight</div>
-                        <div class="color-options-row">
+                        <div class="color-options-row color-grid">
                             <span class="color-dot bg-color" data-bgcolor="transparent" style="background: transparent; border: 1px dashed var(--text-placeholder);" title="Xóa nền"></span>
-                            <span class="color-dot bg-color" data-bgcolor="#7f1d1d" style="background: #ef4444; opacity: 0.7;" title="Nền đỏ"></span>
-                            <span class="color-dot bg-color" data-bgcolor="#1e3a8a" style="background: #3b82f6; opacity: 0.7;" title="Nền xanh"></span>
-                            <span class="color-dot bg-color" data-bgcolor="#064e3b" style="background: #10b981; opacity: 0.7;" title="Nền xanh lá"></span>
-                            <span class="color-dot bg-color" data-bgcolor="#78350f" style="background: #f59e0b; opacity: 0.7;" title="Nền vàng"></span>
-                            <span class="color-dot bg-color" data-bgcolor="#581c87" style="background: #a855f7; opacity: 0.7;" title="Nền tím"></span>
+                            <span class="color-dot bg-color" data-bgcolor="rgba(100, 116, 139, 0.25)" style="background: #64748b; opacity: 0.7;" title="Nền xám"></span>
+                            <span class="color-dot bg-color" data-bgcolor="rgba(120, 53, 15, 0.25)" style="background: #78350f; opacity: 0.7;" title="Nền nâu"></span>
+                            <span class="color-dot bg-color" data-bgcolor="rgba(234, 88, 12, 0.25)" style="background: #ea580c; opacity: 0.7;" title="Nền cam"></span>
+                            <span class="color-dot bg-color" data-bgcolor="rgba(217, 119, 6, 0.28)" style="background: #d97706; opacity: 0.7;" title="Nền vàng"></span>
+                            <span class="color-dot bg-color" data-bgcolor="rgba(22, 163, 74, 0.25)" style="background: #16a34a; opacity: 0.7;" title="Nền xanh lá"></span>
+                            <span class="color-dot bg-color" data-bgcolor="rgba(13, 148, 136, 0.25)" style="background: #0d9488; opacity: 0.7;" title="Nền xanh ngọc"></span>
+                            <span class="color-dot bg-color" data-bgcolor="rgba(37, 99, 235, 0.25)" style="background: #2563eb; opacity: 0.7;" title="Nền xanh dương"></span>
+                            <span class="color-dot bg-color" data-bgcolor="rgba(147, 51, 234, 0.25)" style="background: #9333ea; opacity: 0.7;" title="Nền tím"></span>
+                            <span class="color-dot bg-color" data-bgcolor="rgba(219, 39, 119, 0.25)" style="background: #db2777; opacity: 0.7;" title="Nền hồng"></span>
+                            <span class="color-dot bg-color" data-bgcolor="rgba(220, 38, 38, 0.25)" style="background: #dc2626; opacity: 0.7;" title="Nền đỏ"></span>
+                            <label class="color-dot custom-picker-btn bg-color" title="Tự chọn màu nền highlight...">
+                                <i class="ri-paint-brush-line"></i>
+                                <input type="color" id="custom-bg-color-picker" style="opacity: 0; width: 0; height: 0; position: absolute;">
+                            </label>
                         </div>
                     </div>
                 </div>
@@ -932,7 +955,7 @@
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
     
     <script src="firebase-config.js"></script>
-    <script src="shared/note-schema.js?v=3.2"></script>
-    <script src="app.js?v=3.2"></script>
+    <script src="shared/note-schema.js?v=3.3"></script>
+    <script src="app.js?v=3.3"></script>
 </body>
 </html>

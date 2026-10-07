@@ -1742,7 +1742,7 @@ function serializeBlocks() {
         if (!contentEl) return;
         const type = contentEl.getAttribute('data-type');
         
-        // Lưu trữ khối hình ảnh với đầy đủ metadata (src, caption, width, align)
+        // Lưu trữ khối hình ảnh với đầy đủ metadata (src, caption, width, align, frameStyle)
         if (type === 'image') {
             const img = contentEl.querySelector('img.note-image') || contentEl.querySelector('img');
             const cap = contentEl.querySelector('.image-caption');
@@ -1750,13 +1750,14 @@ function serializeBlocks() {
             let src = img ? (img.getAttribute('src') || '') : '';
             if (!src && contentEl.dataset.src) src = contentEl.dataset.src;
             const caption = cap ? (cap.innerText || cap.textContent || '').trim() : '';
-            const width = (mediaWrap && mediaWrap.style.width) ? mediaWrap.style.width : (img && img.style.width ? img.style.width : '100%');
+            const width = (mediaWrap && mediaWrap.style.width) ? mediaWrap.style.width : (img && img.style.width ? img.style.width : 'fit-content');
             const align = contentEl.getAttribute('data-align') || 'center';
+            const frameStyle = mediaWrap ? (mediaWrap.getAttribute('data-frame') || 'standard') : 'standard';
             
             blocks.push({
                 id: wrapper.getAttribute('data-id'),
                 type: 'image',
-                content: JSON.stringify({ src, caption, width, align }),
+                content: JSON.stringify({ src, caption, width, align, frameStyle }),
                 indent: parseInt(wrapper.getAttribute('data-indent') || '0', 10)
             });
             return;
@@ -1919,6 +1920,11 @@ function checkMarkdownShortcuts(target) {
     if (h1Match) {
         EditorHistory.recordBeforeAction();
         setBlockType(target, 'h1');
+        const wrapper = target.closest('.block-wrapper');
+        if (wrapper) {
+            wrapper.setAttribute('data-indent', 0);
+            wrapper.style.marginLeft = '0px';
+        }
         target.innerHTML = h1Match[1];
         setCaretAtStart(target);
         triggerSave();
@@ -1930,6 +1936,13 @@ function checkMarkdownShortcuts(target) {
     if (h2Match) {
         EditorHistory.recordBeforeAction();
         setBlockType(target, 'h2');
+        const wrapper = target.closest('.block-wrapper');
+        if (wrapper) {
+            let curIndent = parseInt(wrapper.getAttribute('data-indent') || '0', 10);
+            curIndent = Math.min(curIndent, 1);
+            wrapper.setAttribute('data-indent', curIndent);
+            wrapper.style.marginLeft = `${curIndent * 24}px`;
+        }
         target.innerHTML = h2Match[1];
         setCaretAtStart(target);
         triggerSave();
@@ -1941,6 +1954,13 @@ function checkMarkdownShortcuts(target) {
     if (h3Match) {
         EditorHistory.recordBeforeAction();
         setBlockType(target, 'h3');
+        const wrapper = target.closest('.block-wrapper');
+        if (wrapper) {
+            let curIndent = parseInt(wrapper.getAttribute('data-indent') || '0', 10);
+            curIndent = Math.min(curIndent, 2);
+            wrapper.setAttribute('data-indent', curIndent);
+            wrapper.style.marginLeft = `${curIndent * 24}px`;
+        }
         target.innerHTML = h3Match[1];
         setCaretAtStart(target);
         triggerSave();
@@ -2171,10 +2191,23 @@ function handleBlockKeydown(e) {
         e.preventDefault();
         EditorHistory.recordBeforeAction();
         let indent = parseInt(wrapper.getAttribute('data-indent') || '0', 10);
+        const blockType = target.getAttribute('data-type') || wrapper.getAttribute('data-type') || 'text';
+        
+        // Headings indentation rules:
+        // H1 / toggle-h1: luôn giữ cấp 0 (không lùi dòng)
+        if (blockType === 'h1' || blockType === 'toggle-h1') {
+            wrapper.setAttribute('data-indent', 0);
+            wrapper.style.marginLeft = '0px';
+            return;
+        }
+
         if (e.shiftKey) {
             indent = Math.max(0, indent - 1);
         } else {
-            indent = Math.min(4, indent + 1); // max 4 levels
+            let maxIndent = 4;
+            if (blockType === 'h2' || blockType === 'toggle-h2') maxIndent = 1;
+            if (blockType === 'h3' || blockType === 'toggle-h3') maxIndent = 2;
+            indent = Math.min(maxIndent, indent + 1);
         }
         wrapper.setAttribute('data-indent', indent);
         wrapper.style.marginLeft = `${indent * 24}px`;
@@ -2252,6 +2285,12 @@ function handleBlockKeydown(e) {
             if (icon && !icon.classList.contains('open')) {
                 toggleBlockOpen(icon);
             }
+        } else if (type === 'h1') {
+            indent = 0; // Khối mới dưới H1 luôn về cấp 0
+        } else if (type === 'h2') {
+            indent = Math.min(indent, 1);
+        } else if (type === 'h3') {
+            indent = Math.min(indent, 2);
         }
         
         // Create the new block with the content after cursor!
@@ -2531,7 +2570,7 @@ function handleBlockPaste(e) {
         if (imgMatch) {
             e.preventDefault();
             EditorHistory.recordBeforeAction();
-            setBlockType(target, 'image', JSON.stringify({ src: imgMatch[2], caption: imgMatch[1] || '', width: '100%', align: 'center' }));
+            setBlockType(target, 'image', JSON.stringify({ src: imgMatch[2], caption: imgMatch[1] || '', width: 'fit-content', align: 'center', frameStyle: 'standard' }));
             selectSingleBlock(wrapper);
             triggerSave();
             EditorHistory.updateLastSnapshot();
@@ -2769,7 +2808,7 @@ function setBlockType(element, type, initialContent = '') {
             element.style.opacity = '1';
         }
         if (isToggle) {
-            prefix = `<i class="ri-arrow-right-s-line toggle-icon" onclick="toggleBlockOpen(this)"></i>`;
+            prefix = `<i class="ri-arrow-right-s-line toggle-icon open" onclick="toggleBlockOpen(this)"></i>`;
         } else if (type === 'bullet') {
             prefix = `<span class="bullet-dot">•</span>`;
         } else if (type === 'number') {
@@ -2790,6 +2829,26 @@ function setBlockType(element, type, initialContent = '') {
         }
     }
     
+    // Ràng buộc thụt đầu dòng (indentation constraints) cho tiêu đề Heading
+    if (wrapper) {
+        if (type === 'h1' || type === 'toggle-h1') {
+            wrapper.setAttribute('data-indent', 0);
+            wrapper.style.marginLeft = '0px';
+        } else if (type === 'h2' || type === 'toggle-h2') {
+            let curIndent = parseInt(wrapper.getAttribute('data-indent') || '0', 10);
+            if (curIndent > 1) {
+                wrapper.setAttribute('data-indent', 1);
+                wrapper.style.marginLeft = '24px';
+            }
+        } else if (type === 'h3' || type === 'toggle-h3') {
+            let curIndent = parseInt(wrapper.getAttribute('data-indent') || '0', 10);
+            if (curIndent > 2) {
+                wrapper.setAttribute('data-indent', 2);
+                wrapper.style.marginLeft = '48px';
+            }
+        }
+    }
+
     if (type !== 'divider' && type !== 'image' && type !== 'toc') {
         const page = appState.pages[appState.activePageId];
         const isLocked = page && page.locked;
@@ -3382,26 +3441,48 @@ function initFloatingToolbar() {
         dot.addEventListener('click', (e) => {
             e.preventDefault();
             const color = dot.getAttribute('data-color');
-            document.execCommand('foreColor', false, color);
-            colorDropdown.style.display = 'none';
-            triggerSave();
+            if (color) {
+                applyFormattingToSelection('foreColor', color);
+                colorDropdown.style.display = 'none';
+            }
         });
     });
+
+    // Custom Text Color Input
+    const customTextColorInput = document.getElementById('custom-text-color-picker');
+    if (customTextColorInput) {
+        customTextColorInput.addEventListener('input', (e) => {
+            applyFormattingToSelection('foreColor', e.target.value);
+        });
+        customTextColorInput.addEventListener('change', (e) => {
+            applyFormattingToSelection('foreColor', e.target.value);
+            colorDropdown.style.display = 'none';
+        });
+    }
 
     // Background Highlight Colors
     toolbar.querySelectorAll('.color-dot.bg-color').forEach(dot => {
         dot.addEventListener('click', (e) => {
             e.preventDefault();
             const bgcolor = dot.getAttribute('data-bgcolor');
-            if (bgcolor === 'transparent') {
-                document.execCommand('removeFormat', false, null);
-            } else {
-                document.execCommand('hiliteColor', false, bgcolor);
+            if (bgcolor) {
+                applyFormattingToSelection('hiliteColor', bgcolor);
+                colorDropdown.style.display = 'none';
             }
-            colorDropdown.style.display = 'none';
-            triggerSave();
         });
     });
+
+    // Custom Background Color Input
+    const customBgColorInput = document.getElementById('custom-bg-color-picker');
+    if (customBgColorInput) {
+        customBgColorInput.addEventListener('input', (e) => {
+            applyFormattingToSelection('hiliteColor', e.target.value);
+        });
+        customBgColorInput.addEventListener('change', (e) => {
+            applyFormattingToSelection('hiliteColor', e.target.value);
+            colorDropdown.style.display = 'none';
+        });
+    }
 
     // Block Type Dropdown Toggle
     if (typeBtn && typeDropdown) {
@@ -3420,6 +3501,19 @@ function initFloatingToolbar() {
                 e.preventDefault();
                 const newType = item.getAttribute('data-type');
                 typeDropdown.style.display = 'none';
+                
+                // Chuyển đổi hàng loạt nếu đang bôi đen nhiều dòng
+                if (selectedBlockWrappers && selectedBlockWrappers.length > 0) {
+                    EditorHistory.recordBeforeAction();
+                    selectedBlockWrappers.forEach(w => {
+                        const cid = w.getAttribute('data-id');
+                        if (cid) convertBlockType(cid, newType);
+                    });
+                    triggerSave();
+                    EditorHistory.updateLastSnapshot();
+                    return;
+                }
+
                 if (activeBlockId) {
                     convertBlockType(activeBlockId, newType);
                 }
@@ -3504,72 +3598,70 @@ function initFloatingToolbar() {
         clearTimeout(selTimeout);
         selTimeout = setTimeout(() => {
             const sel = window.getSelection();
-            if (!sel || sel.isCollapsed || !sel.rangeCount) {
+            const hasBlocks = selectedBlockWrappers && selectedBlockWrappers.length > 0;
+            const hasText = sel && !sel.isCollapsed && sel.rangeCount > 0 && sel.toString().trim().length > 0;
+
+            if (!hasText && !hasBlocks) {
                 toolbar.style.display = 'none';
                 if (colorDropdown) colorDropdown.style.display = 'none';
                 if (typeDropdown) typeDropdown.style.display = 'none';
                 return;
             }
 
-            const text = sel.toString().trim();
-            if (text.length === 0) {
-                toolbar.style.display = 'none';
-                return;
-            }
+            let text = '';
+            let rect = null;
+            let inEditor = false;
 
-            currentSelectedText = text;
+            if (hasText) {
+                text = sel.toString().trim();
+                currentSelectedText = text;
+                const range = sel.getRangeAt(0);
+                let container = range.commonAncestorContainer;
+                if (container && container.nodeType === Node.TEXT_NODE) container = container.parentElement;
 
-            const range = sel.getRangeAt(0);
-            let container = range.commonAncestorContainer;
-            if (container && container.nodeType === Node.TEXT_NODE) container = container.parentElement;
+                if (toolbar.contains(container) || (container && container.closest('#vocab-modal, #search-modal, #settings-modal'))) {
+                    return;
+                }
 
-            // Don't show toolbar if user is selecting inside the toolbar itself or inside modals/inputs
-            if (toolbar.contains(container) || (container && container.closest('#vocab-modal, #search-modal, #settings-modal'))) {
-                return;
-            }
+                inEditor = !!(container && container.closest('#editor-container, .page-content, .block-editor, .block-content'));
+                rect = range.getBoundingClientRect();
 
-            // Check if selection is within editor content
-            const inEditor = !!(container && container.closest('#editor-container, .page-content, .block-editor, .block-content'));
+                if (inEditor) {
+                    const blockEl = container.closest('.block-wrapper');
+                    if (blockEl) {
+                        activeBlockId = blockEl.getAttribute('data-id');
+                        activeBlockElement = blockEl;
+                        const blockType = blockEl.getAttribute('data-type') || 'text';
+                        updateBlockTypeBadge(blockType);
+                    }
+                }
+            } else if (hasBlocks) {
+                inEditor = true;
+                const first = selectedBlockWrappers[0];
+                rect = first.getBoundingClientRect();
+                activeBlockId = first.getAttribute('data-id');
+                activeBlockElement = first;
+                const bType = first.getAttribute('data-type') || 'text';
+                updateBlockTypeBadge(bType);
 
-            // Toggle editor-only rows
-            const headerRow = document.getElementById('nft-header-row');
-            const dividerTop = document.getElementById('nft-divider-top');
-            const caseTitle = document.getElementById('nft-case-title');
-            const caseRow = document.getElementById('nft-case-row');
-            const toolsTitle = document.getElementById('nft-tools-title');
-            const linkItem = document.getElementById('bubble-link-btn');
-
-            if (headerRow) headerRow.style.display = inEditor ? 'flex' : 'none';
-            if (dividerTop) dividerTop.style.display = inEditor ? 'block' : 'none';
-            if (caseTitle) caseTitle.style.display = inEditor ? 'block' : 'none';
-            if (caseRow) caseRow.style.display = inEditor ? 'flex' : 'none';
-            if (toolsTitle) toolsTitle.style.display = inEditor ? 'block' : 'none';
-            if (linkItem) linkItem.style.display = inEditor ? 'flex' : 'none';
-
-            // Update Word and Character Count Stats
-            const wordCount = text.split(/\s+/).filter(Boolean).length;
-            const charCount = text.length;
-            const statsEl = document.getElementById('nft-word-char-count');
-            if (statsEl) {
-                statsEl.textContent = `${wordCount} từ • ${charCount} ký tự`;
-            }
-
-            // Identify active block if in editor
-            if (inEditor) {
-                const blockEl = container.closest('.block-wrapper');
-                if (blockEl) {
-                    activeBlockId = blockEl.getAttribute('data-id');
-                    activeBlockElement = blockEl;
-                    const blockType = blockEl.getAttribute('data-type') || 'text';
-                    updateBlockTypeBadge(blockType);
-                } else {
-                    activeBlockId = null;
-                    activeBlockElement = null;
+                let totalWords = 0;
+                let totalChars = 0;
+                let combinedText = [];
+                selectedBlockWrappers.forEach(w => {
+                    const t = w.querySelector('.block-content')?.innerText || '';
+                    totalWords += t.split(/\s+/).filter(Boolean).length;
+                    totalChars += t.length;
+                    combinedText.push(t);
+                });
+                text = combinedText.join('\n').trim();
+                currentSelectedText = text;
+                const statsEl = document.getElementById('nft-word-char-count');
+                if (statsEl) {
+                    statsEl.textContent = `${selectedBlockWrappers.length} dòng • ${totalWords} từ • ${totalChars} ký tự`;
                 }
             }
 
-            const rect = range.getBoundingClientRect();
-            if (rect.width === 0 && rect.height === 0) {
+            if (!rect || (rect.width === 0 && rect.height === 0)) {
                 toolbar.style.display = 'none';
                 return;
             }
@@ -3620,6 +3712,10 @@ function updateBlockTypeBadge(type) {
         h1: { label: 'Heading 1', icon: 'ri-h-1' },
         h2: { label: 'Heading 2', icon: 'ri-h-2' },
         h3: { label: 'Heading 3', icon: 'ri-h-3' },
+        toggle: { label: 'Toggle list', icon: 'ri-arrow-right-s-line' },
+        'toggle-h1': { label: 'Toggle H1', icon: 'ri-arrow-right-s-line' },
+        'toggle-h2': { label: 'Toggle H2', icon: 'ri-arrow-right-s-line' },
+        'toggle-h3': { label: 'Toggle H3', icon: 'ri-arrow-right-s-line' },
         bullet: { label: 'Danh sách', icon: 'ri-list-unordered' },
         number: { label: 'Số thứ tự', icon: 'ri-list-ordered' },
         todo: { label: 'To-do', icon: 'ri-checkbox-line' },
@@ -3638,13 +3734,16 @@ function getBlockTypeName(type) {
         h1: 'Heading 1',
         h2: 'Heading 2',
         h3: 'Heading 3',
+        toggle: 'Toggle list',
+        'toggle-h1': 'Toggle Heading 1',
+        'toggle-h2': 'Toggle Heading 2',
+        'toggle-h3': 'Toggle Heading 3',
         bullet: 'Danh sách chấm',
         number: 'Danh sách số',
         todo: 'To-do list',
         quote: 'Trích dẫn',
         code: 'Khối code',
-        divider: 'Đường kẻ',
-        toggle: 'Toggle'
+        divider: 'Đường kẻ'
     };
     return names[type] || (type ? type.toUpperCase() : 'Khối');
 }
@@ -3670,12 +3769,31 @@ function convertBlockType(blockId, newType) {
     const contentEl = wrapper.querySelector('.block-content');
     if (!contentEl) return;
     
+    EditorHistory.recordBeforeAction();
+    const oldType = wrapper.getAttribute('data-type') || '';
+    const wasToggle = oldType.startsWith('toggle');
+    const isNewToggle = newType.startsWith('toggle');
+
     setBlockType(contentEl, newType);
+
+    // Nếu chuyển từ Toggle sang khối thường, hiển thị lại các khối con trước đó bị ẩn
+    if (wasToggle && !isNewToggle) {
+        let next = wrapper.nextElementSibling;
+        const myIndent = parseInt(wrapper.getAttribute('data-indent') || '0', 10);
+        while (next && next.classList.contains('block-wrapper')) {
+            const nextIndent = parseInt(next.getAttribute('data-indent') || '0', 10);
+            if (nextIndent <= myIndent) break;
+            next.style.display = 'flex';
+            next = next.nextElementSibling;
+        }
+    }
+
     if (newType === 'number') {
         updateNumberPrefixes();
     }
     updateBlockTypeBadge(newType);
     triggerSave();
+    EditorHistory.updateLastSnapshot();
     contentEl.focus();
     
     const typeDropdown = document.getElementById('nft-type-dropdown');
@@ -3997,31 +4115,151 @@ function initMultiBlockSelection() {
     });
 }
 
-function executeFormatAction(action) {
-    if (action === 'bold') {
+function applyFormattingToSelection(formatType, value = null) {
+    EditorHistory.recordBeforeAction();
+
+    // 1. Nếu có nhiều khối dòng đang được chọn (Multi-block selection)
+    if (selectedBlockWrappers && selectedBlockWrappers.length > 0) {
+        selectedBlockWrappers.forEach(wrapper => {
+            const contentEl = wrapper.querySelector('.block-content');
+            if (!contentEl || contentEl.contentEditable === 'false') return;
+            applyBlockFormat(contentEl, formatType, value);
+        });
+        triggerSave();
+        EditorHistory.updateLastSnapshot();
+        return;
+    }
+
+    // 2. Kiểm tra vùng bôi đen chữ (Text Selection)
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+    const range = sel.getRangeAt(0);
+
+    // Tìm tất cả các khối block giao nhau với vùng bôi đen
+    const allWrappers = Array.from(elements.blockEditor.querySelectorAll('.block-wrapper'));
+    const intersectingWrappers = allWrappers.filter(w => {
+        const c = w.querySelector('.block-content');
+        if (!c) return false;
+        try {
+            return range.intersectsNode(c);
+        } catch (e) {
+            return false;
+        }
+    });
+
+    if (intersectingWrappers.length <= 1) {
+        // Bôi đen trong phạm vi 1 dòng
+        applyInlineCommand(formatType, value);
+    } else {
+        // Bôi đen xuyên suốt NHIỀU DÒNG (Multi-line selection)
+        intersectingWrappers.forEach((w, idx) => {
+            const contentEl = w.querySelector('.block-content');
+            if (!contentEl || contentEl.contentEditable === 'false') return;
+
+            const subRange = document.createRange();
+            try {
+                if (idx === 0) {
+                    subRange.setStart(range.startContainer, range.startOffset);
+                    subRange.setEnd(contentEl, contentEl.childNodes.length);
+                } else if (idx === intersectingWrappers.length - 1) {
+                    subRange.setStart(contentEl, 0);
+                    subRange.setEnd(range.endContainer, range.endOffset);
+                } else {
+                    subRange.selectNodeContents(contentEl);
+                }
+
+                sel.removeAllRanges();
+                sel.addRange(subRange);
+                applyInlineCommand(formatType, value);
+            } catch (err) {
+                applyBlockFormat(contentEl, formatType, value);
+            }
+        });
+
+        // Đánh dấu trực quan các dòng đã được định dạng
+        intersectingWrappers.forEach(w => w.classList.add('is-block-selected'));
+        selectedBlockWrappers = intersectingWrappers;
+    }
+
+    triggerSave();
+    EditorHistory.updateLastSnapshot();
+}
+
+function applyInlineCommand(formatType, value = null) {
+    if (formatType === 'foreColor') {
+        if (value === 'default') {
+            document.execCommand('removeFormat', false, null);
+        } else {
+            document.execCommand('foreColor', false, value);
+        }
+    } else if (formatType === 'hiliteColor') {
+        if (value === 'transparent') {
+            document.execCommand('removeFormat', false, null);
+        } else {
+            document.execCommand('hiliteColor', false, value);
+        }
+    } else if (formatType === 'bold') {
         document.execCommand('bold', false, null);
-    } else if (action === 'italic') {
+    } else if (formatType === 'italic') {
         document.execCommand('italic', false, null);
-    } else if (action === 'underline') {
+    } else if (formatType === 'underline') {
         document.execCommand('underline', false, null);
-    } else if (action === 'removeFormat') {
-        document.execCommand('removeFormat', false, null);
-    } else if (action === 'strikethrough') {
+    } else if (formatType === 'strikethrough') {
         document.execCommand('strikeThrough', false, null);
-    } else if (action === 'code') {
+    } else if (formatType === 'removeFormat') {
+        document.execCommand('removeFormat', false, null);
+    } else if (formatType === 'code') {
         const sel = window.getSelection();
-        if (!sel.isCollapsed) {
+        if (sel && !sel.isCollapsed) {
             const text = sel.toString();
             document.execCommand('insertHTML', false, `<code class="inline-code">${escapeHtml(text)}</code>`);
         }
-    } else if (action === 'copy') {
+    } else if (formatType === 'copy') {
         const sel = window.getSelection();
         if (sel) {
             navigator.clipboard.writeText(sel.toString().trim());
             showToast('Đã sao chép đoạn văn bản!');
         }
     }
-    triggerSave();
+}
+
+function applyBlockFormat(contentEl, formatType, value = null) {
+    if (formatType === 'foreColor') {
+        if (value === 'default') {
+            contentEl.style.color = '';
+            contentEl.querySelectorAll('[style*="color"], font[color]').forEach(el => {
+                el.style.color = '';
+                if (el.tagName === 'FONT') el.removeAttribute('color');
+            });
+        } else {
+            contentEl.style.color = value;
+        }
+    } else if (formatType === 'hiliteColor') {
+        if (value === 'transparent') {
+            contentEl.style.backgroundColor = '';
+            contentEl.querySelectorAll('[style*="background"], mark').forEach(el => el.style.backgroundColor = '');
+        } else {
+            contentEl.style.backgroundColor = value;
+        }
+    } else if (formatType === 'bold') {
+        contentEl.style.fontWeight = (contentEl.style.fontWeight === 'bold' || contentEl.style.fontWeight === '700') ? 'normal' : 'bold';
+    } else if (formatType === 'italic') {
+        contentEl.style.fontStyle = contentEl.style.fontStyle === 'italic' ? 'normal' : 'italic';
+    } else if (formatType === 'underline') {
+        contentEl.style.textDecoration = contentEl.style.textDecoration === 'underline' ? 'none' : 'underline';
+    } else if (formatType === 'strikethrough') {
+        contentEl.style.textDecoration = contentEl.style.textDecoration === 'line-through' ? 'none' : 'line-through';
+    } else if (formatType === 'removeFormat') {
+        contentEl.style.color = '';
+        contentEl.style.backgroundColor = '';
+        contentEl.style.fontWeight = '';
+        contentEl.style.fontStyle = '';
+        contentEl.style.textDecoration = '';
+    }
+}
+
+function executeFormatAction(action) {
+    applyFormattingToSelection(action);
 }
 
 function escapeHtml(str) {
@@ -4214,15 +4452,17 @@ function compressImageFile(file, maxW = 1400, maxH = 1400, q = 0.82) {
 function renderImageBlock(contentEl, contentData) {
     let src = '';
     let caption = '';
-    let width = '100%';
+    let width = 'fit-content';
     let align = 'center';
+    let frameStyle = 'standard';
 
     if (contentData) {
         if (typeof contentData === 'object') {
             src = contentData.src || '';
             caption = contentData.caption || '';
-            width = contentData.width || '100%';
+            width = contentData.width || 'fit-content';
             align = contentData.align || 'center';
+            frameStyle = contentData.frameStyle || 'standard';
         } else if (typeof contentData === 'string') {
             const trimmed = contentData.trim();
             if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
@@ -4230,8 +4470,9 @@ function renderImageBlock(contentEl, contentData) {
                     const parsed = JSON.parse(trimmed);
                     src = parsed.src || '';
                     caption = parsed.caption || '';
-                    width = parsed.width || '100%';
+                    width = parsed.width || 'fit-content';
                     align = parsed.align || 'center';
+                    frameStyle = parsed.frameStyle || 'standard';
                 } catch (e) {
                     src = trimmed;
                 }
@@ -4261,25 +4502,35 @@ function renderImageBlock(contentEl, contentData) {
 
     const safeCaption = escapeHtml(caption);
     const safeSrc = src ? escapeHtml(src) : '';
+    const isFit = (width === 'fit-content' || width === 'auto');
 
     contentEl.innerHTML = `
         <div class="image-block-container align-${align}">
-            <div class="image-toolbar" contenteditable="false">
-                <button type="button" class="img-btn ${width === '50%' ? 'active' : ''}" data-action="resize-50" title="50% chiều rộng">50%</button>
-                <button type="button" class="img-btn ${width === '75%' ? 'active' : ''}" data-action="resize-75" title="75% chiều rộng">75%</button>
-                <button type="button" class="img-btn ${width === '100%' || !width ? 'active' : ''}" data-action="resize-100" title="100% chiều rộng">100%</button>
-                <span class="img-tb-divider"></span>
-                <button type="button" class="img-btn ${align === 'left' ? 'active' : ''}" data-action="align-left" title="Căn trái"><i class="ri-align-left"></i></button>
-                <button type="button" class="img-btn ${align === 'center' || !align ? 'active' : ''}" data-action="align-center" title="Căn giữa"><i class="ri-align-center"></i></button>
-                <button type="button" class="img-btn ${align === 'right' ? 'active' : ''}" data-action="align-right" title="Căn phải"><i class="ri-align-right"></i></button>
-                <span class="img-tb-divider"></span>
-                <button type="button" class="img-btn" data-action="caption" title="Thêm/sửa chú thích"><i class="ri-chat-1-line"></i></button>
-                <button type="button" class="img-btn" data-action="zoom" title="Xem ảnh toàn màn hình"><i class="ri-zoom-in-line"></i></button>
-                <button type="button" class="img-btn" data-action="download" title="Tải ảnh về máy"><i class="ri-download-2-line"></i></button>
-                <button type="button" class="img-btn danger" data-action="delete" title="Xóa dòng ảnh"><i class="ri-delete-bin-line"></i></button>
-            </div>
-            <div class="image-media-wrapper" style="width: ${width};">
-                <img class="note-image" src="${safeSrc}" alt="${safeCaption || 'Hình ảnh ghi chú'}" loading="lazy" />
+            <div class="image-media-wrapper frame-${frameStyle} ${isFit ? 'is-fit' : ''}" data-frame="${frameStyle}" style="width: ${width};">
+                <div class="image-resize-handle handle-left" title="Kéo để chỉnh kích thước"></div>
+                <div class="image-resize-handle handle-right" title="Kéo để chỉnh kích thước"></div>
+                <div class="image-inner-frame">
+                    <img class="note-image" src="${safeSrc}" alt="${safeCaption || 'Hình ảnh ghi chú'}" loading="lazy" />
+                </div>
+                <div class="image-resize-badge" style="display: none;">${width}</div>
+                <div class="image-toolbar" contenteditable="false">
+                    <button type="button" class="img-btn ${isFit ? 'active' : ''}" data-action="resize-fit" title="Vừa vặn (Kích thước tự nhiên)">Vừa</button>
+                    <button type="button" class="img-btn ${width === '25%' ? 'active' : ''}" data-action="resize-25" title="25% chiều rộng">25%</button>
+                    <button type="button" class="img-btn ${width === '50%' ? 'active' : ''}" data-action="resize-50" title="50% chiều rộng">50%</button>
+                    <button type="button" class="img-btn ${width === '75%' ? 'active' : ''}" data-action="resize-75" title="75% chiều rộng">75%</button>
+                    <button type="button" class="img-btn ${width === '100%' ? 'active' : ''}" data-action="resize-100" title="100% chiều rộng">100%</button>
+                    <span class="img-tb-divider"></span>
+                    <button type="button" class="img-btn" data-action="toggle-frame" title="Đổi khung ảnh: Chuẩn / Bóng đổ / Bo tròn / Không viền"><i class="ri-artboard-line"></i></button>
+                    <span class="img-tb-divider"></span>
+                    <button type="button" class="img-btn ${align === 'left' ? 'active' : ''}" data-action="align-left" title="Căn trái"><i class="ri-align-left"></i></button>
+                    <button type="button" class="img-btn ${align === 'center' || !align ? 'active' : ''}" data-action="align-center" title="Căn giữa"><i class="ri-align-center"></i></button>
+                    <button type="button" class="img-btn ${align === 'right' ? 'active' : ''}" data-action="align-right" title="Căn phải"><i class="ri-align-right"></i></button>
+                    <span class="img-tb-divider"></span>
+                    <button type="button" class="img-btn" data-action="caption" title="Thêm/sửa chú thích"><i class="ri-chat-1-line"></i></button>
+                    <button type="button" class="img-btn" data-action="zoom" title="Xem ảnh toàn màn hình"><i class="ri-zoom-in-line"></i></button>
+                    <button type="button" class="img-btn" data-action="download" title="Tải ảnh về máy"><i class="ri-download-2-line"></i></button>
+                    <button type="button" class="img-btn danger" data-action="delete" title="Xóa dòng ảnh"><i class="ri-delete-bin-line"></i></button>
+                </div>
             </div>
             <div class="image-caption" contenteditable="true" data-placeholder="Thêm chú thích ảnh...">${safeCaption}</div>
         </div>
@@ -4289,10 +4540,74 @@ function renderImageBlock(contentEl, contentData) {
     const mediaWrap = contentEl.querySelector('.image-media-wrapper');
     const imgEl = contentEl.querySelector('.note-image');
     const captionEl = contentEl.querySelector('.image-caption');
+    const badge = contentEl.querySelector('.image-resize-badge');
+    const leftHandle = contentEl.querySelector('.handle-left');
+    const rightHandle = contentEl.querySelector('.handle-right');
+
+    // Interactive Drag-to-Resize on Left & Right handles
+    const setupResizeHandle = (handle, isLeft) => {
+        if (!handle) return;
+        const startResize = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            EditorHistory.recordBeforeAction();
+            handle.classList.add('is-resizing');
+            if (badge) {
+                badge.textContent = mediaWrap.style.width || '100%';
+                badge.style.display = 'block';
+            }
+
+            const startX = e.type.startsWith('touch') ? e.touches[0].clientX : e.clientX;
+            const containerWidth = container.offsetWidth || 800;
+            const startMediaWidth = mediaWrap.offsetWidth;
+
+            const onMove = (moveEvt) => {
+                const clientX = moveEvt.type.startsWith('touch') ? moveEvt.touches[0].clientX : moveEvt.clientX;
+                const deltaX = clientX - startX;
+                const change = isLeft ? -deltaX * 2 : deltaX * 2;
+                let newPx = startMediaWidth + (align === 'center' ? change : (isLeft ? -deltaX : deltaX));
+                let newPercent = Math.round((newPx / containerWidth) * 100);
+                if (newPercent < 20) newPercent = 20;
+                if (newPercent > 100) newPercent = 100;
+
+                mediaWrap.style.width = `${newPercent}%`;
+                mediaWrap.classList.remove('is-fit');
+                if (badge) {
+                    badge.textContent = `${newPercent}%`;
+                    badge.style.display = 'block';
+                }
+                contentEl.querySelectorAll('[data-action^="resize-"]').forEach(b => {
+                    b.classList.toggle('active', b.getAttribute('data-action') === `resize-${newPercent}`);
+                });
+            };
+
+            const onEnd = () => {
+                handle.classList.remove('is-resizing');
+                if (badge) badge.style.display = 'none';
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup', onEnd);
+                document.removeEventListener('touchmove', onMove);
+                document.removeEventListener('touchend', onEnd);
+                triggerSave();
+                EditorHistory.updateLastSnapshot();
+            };
+
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onEnd);
+            document.addEventListener('touchmove', onMove);
+            document.addEventListener('touchend', onEnd);
+        };
+
+        handle.addEventListener('mousedown', startResize);
+        handle.addEventListener('touchstart', startResize, { passive: false });
+    };
+
+    setupResizeHandle(leftHandle, true);
+    setupResizeHandle(rightHandle, false);
 
     // Bấm vào ảnh hoặc vùng ảnh: Chọn toàn bộ dòng ảnh (cho phép xóa bằng Backspace/Delete hoặc copy bằng Ctrl+C)
     container.addEventListener('click', (e) => {
-        if (e.target.closest('.image-toolbar') || e.target.closest('.image-caption')) return;
+        if (e.target.closest('.image-toolbar') || e.target.closest('.image-caption') || e.target.closest('.image-resize-handle')) return;
         const wrapper = contentEl.closest('.block-wrapper');
         if (wrapper) {
             selectSingleBlock(wrapper);
@@ -4360,9 +4675,27 @@ function renderImageBlock(contentEl, contentData) {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
             const action = btn.getAttribute('data-action');
-            if (action === 'resize-50') {
+            if (action === 'resize-fit') {
+                EditorHistory.recordBeforeAction();
+                mediaWrap.style.width = 'fit-content';
+                mediaWrap.classList.add('is-fit');
+                contentEl.querySelectorAll('[data-action^="resize-"]').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                triggerSave();
+                EditorHistory.updateLastSnapshot();
+                showToast('📐 Kích thước tự nhiên (Vừa vặn)');
+            } else if (action === 'resize-25') {
+                EditorHistory.recordBeforeAction();
+                mediaWrap.style.width = '25%';
+                mediaWrap.classList.remove('is-fit');
+                contentEl.querySelectorAll('[data-action^="resize-"]').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                triggerSave();
+                EditorHistory.updateLastSnapshot();
+            } else if (action === 'resize-50') {
                 EditorHistory.recordBeforeAction();
                 mediaWrap.style.width = '50%';
+                mediaWrap.classList.remove('is-fit');
                 contentEl.querySelectorAll('[data-action^="resize-"]').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 triggerSave();
@@ -4370,6 +4703,7 @@ function renderImageBlock(contentEl, contentData) {
             } else if (action === 'resize-75') {
                 EditorHistory.recordBeforeAction();
                 mediaWrap.style.width = '75%';
+                mediaWrap.classList.remove('is-fit');
                 contentEl.querySelectorAll('[data-action^="resize-"]').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 triggerSave();
@@ -4377,10 +4711,24 @@ function renderImageBlock(contentEl, contentData) {
             } else if (action === 'resize-100') {
                 EditorHistory.recordBeforeAction();
                 mediaWrap.style.width = '100%';
+                mediaWrap.classList.remove('is-fit');
                 contentEl.querySelectorAll('[data-action^="resize-"]').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 triggerSave();
                 EditorHistory.updateLastSnapshot();
+            } else if (action === 'toggle-frame') {
+                EditorHistory.recordBeforeAction();
+                const frameStyles = ['standard', 'shadow', 'rounded', 'clean'];
+                const curFrame = mediaWrap.getAttribute('data-frame') || 'standard';
+                const nextIdx = (frameStyles.indexOf(curFrame) + 1) % frameStyles.length;
+                const newFrame = frameStyles[nextIdx];
+                frameStyles.forEach(f => mediaWrap.classList.remove(`frame-${f}`));
+                mediaWrap.classList.add(`frame-${newFrame}`);
+                mediaWrap.setAttribute('data-frame', newFrame);
+                triggerSave();
+                EditorHistory.updateLastSnapshot();
+                const frameLabels = { standard: 'Chuẩn (Viền nhẹ)', shadow: 'Bóng đổ nổi', rounded: 'Bo tròn lớn', clean: 'Không viền' };
+                showToast(`🖼️ Khung: ${frameLabels[newFrame]}`);
             } else if (action === 'align-left') {
                 EditorHistory.recordBeforeAction();
                 container.className = 'image-block-container align-left';
@@ -4456,8 +4804,9 @@ function insertImageFromFile(file, targetWrapper = null) {
         const imgBlock = createBlockElement('image', JSON.stringify({
             src: dataUrl,
             caption: '',
-            width: '100%',
-            align: 'center'
+            width: 'fit-content',
+            align: 'center',
+            frameStyle: 'standard'
         }), generateId(), indent);
 
         if (wrapper && wrapper.parentNode) {
@@ -4604,8 +4953,9 @@ function applyImageToTarget(src, caption = '') {
     const imgBlock = createBlockElement('image', JSON.stringify({
         src: src,
         caption: caption,
-        width: '100%',
-        align: 'center'
+        width: 'fit-content',
+        align: 'center',
+        frameStyle: 'standard'
     }), generateId(), indent);
 
     if (wrapper && wrapper.parentNode) {
