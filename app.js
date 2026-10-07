@@ -2075,9 +2075,7 @@ function createBlockElement(type, content, id = generateId(), indent = 0) {
     const contentEl = wrapper.querySelector('.block-content');
     const handleEl = wrapper.querySelector('.block-handle');
     
-    if (type === 'image') {
-        renderImageBlock(contentEl, content);
-    } else {
+    if (type !== 'image') {
         contentEl.innerHTML = content;
     }
 
@@ -2883,7 +2881,11 @@ function setBlockType(element, type, initialContent = '') {
     if (type === 'code') placeholder = "Code snippet";
     if (type === 'quote') placeholder = "Empty quote";
     if (type === 'toggle') placeholder = "Toggle";
-    element.setAttribute('data-placeholder', placeholder);
+    if (type === 'image' || type === 'divider' || type === 'toc') {
+        element.removeAttribute('data-placeholder');
+    } else {
+        element.setAttribute('data-placeholder', placeholder);
+    }
 }
 
 function renderTableOfContents(element) {
@@ -4504,37 +4506,7 @@ function renderImageBlock(contentEl, contentData) {
     const safeSrc = src ? escapeHtml(src) : '';
     const isFit = (width === 'fit-content' || width === 'auto');
 
-    contentEl.innerHTML = `
-        <div class="image-block-container align-${align}">
-            <div class="image-media-wrapper frame-${frameStyle} ${isFit ? 'is-fit' : ''}" data-frame="${frameStyle}" style="width: ${width};">
-                <div class="image-resize-handle handle-left" title="Kéo để chỉnh kích thước"></div>
-                <div class="image-resize-handle handle-right" title="Kéo để chỉnh kích thước"></div>
-                <div class="image-inner-frame">
-                    <img class="note-image" src="${safeSrc}" alt="${safeCaption || 'Hình ảnh ghi chú'}" loading="lazy" />
-                </div>
-                <div class="image-resize-badge" style="display: none;">${width}</div>
-                <div class="image-toolbar" contenteditable="false">
-                    <button type="button" class="img-btn ${isFit ? 'active' : ''}" data-action="resize-fit" title="Vừa vặn (Kích thước tự nhiên)">Vừa</button>
-                    <button type="button" class="img-btn ${width === '25%' ? 'active' : ''}" data-action="resize-25" title="25% chiều rộng">25%</button>
-                    <button type="button" class="img-btn ${width === '50%' ? 'active' : ''}" data-action="resize-50" title="50% chiều rộng">50%</button>
-                    <button type="button" class="img-btn ${width === '75%' ? 'active' : ''}" data-action="resize-75" title="75% chiều rộng">75%</button>
-                    <button type="button" class="img-btn ${width === '100%' ? 'active' : ''}" data-action="resize-100" title="100% chiều rộng">100%</button>
-                    <span class="img-tb-divider"></span>
-                    <button type="button" class="img-btn" data-action="toggle-frame" title="Đổi khung ảnh: Chuẩn / Bóng đổ / Bo tròn / Không viền"><i class="ri-artboard-line"></i></button>
-                    <span class="img-tb-divider"></span>
-                    <button type="button" class="img-btn ${align === 'left' ? 'active' : ''}" data-action="align-left" title="Căn trái"><i class="ri-align-left"></i></button>
-                    <button type="button" class="img-btn ${align === 'center' || !align ? 'active' : ''}" data-action="align-center" title="Căn giữa"><i class="ri-align-center"></i></button>
-                    <button type="button" class="img-btn ${align === 'right' ? 'active' : ''}" data-action="align-right" title="Căn phải"><i class="ri-align-right"></i></button>
-                    <span class="img-tb-divider"></span>
-                    <button type="button" class="img-btn" data-action="caption" title="Thêm/sửa chú thích"><i class="ri-chat-1-line"></i></button>
-                    <button type="button" class="img-btn" data-action="zoom" title="Xem ảnh toàn màn hình"><i class="ri-zoom-in-line"></i></button>
-                    <button type="button" class="img-btn" data-action="download" title="Tải ảnh về máy"><i class="ri-download-2-line"></i></button>
-                    <button type="button" class="img-btn danger" data-action="delete" title="Xóa dòng ảnh"><i class="ri-delete-bin-line"></i></button>
-                </div>
-            </div>
-            <div class="image-caption" contenteditable="true" data-placeholder="Thêm chú thích ảnh...">${safeCaption}</div>
-        </div>
-    `;
+    contentEl.innerHTML = `<div class="image-block-container align-${align}"><div class="image-media-wrapper frame-${frameStyle} ${isFit ? 'is-fit' : ''}" data-frame="${frameStyle}" style="width: ${width};"><div class="image-resize-handle handle-left" title="Kéo để chỉnh kích thước"></div><div class="image-resize-handle handle-right" title="Kéo để chỉnh kích thước"></div><div class="image-inner-frame"><img class="note-image" src="${safeSrc}" alt="${safeCaption || 'Hình ảnh ghi chú'}" loading="lazy" /></div><div class="image-resize-badge" style="display: none;">${width}</div><div class="image-toolbar" contenteditable="false"><button type="button" class="img-btn ${isFit ? 'active' : ''}" data-action="resize-fit" title="Vừa vặn (Kích thước tự nhiên)">Vừa</button><button type="button" class="img-btn ${width === '25%' ? 'active' : ''}" data-action="resize-25" title="25% chiều rộng">25%</button><button type="button" class="img-btn ${width === '50%' ? 'active' : ''}" data-action="resize-50" title="50% chiều rộng">50%</button><button type="button" class="img-btn ${width === '75%' ? 'active' : ''}" data-action="resize-75" title="75% chiều rộng">75%</button><button type="button" class="img-btn ${width === '100%' ? 'active' : ''}" data-action="resize-100" title="100% chiều rộng">100%</button><span class="img-tb-divider"></span><button type="button" class="img-btn" data-action="toggle-frame" title="Đổi khung ảnh: Chuẩn / Bóng đổ / Bo tròn / Không viền"><i class="ri-artboard-line"></i></button><span class="img-tb-divider"></span><button type="button" class="img-btn ${align === 'left' ? 'active' : ''}" data-action="align-left" title="Căn trái"><i class="ri-align-left"></i></button><button type="button" class="img-btn ${align === 'center' || !align ? 'active' : ''}" data-action="align-center" title="Căn giữa"><i class="ri-align-center"></i></button><button type="button" class="img-btn ${align === 'right' ? 'active' : ''}" data-action="align-right" title="Căn phải"><i class="ri-align-right"></i></button><span class="img-tb-divider"></span><button type="button" class="img-btn" data-action="caption" title="Thêm/sửa chú thích"><i class="ri-chat-1-line"></i></button><button type="button" class="img-btn" data-action="zoom" title="Xem ảnh toàn màn hình"><i class="ri-zoom-in-line"></i></button><button type="button" class="img-btn" data-action="download" title="Tải ảnh về máy"><i class="ri-download-2-line"></i></button><button type="button" class="img-btn danger" data-action="delete" title="Xóa dòng ảnh"><i class="ri-delete-bin-line"></i></button></div></div><div class="image-caption" contenteditable="true" data-placeholder="Thêm chú thích ảnh...">${safeCaption}</div></div>`.trim();
 
     const container = contentEl.querySelector('.image-block-container');
     const mediaWrap = contentEl.querySelector('.image-media-wrapper');
