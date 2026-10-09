@@ -1,5 +1,5 @@
 // --- CONFIG & STATE ---
-const APP_VERSION = 'v3.9.2';
+const APP_VERSION = 'v3.9.3';
 const appState = {
     theme: localStorage.getItem('theme') || 'dark',
     activePageId: null,
@@ -2142,8 +2142,10 @@ function serializeBlocks() {
             const isFullWidth = tableEl ? tableEl.classList.contains('is-fullwidth') : true;
             const tableWidth = (tableEl && tableEl.style.width) ? tableEl.style.width : (isFullWidth ? '100%' : 'max-content');
             const rows = [];
+            const rowHeights = [];
             if (tableEl) {
                 tableEl.querySelectorAll('tbody tr').forEach(tr => {
+                    rowHeights.push(tr.style.height || '');
                     const rowData = [];
                     tr.querySelectorAll('th, td').forEach(cell => {
                         const clone = cell.cloneNode(true);
@@ -2170,7 +2172,7 @@ function serializeBlocks() {
             blocks.push({
                 id: wrapper.getAttribute('data-id'),
                 type: 'table',
-                content: JSON.stringify({ hasHeader, isFullWidth, tableWidth, rows, colWidths }),
+                content: JSON.stringify({ hasHeader, isFullWidth, tableWidth, rows, colWidths, rowHeights }),
                 indent: parseInt(wrapper.getAttribute('data-indent') || '0', 10)
             });
             return;
@@ -4745,11 +4747,16 @@ function initMultiBlockSelection() {
     if (!elements.blockEditor) return;
 
     elements.blockEditor.addEventListener('mousedown', (e) => {
-        if (e.target.closest('.block-handle') || e.target.closest('.todo-cb') || e.target.closest('.toggle-icon') || e.target.closest('.image-toolbar') || e.target.closest('.table-block-container') || e.target.closest('.col-resizer') || e.target.closest('.table-corner-resizer') || e.target.closest('.table-floating-toolbar')) {
+        if (e.target.closest('.block-handle') || e.target.closest('.todo-cb') || e.target.closest('.toggle-icon') || e.target.closest('.image-toolbar') || e.target.closest('.table-block-container') || e.target.closest('.col-resizer') || e.target.closest('.table-corner-resizer') || e.target.closest('.table-floating-toolbar') || e.target.closest('.block-wrapper[data-type="table"]')) {
             return;
         }
         isMouseDown = true;
         dragStartWrapper = e.target.closest('.block-wrapper');
+        if (dragStartWrapper && dragStartWrapper.getAttribute('data-type') === 'table') {
+            dragStartWrapper = null;
+            isMouseDown = false;
+            return;
+        }
         if (!e.shiftKey && !e.target.closest('.is-block-selected')) {
             clearBlockSelection();
         }
@@ -4758,6 +4765,7 @@ function initMultiBlockSelection() {
     elements.blockEditor.addEventListener('mousemove', (e) => {
         if (!isMouseDown || !dragStartWrapper) return;
         const currentWrapper = e.target.closest('.block-wrapper');
+        if (currentWrapper && currentWrapper.getAttribute('data-type') === 'table') return;
         if (currentWrapper && currentWrapper !== dragStartWrapper) {
             const allWrappers = Array.from(elements.blockEditor.querySelectorAll('.block-wrapper'));
             const idx1 = allWrappers.indexOf(dragStartWrapper);
@@ -4766,13 +4774,14 @@ function initMultiBlockSelection() {
                 const start = Math.min(idx1, idx2);
                 const end = Math.max(idx1, idx2);
                 allWrappers.forEach((w, idx) => {
-                    if (idx >= start && idx <= end) {
+                    const isTable = w.getAttribute('data-type') === 'table';
+                    if (idx >= start && idx <= end && !isTable) {
                         w.classList.add('is-block-selected');
                     } else {
                         w.classList.remove('is-block-selected');
                     }
                 });
-                selectedBlockWrappers = allWrappers.slice(start, end + 1);
+                selectedBlockWrappers = allWrappers.slice(start, end + 1).filter(w => w.getAttribute('data-type') !== 'table');
             }
         }
     });
@@ -6194,12 +6203,26 @@ function renderMathBlock(contentEl, initialFormula = '') {
 function renderTableBlock(contentEl, initialContent = '') {
     contentEl.contentEditable = false;
     contentEl.setAttribute('data-type', 'table');
+    contentEl.style.padding = '0';
+    contentEl.style.margin = '0';
+    contentEl.style.minHeight = '0';
+    contentEl.style.background = 'transparent';
+
+    const parentWrapper = contentEl.closest('.block-wrapper');
+    if (parentWrapper) {
+        parentWrapper.style.padding = '0';
+        parentWrapper.style.margin = '2px 0';
+        parentWrapper.style.minHeight = '0';
+        parentWrapper.style.background = 'transparent';
+        parentWrapper.setAttribute('data-type', 'table');
+    }
 
     let tableData = {
         hasHeader: true,
         isFullWidth: true,
         tableWidth: '100%',
         colWidths: [],
+        rowHeights: [],
         rows: [
             ['Tiêu đề 1', 'Tiêu đề 2', 'Tiêu đề 3'],
             ['', '', ''],
@@ -6312,7 +6335,9 @@ function renderTableBlock(contentEl, initialContent = '') {
 
     function syncDataFromDom() {
         const rows = [];
+        const rowHeights = [];
         tbody.querySelectorAll('tr').forEach(tr => {
+            rowHeights.push(tr.style.height || '');
             const rowData = [];
             tr.querySelectorAll('th, td').forEach(cell => {
                 const clone = cell.cloneNode(true);
@@ -6322,6 +6347,7 @@ function renderTableBlock(contentEl, initialContent = '') {
             if (rowData.length > 0) rows.push(rowData);
         });
         tableData.rows = rows;
+        tableData.rowHeights = rowHeights;
 
         // Lưu kích thước cột
         const colWidths = [];
@@ -6349,6 +6375,9 @@ function renderTableBlock(contentEl, initialContent = '') {
         tbody.innerHTML = '';
         tableData.rows.forEach((row, rIdx) => {
             const tr = document.createElement('tr');
+            if (tableData.rowHeights && tableData.rowHeights[rIdx]) {
+                tr.style.height = tableData.rowHeights[rIdx];
+            }
             row.forEach((cellVal, cIdx) => {
                 const isHeader = tableData.hasHeader && rIdx === 0;
                 const cell = document.createElement(isHeader ? 'th' : 'td');
@@ -6481,32 +6510,49 @@ function renderTableBlock(contentEl, initialContent = '') {
         });
     }
 
-    // Nút kéo chỉnh khung bảng góc dưới bên phải (Word-style frame adjustment)
+    // Nút kéo chỉnh khung bảng góc dưới bên phải (Word-style frame adjustment cả chiều rộng lẫn chiều cao)
     cornerResizer.addEventListener('mousedown', (e) => {
         e.preventDefault();
         e.stopPropagation();
         cornerResizer.classList.add('is-resizing');
 
         const startX = e.pageX;
+        const startY = e.pageY;
         const initialTableWidth = tableEl.getBoundingClientRect().width;
+        const initialTableHeight = tableEl.getBoundingClientRect().height;
         const cols = Array.from(colgroup.querySelectorAll('col'));
         const thCells = Array.from(tbody.querySelector('tr')?.children || []);
+        const trs = Array.from(tbody.querySelectorAll('tr'));
         const initialColWidths = thCells.map(c => c.getBoundingClientRect().width);
+        const initialRowHeights = trs.map(r => r.getBoundingClientRect().height);
 
         tableEl.classList.remove('is-fullwidth', 'is-fit');
         tableData.isFullWidth = false;
 
         function onMouseMove(moveEvent) {
             const deltaX = moveEvent.pageX - startX;
-            const newTableWidth = Math.max(180, initialTableWidth + deltaX);
+            const deltaY = moveEvent.pageY - startY;
+
+            // Chỉnh chiều rộng bảng và cột theo trục X
+            const newTableWidth = Math.max(160, initialTableWidth + deltaX);
             tableEl.style.width = `${newTableWidth}px`;
             tableWrapInner.style.width = `${newTableWidth}px`;
 
-            const ratio = newTableWidth / initialTableWidth;
+            const ratioX = newTableWidth / initialTableWidth;
             cols.forEach((col, idx) => {
-                const nw = Math.max(40, Math.round(initialColWidths[idx] * ratio));
+                const nw = Math.max(36, Math.round(initialColWidths[idx] * ratioX));
                 col.style.width = `${nw}px`;
             });
+
+            // Chỉnh chiều cao khung hàng theo trục Y (như Word)
+            if (initialTableHeight > 0 && trs.length > 0) {
+                const newTableHeight = Math.max(trs.length * 20, initialTableHeight + deltaY);
+                const ratioY = newTableHeight / initialTableHeight;
+                trs.forEach((tr, idx) => {
+                    const nh = Math.max(20, Math.round(initialRowHeights[idx] * ratioY));
+                    tr.style.height = `${nh}px`;
+                });
+            }
         }
 
         function onMouseUp() {
@@ -6525,6 +6571,17 @@ function renderTableBlock(contentEl, initialContent = '') {
 
         document.addEventListener('mousemove', onMouseMove);
         document.addEventListener('mouseup', onMouseUp);
+    });
+
+    // Double-click góc kéo để thu gọn chiều cao bảng về sát khít nội dung
+    cornerResizer.addEventListener('dblclick', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        tbody.querySelectorAll('tr').forEach(tr => tr.style.height = '');
+        tableData.rowHeights = [];
+        syncDataFromDom();
+        triggerSave();
+        showToast('📏 Đã thu gọn chiều cao bảng vừa khít nội dung!');
     });
 
     function addRow() {
@@ -6633,6 +6690,8 @@ function renderTableBlock(contentEl, initialContent = '') {
             if (frameBtn) frameBtn.classList.remove('active');
             if (label) label.textContent = 'Khung: Fit';
         }
+        tbody.querySelectorAll('tr').forEach(tr => tr.style.height = '');
+        tableData.rowHeights = [];
         triggerSave();
     }
 

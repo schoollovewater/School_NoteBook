@@ -3777,46 +3777,71 @@ body.is-dragging {
    TABLE BLOCK (DẠNG BẢNG NOTION / WORD)
    ========================================================================== */
 .block-wrapper[data-type="table"] {
-    width: 100%;
+    width: 100% !important;
+    margin: 2px 0 !important;
+    padding: 0 !important;
+    min-height: 0 !important;
+    height: auto !important;
     background: transparent !important;
-    padding: 2px 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    align-items: stretch !important;
 }
 
 .block-wrapper[data-type="table"].is-block-selected,
-.block-wrapper[data-type="table"].is-focused {
+.block-wrapper[data-type="table"].is-focused,
+.block-wrapper[data-type="table"] .table-block-container,
+.block-wrapper[data-type="table"] .block-content {
     background: transparent !important;
     outline: none !important;
+    box-shadow: none !important;
+}
+
+.block-wrapper[data-type="table"] .block-content {
+    width: 100% !important;
+    min-height: 0 !important;
+    height: auto !important;
+    font-size: 14px !important;
+    line-height: normal !important;
+    white-space: normal !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
 }
 
 .table-block-container {
-    width: 100%;
-    margin: 8px 0;
+    width: 100% !important;
+    margin: 2px 0 !important;
     position: relative;
     background: transparent !important;
     border: none !important;
     box-shadow: none !important;
     border-radius: 0 !important;
     padding: 0 !important;
+    min-height: 0 !important;
+    height: auto !important;
     user-select: text;
 }
 
 /* Toolbar nổi tinh tế kiểu Word/Notion (chỉ hiện khi hover hoặc focus vào bảng) */
 .table-floating-toolbar {
     position: absolute;
-    top: -34px;
+    top: -28px;
     right: 0;
     z-index: 30;
     display: flex;
     align-items: center;
     gap: 3px;
-    padding: 3px 8px;
+    padding: 2px 6px;
     background: var(--bg-elevated);
     border: 1px solid var(--border-color);
     border-radius: 6px;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
     backdrop-filter: blur(10px);
     opacity: 0;
-    transform: translateY(3px);
+    transform: translateY(2px);
     pointer-events: none;
     transition: opacity 0.15s ease, transform 0.15s ease;
     user-select: none;
@@ -3872,11 +3897,13 @@ body.is-dragging {
 
 /* Khung cuộn ngang bảng */
 .table-scroll-wrapper {
-    width: 100%;
+    width: 100% !important;
     overflow-x: auto;
     overflow-y: visible;
-    padding: 0 0 6px 0;
-    margin: 0;
+    padding: 0 !important;
+    margin: 0 !important;
+    min-height: 0 !important;
+    height: auto !important;
     position: relative;
     scrollbar-width: thin;
 }
@@ -3886,6 +3913,10 @@ body.is-dragging {
     position: relative;
     max-width: 100%;
     vertical-align: top;
+    padding: 0 !important;
+    margin: 0 !important;
+    min-height: 0 !important;
+    height: auto !important;
 }
 
 /* Bảng phong cách Word: không có card nền, kẻ ô rõ ràng */
@@ -3894,14 +3925,14 @@ body.is-dragging {
     border-collapse: separate;
     border-spacing: 0;
     table-layout: fixed;
-    margin: 0;
+    margin: 0 !important;
     font-size: 14px;
-    line-height: 1.5;
+    line-height: 1.4;
     color: var(--text-primary);
     border-top: 1px solid var(--border-color);
     border-left: 1px solid var(--border-color);
     border-radius: 4px;
-    background: transparent;
+    background: transparent !important;
     box-sizing: border-box;
 }
 
@@ -3927,8 +3958,8 @@ body.is-dragging {
 .notion-table td {
     border-right: 1px solid var(--border-color);
     border-bottom: 1px solid var(--border-color);
-    padding: 8px 12px;
-    min-width: 50px;
+    padding: 5px 10px;
+    min-width: 48px;
     text-align: left;
     vertical-align: top;
     outline: none;
@@ -3937,6 +3968,8 @@ body.is-dragging {
     white-space: pre-wrap;
     background: transparent;
     box-sizing: border-box;
+    font-size: 14px;
+    line-height: 1.4;
 }
 
 /* Placeholder cho ô trống */
@@ -4056,9 +4089,9 @@ body.is-dragging {
 /* Nút thêm nhanh cột (+) ở mép phải bảng */
 .table-quick-add-col-btn {
     position: absolute;
-    right: -24px;
+    right: -20px;
     top: 0;
-    width: 18px;
+    width: 16px;
     height: 100%;
     max-height: 80px;
     display: flex;
@@ -4066,9 +4099,9 @@ body.is-dragging {
     justify-content: center;
     background: transparent;
     border: 1px dashed var(--border-color);
-    border-radius: 4px;
+    border-radius: 3px;
     color: var(--text-placeholder);
-    font-size: 13px;
+    font-size: 11px;
     cursor: pointer;
     opacity: 0;
     transition: all 0.15s ease;
@@ -4089,17 +4122,17 @@ body.is-dragging {
 .table-quick-add-row-btn {
     position: absolute;
     left: 0;
-    bottom: -24px;
-    height: 18px;
-    padding: 0 10px;
+    bottom: -18px;
+    height: 16px;
+    padding: 0 8px;
     display: flex;
     align-items: center;
     justify-content: center;
     background: transparent;
     border: 1px dashed var(--border-color);
-    border-radius: 4px;
+    border-radius: 3px;
     color: var(--text-placeholder);
-    font-size: 12px;
+    font-size: 11px;
     cursor: pointer;
     opacity: 0;
     transition: all 0.15s ease;
