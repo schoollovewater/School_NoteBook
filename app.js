@@ -2134,22 +2134,35 @@ function serializeBlocks() {
 
         // Lưu trữ khối bảng (Table)
         if (type === 'table') {
-            const tableEl = contentEl.querySelector('table.notion-table');
+            const tableEl = contentEl.querySelector('table.word-table') || contentEl.querySelector('table.notion-table');
             const hasHeader = tableEl ? tableEl.classList.contains('has-header') : true;
+            const isFullWidth = tableEl ? !tableEl.classList.contains('is-fit') : true;
             const rows = [];
             if (tableEl) {
                 tableEl.querySelectorAll('tr').forEach(tr => {
                     const rowData = [];
                     tr.querySelectorAll('th, td').forEach(cell => {
-                        rowData.push(cell.innerHTML.trim());
+                        const clone = cell.cloneNode(true);
+                        const resizer = clone.querySelector('.col-resizer');
+                        if (resizer) resizer.remove();
+                        rowData.push(clone.innerHTML.trim());
                     });
                     if (rowData.length > 0) rows.push(rowData);
                 });
             }
+            const colWidths = [];
+            if (tableEl) {
+                const firstTr = tableEl.querySelector('tr');
+                if (firstTr) {
+                    firstTr.querySelectorAll('th, td').forEach(c => {
+                        colWidths.push(c.style.width || '');
+                    });
+                }
+            }
             blocks.push({
                 id: wrapper.getAttribute('data-id'),
                 type: 'table',
-                content: JSON.stringify({ hasHeader, rows }),
+                content: JSON.stringify({ hasHeader, isFullWidth, rows, colWidths }),
                 indent: parseInt(wrapper.getAttribute('data-indent') || '0', 10)
             });
             return;
@@ -6160,6 +6173,8 @@ function renderTableBlock(contentEl, initialContent = '') {
 
     let tableData = {
         hasHeader: true,
+        isFullWidth: true,
+        colWidths: [],
         rows: [
             ['Tiêu đề 1', 'Tiêu đề 2', 'Tiêu đề 3'],
             ['', '', ''],
@@ -6169,12 +6184,12 @@ function renderTableBlock(contentEl, initialContent = '') {
 
     if (initialContent) {
         if (typeof initialContent === 'object' && initialContent.rows) {
-            tableData = initialContent;
+            tableData = Object.assign(tableData, initialContent);
         } else if (typeof initialContent === 'string' && initialContent.trim().startsWith('{')) {
             try {
                 const parsed = JSON.parse(initialContent);
                 if (parsed && Array.isArray(parsed.rows) && parsed.rows.length > 0) {
-                    tableData = parsed;
+                    tableData = Object.assign(tableData, parsed);
                 }
             } catch (e) {}
         }
@@ -6199,14 +6214,17 @@ function renderTableBlock(contentEl, initialContent = '') {
 
     container.innerHTML = `
         <div class="table-floating-toolbar" contenteditable="false">
-            <button type="button" class="tbl-btn ${tableData.hasHeader ? 'active' : ''}" data-action="toggle-header" title="Bật/Tắt dòng tiêu đề">
+            <button type="button" class="tbl-btn ${tableData.hasHeader ? 'active' : ''}" data-action="toggle-header" title="Bật/Tắt hàng tiêu đề">
                 <i class="ri-heading"></i> <span>Tiêu đề</span>
             </button>
+            <button type="button" class="tbl-btn ${tableData.isFullWidth ? 'active' : ''}" data-action="toggle-frame-width" title="Đổi khung: Toàn trang (100%) hoặc Vừa vặn (Fit)">
+                <i class="ri-expand-width-line"></i> <span class="tbl-frame-label">${tableData.isFullWidth ? 'Khung: 100%' : 'Khung: Fit'}</span>
+            </button>
             <div class="tbl-divider"></div>
-            <button type="button" class="tbl-btn" data-action="add-row" title="Thêm dòng bên dưới ô đang chọn (Hoặc phím Enter / Tab)">
+            <button type="button" class="tbl-btn" data-action="add-row" title="Thêm dòng bên dưới (Phím tắt: Enter / Tab)">
                 <i class="ri-insert-row-bottom"></i> <span>+ Dòng</span>
             </button>
-            <button type="button" class="tbl-btn" data-action="add-col" title="Thêm cột bên phải ô đang chọn">
+            <button type="button" class="tbl-btn" data-action="add-col" title="Thêm cột bên phải">
                 <i class="ri-insert-column-right"></i> <span>+ Cột</span>
             </button>
             <button type="button" class="tbl-btn" data-action="del-row" title="Xóa dòng hiện tại">
@@ -6223,20 +6241,13 @@ function renderTableBlock(contentEl, initialContent = '') {
                 <i class="ri-delete-bin-line"></i>
             </button>
         </div>
-        <div class="table-main-wrapper">
-            <div class="table-scroll-wrapper">
-                <table class="notion-table ${tableData.hasHeader ? 'has-header' : ''}">
-                    <tbody></tbody>
-                </table>
-            </div>
-            <button type="button" class="table-add-col-btn" data-action="add-col-direct" title="Thêm cột mới">+</button>
+        <div class="table-scroll-wrapper">
+            <table class="word-table ${tableData.hasHeader ? 'has-header' : ''} ${tableData.isFullWidth ? 'is-fullwidth' : 'is-fit'}">
+                <tbody></tbody>
+            </table>
         </div>
-        <div class="table-bottom-bar">
-            <button type="button" class="table-add-row-btn" data-action="add-row-direct" title="Thêm dòng mới (Phím tắt: Tab hoặc Enter)">
-                <i class="ri-add-line"></i> <span>Thêm dòng</span>
-            </button>
-            <span class="table-hint-text">Mẹo: Bấm <kbd>Tab</kbd> hoặc <kbd>Enter</kbd> để thêm nhanh dòng mới</span>
-        </div>
+        <button type="button" class="table-quick-add-col-btn" data-action="add-col-direct" title="Thêm cột mới">+</button>
+        <button type="button" class="table-quick-add-row-btn" data-action="add-row-direct" title="Thêm dòng mới">+</button>
     `;
 
     const tbody = container.querySelector('tbody');
@@ -6248,11 +6259,24 @@ function renderTableBlock(contentEl, initialContent = '') {
         tbody.querySelectorAll('tr').forEach(tr => {
             const rowData = [];
             tr.querySelectorAll('th, td').forEach(cell => {
-                rowData.push(cell.innerHTML.trim());
+                const clone = cell.cloneNode(true);
+                const resizer = clone.querySelector('.col-resizer');
+                if (resizer) resizer.remove();
+                rowData.push(clone.innerHTML.trim());
             });
             if (rowData.length > 0) rows.push(rowData);
         });
         tableData.rows = rows;
+
+        // Lưu kích thước cột đã kéo
+        const colWidths = [];
+        const firstTr = tbody.querySelector('tr');
+        if (firstTr) {
+            firstTr.querySelectorAll('th, td').forEach(c => {
+                colWidths.push(c.style.width || '');
+            });
+        }
+        tableData.colWidths = colWidths;
     }
 
     function renderRows() {
@@ -6265,6 +6289,47 @@ function renderTableBlock(contentEl, initialContent = '') {
                 cell.contentEditable = 'true';
                 cell.setAttribute('data-placeholder', isHeader ? `Tiêu đề ${cIdx + 1}` : 'Nội dung...');
                 cell.innerHTML = cellVal || '';
+
+                if (tableData.colWidths && tableData.colWidths[cIdx]) {
+                    cell.style.width = tableData.colWidths[cIdx];
+                    tableEl.style.tableLayout = 'fixed';
+                }
+
+                // Thêm thanh kéo chỉnh độ rộng cột ở hàng đầu tiên (như Word)
+                if (rIdx === 0) {
+                    const resizer = document.createElement('div');
+                    resizer.className = 'col-resizer';
+                    resizer.contentEditable = 'false';
+                    resizer.title = 'Kéo để chỉnh độ rộng cột (như Word)';
+
+                    resizer.addEventListener('mousedown', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        resizer.classList.add('is-resizing');
+                        const startX = e.pageX;
+                        const startWidth = cell.offsetWidth;
+                        tableEl.style.tableLayout = 'fixed';
+
+                        function onMouseMove(moveEvent) {
+                            const deltaX = moveEvent.pageX - startX;
+                            const newWidth = Math.max(50, startWidth + deltaX);
+                            cell.style.width = `${newWidth}px`;
+                        }
+
+                        function onMouseUp() {
+                            resizer.classList.remove('is-resizing');
+                            document.removeEventListener('mousemove', onMouseMove);
+                            document.removeEventListener('mouseup', onMouseUp);
+                            syncDataFromDom();
+                            triggerSave();
+                        }
+
+                        document.addEventListener('mousemove', onMouseMove);
+                        document.addEventListener('mouseup', onMouseUp);
+                    });
+
+                    cell.appendChild(resizer);
+                }
 
                 cell.addEventListener('focus', () => {
                     activeCell = cell;
@@ -6344,6 +6409,9 @@ function renderTableBlock(contentEl, initialContent = '') {
             insertColIdx = Array.from(curTr.children).indexOf(activeCell) + 1;
         }
         tableData.rows.forEach(r => r.splice(insertColIdx, 0, ''));
+        if (tableData.colWidths && tableData.colWidths.length > 0) {
+            tableData.colWidths.splice(insertColIdx, 0, '');
+        }
         renderRows();
         triggerSave();
     }
@@ -6377,6 +6445,9 @@ function renderTableBlock(contentEl, initialContent = '') {
             targetColIdx = Array.from(curTr.children).indexOf(activeCell);
         }
         tableData.rows.forEach(r => r.splice(targetColIdx, 1));
+        if (tableData.colWidths && tableData.colWidths.length > 0) {
+            tableData.colWidths.splice(targetColIdx, 1);
+        }
         renderRows();
         triggerSave();
     }
@@ -6388,6 +6459,20 @@ function renderTableBlock(contentEl, initialContent = '') {
         const headerBtn = container.querySelector('[data-action="toggle-header"]');
         if (headerBtn) headerBtn.classList.toggle('active', tableData.hasHeader);
         renderRows();
+        triggerSave();
+    }
+
+    function toggleFrameWidth() {
+        syncDataFromDom();
+        tableData.isFullWidth = !tableData.isFullWidth;
+        tableEl.classList.toggle('is-fullwidth', tableData.isFullWidth);
+        tableEl.classList.toggle('is-fit', !tableData.isFullWidth);
+        const frameBtn = container.querySelector('[data-action="toggle-frame-width"]');
+        if (frameBtn) {
+            frameBtn.classList.toggle('active', tableData.isFullWidth);
+            const label = frameBtn.querySelector('.tbl-frame-label');
+            if (label) label.textContent = tableData.isFullWidth ? 'Khung: 100%' : 'Khung: Fit';
+        }
         triggerSave();
     }
 
@@ -6422,6 +6507,10 @@ function renderTableBlock(contentEl, initialContent = '') {
     container.querySelector('[data-action="toggle-header"]').addEventListener('click', (e) => {
         e.stopPropagation();
         toggleHeader();
+    });
+    container.querySelector('[data-action="toggle-frame-width"]').addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleFrameWidth();
     });
     container.querySelector('[data-action="add-row"]').addEventListener('click', (e) => {
         e.stopPropagation();
