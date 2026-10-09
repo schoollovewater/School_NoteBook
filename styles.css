@@ -2967,10 +2967,13 @@ body.is-dragging {
     margin: 0 !important;
 }
 
-/* Crucial: DO NOT outline or background-tint the full-width block-wrapper or container for image blocks! */
+/* Crucial: DO NOT outline or background-tint block-wrapper for image & table blocks! */
 .block-wrapper[data-type="image"].is-block-selected,
 .block-wrapper[data-type="image"].is-focused,
-.block-wrapper[data-type="image"] .image-block-container {
+.block-wrapper[data-type="image"] .image-block-container,
+.block-wrapper[data-type="table"].is-block-selected,
+.block-wrapper[data-type="table"].is-focused,
+.block-wrapper[data-type="table"] .table-block-container {
     outline: none !important;
     background: transparent !important;
     box-shadow: none !important;
@@ -3771,10 +3774,18 @@ body.is-dragging {
 }
 
 /* ==========================================================================
-   TABLE BLOCK (DẠNG BẢNG NOTION)
+   TABLE BLOCK (DẠNG BẢNG NOTION / WORD)
    ========================================================================== */
 .block-wrapper[data-type="table"] {
     width: 100%;
+    background: transparent !important;
+    padding: 2px 0 !important;
+}
+
+.block-wrapper[data-type="table"].is-block-selected,
+.block-wrapper[data-type="table"].is-focused {
+    background: transparent !important;
+    outline: none !important;
 }
 
 .table-block-container {
@@ -3863,24 +3874,40 @@ body.is-dragging {
 .table-scroll-wrapper {
     width: 100%;
     overflow-x: auto;
-    padding: 0;
+    overflow-y: visible;
+    padding: 0 0 6px 0;
     margin: 0;
+    position: relative;
     scrollbar-width: thin;
+}
+
+.table-wrap-inner {
+    display: inline-block;
+    position: relative;
+    max-width: 100%;
+    vertical-align: top;
 }
 
 /* Bảng phong cách Word: không có card nền, kẻ ô rõ ràng */
 .word-table,
 .notion-table {
-    width: 100%;
-    border-collapse: collapse;
-    table-layout: auto;
+    border-collapse: separate;
+    border-spacing: 0;
+    table-layout: fixed;
     margin: 0;
     font-size: 14px;
     line-height: 1.5;
     color: var(--text-primary);
-    border: 1px solid var(--border-color);
+    border-top: 1px solid var(--border-color);
+    border-left: 1px solid var(--border-color);
+    border-radius: 4px;
     background: transparent;
-    transition: width 0.15s ease;
+    box-sizing: border-box;
+}
+
+.word-table.is-fullwidth,
+.notion-table.is-fullwidth {
+    width: 100%;
 }
 
 .word-table.is-fit,
@@ -3898,9 +3925,10 @@ body.is-dragging {
 .word-table td,
 .notion-table th,
 .notion-table td {
-    border: 1px solid var(--border-color);
-    padding: 7px 12px;
-    min-width: 60px;
+    border-right: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+    padding: 8px 12px;
+    min-width: 50px;
     text-align: left;
     vertical-align: top;
     outline: none;
@@ -3950,26 +3978,87 @@ body.is-dragging {
 .col-resizer {
     position: absolute;
     top: 0;
-    right: -3px;
-    width: 6px;
-    height: 100%;
+    bottom: 0;
+    right: -4px;
+    width: 8px;
     cursor: col-resize;
     user-select: none;
-    z-index: 10;
+    z-index: 20;
+    background: transparent;
     transition: background 0.15s ease;
+}
+
+.col-resizer.is-last-col {
+    right: 0;
+    width: 6px;
 }
 
 .col-resizer:hover,
 .col-resizer.is-resizing {
     background: var(--accent);
+    width: 4px;
+    right: -2px;
+}
+
+.col-resizer.is-last-col:hover,
+.col-resizer.is-last-col.is-resizing {
+    right: 0;
+}
+
+/* Đường gióng dọc khi kéo cột (Column Guide Line như Word) */
+.table-resize-guide {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--accent);
+    z-index: 50;
+    pointer-events: none;
+    display: none;
+}
+
+/* Nút kéo chỉnh kích thước khung bảng ở góc dưới bên phải (Word-style Corner Resize Handle) */
+.table-corner-resizer {
+    position: absolute;
+    right: -8px;
+    bottom: -8px;
+    width: 18px;
+    height: 18px;
+    border-radius: 3px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: nwse-resize;
+    user-select: none;
+    z-index: 25;
+    opacity: 0;
+    color: var(--text-placeholder);
+    font-size: 11px;
+    transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.table-wrap-inner:hover .table-corner-resizer,
+.table-wrap-inner:focus-within .table-corner-resizer {
+    opacity: 0.85;
+}
+
+.table-corner-resizer:hover,
+.table-corner-resizer.is-resizing {
+    opacity: 1 !important;
+    color: var(--accent);
+    border-color: var(--accent);
+    background: var(--bg-surface);
 }
 
 /* Nút thêm nhanh cột (+) ở mép phải bảng */
 .table-quick-add-col-btn {
     position: absolute;
-    right: -20px;
+    right: -24px;
     top: 0;
-    width: 16px;
+    width: 18px;
     height: 100%;
     max-height: 80px;
     display: flex;
@@ -4000,9 +4089,9 @@ body.is-dragging {
 .table-quick-add-row-btn {
     position: absolute;
     left: 0;
-    bottom: -20px;
-    height: 16px;
-    padding: 0 8px;
+    bottom: -24px;
+    height: 18px;
+    padding: 0 10px;
     display: flex;
     align-items: center;
     justify-content: center;

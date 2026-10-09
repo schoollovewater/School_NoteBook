@@ -1,5 +1,5 @@
 // --- CONFIG & STATE ---
-const APP_VERSION = 'v3.9';
+const APP_VERSION = 'v3.9.2';
 const appState = {
     theme: localStorage.getItem('theme') || 'dark',
     activePageId: null,
@@ -158,6 +158,9 @@ function initApp() {
     document.getElementById('page-icon').addEventListener('click', changeIcon);
     
     // Sidebar Actions
+    const planEl = document.querySelector('.workspace-plan');
+    if (planEl) planEl.textContent = 'Personal • ' + APP_VERSION;
+
     document.getElementById('search-btn').addEventListener('click', openSearchModal);
     document.getElementById('settings-btn').addEventListener('click', () => {
         document.getElementById('settings-modal').style.display = 'flex';
@@ -2136,15 +2139,15 @@ function serializeBlocks() {
         if (type === 'table') {
             const tableEl = contentEl.querySelector('table.word-table') || contentEl.querySelector('table.notion-table');
             const hasHeader = tableEl ? tableEl.classList.contains('has-header') : true;
-            const isFullWidth = tableEl ? !tableEl.classList.contains('is-fit') : true;
+            const isFullWidth = tableEl ? tableEl.classList.contains('is-fullwidth') : true;
+            const tableWidth = (tableEl && tableEl.style.width) ? tableEl.style.width : (isFullWidth ? '100%' : 'max-content');
             const rows = [];
             if (tableEl) {
-                tableEl.querySelectorAll('tr').forEach(tr => {
+                tableEl.querySelectorAll('tbody tr').forEach(tr => {
                     const rowData = [];
                     tr.querySelectorAll('th, td').forEach(cell => {
                         const clone = cell.cloneNode(true);
-                        const resizer = clone.querySelector('.col-resizer');
-                        if (resizer) resizer.remove();
+                        clone.querySelectorAll('.col-resizer, .table-resize-guide, .table-corner-resizer').forEach(el => el.remove());
                         rowData.push(clone.innerHTML.trim());
                     });
                     if (rowData.length > 0) rows.push(rowData);
@@ -2152,17 +2155,22 @@ function serializeBlocks() {
             }
             const colWidths = [];
             if (tableEl) {
-                const firstTr = tableEl.querySelector('tr');
-                if (firstTr) {
-                    firstTr.querySelectorAll('th, td').forEach(c => {
-                        colWidths.push(c.style.width || '');
-                    });
+                const colEls = tableEl.querySelectorAll('colgroup col');
+                if (colEls.length > 0) {
+                    colEls.forEach(col => colWidths.push(col.style.width || ''));
+                } else {
+                    const firstTr = tableEl.querySelector('tr');
+                    if (firstTr) {
+                        firstTr.querySelectorAll('th, td').forEach(c => {
+                            colWidths.push(c.style.width || '');
+                        });
+                    }
                 }
             }
             blocks.push({
                 id: wrapper.getAttribute('data-id'),
                 type: 'table',
-                content: JSON.stringify({ hasHeader, isFullWidth, rows, colWidths }),
+                content: JSON.stringify({ hasHeader, isFullWidth, tableWidth, rows, colWidths }),
                 indent: parseInt(wrapper.getAttribute('data-indent') || '0', 10)
             });
             return;
@@ -2456,6 +2464,13 @@ function checkMarkdownShortcuts(target) {
 function selectBlockAndShowMenu(wrapper) {
     if (!wrapper) return;
     const contentEl = wrapper.querySelector('.block-content');
+    const currentType = wrapper.getAttribute('data-type') || 'text';
+    
+    // Nếu là khối bảng (table), bảng có thanh công cụ riêng, không hiện toolbar văn bản che bảng
+    if (currentType === 'table') {
+        clearBlockSelection();
+        return;
+    }
     
     // 1. Đưa block này vào selectedBlockWrappers và đánh dấu is-block-selected ("chọn cả dòng")
     clearBlockSelection();
@@ -2477,7 +2492,6 @@ function selectBlockAndShowMenu(wrapper) {
         sel.addRange(range);
     }
     
-    const currentType = wrapper.getAttribute('data-type') || 'text';
     updateBlockTypeBadge(currentType);
     
     // 4. Open Floating Toolbar right above this block
@@ -4405,6 +4419,11 @@ function initFloatingToolbar() {
             const hasBlocks = selectedBlockWrappers && selectedBlockWrappers.length > 0;
             const hasText = sel && !sel.isCollapsed && sel.rangeCount > 0 && sel.toString().trim().length > 0;
 
+            if (hasBlocks && selectedBlockWrappers.some(w => w.getAttribute('data-type') === 'table')) {
+                toolbar.style.display = 'none';
+                return;
+            }
+
             if (!hasText && !hasBlocks) {
                 toolbar.style.display = 'none';
                 if (colorDropdown) colorDropdown.style.display = 'none';
@@ -4425,6 +4444,11 @@ function initFloatingToolbar() {
                 if (container && container.nodeType === Node.TEXT_NODE) container = container.parentElement;
 
                 if (toolbar.contains(container) || (container && container.closest('#vocab-modal, #search-modal, #settings-modal'))) {
+                    return;
+                }
+
+                if (container && container.closest('.table-block-container')) {
+                    toolbar.style.display = 'none';
                     return;
                 }
 
@@ -4721,7 +4745,7 @@ function initMultiBlockSelection() {
     if (!elements.blockEditor) return;
 
     elements.blockEditor.addEventListener('mousedown', (e) => {
-        if (e.target.closest('.block-handle') || e.target.closest('.todo-cb') || e.target.closest('.toggle-icon') || e.target.closest('.image-toolbar')) {
+        if (e.target.closest('.block-handle') || e.target.closest('.todo-cb') || e.target.closest('.toggle-icon') || e.target.closest('.image-toolbar') || e.target.closest('.table-block-container') || e.target.closest('.col-resizer') || e.target.closest('.table-corner-resizer') || e.target.closest('.table-floating-toolbar')) {
             return;
         }
         isMouseDown = true;
@@ -6174,6 +6198,7 @@ function renderTableBlock(contentEl, initialContent = '') {
     let tableData = {
         hasHeader: true,
         isFullWidth: true,
+        tableWidth: '100%',
         colWidths: [],
         rows: [
             ['Tiêu đề 1', 'Tiêu đề 2', 'Tiêu đề 3'],
@@ -6212,13 +6237,15 @@ function renderTableBlock(contentEl, initialContent = '') {
     container.className = 'table-block-container';
     container.contentEditable = 'false';
 
+    let frameLabel = tableData.isFullWidth ? 'Khung: 100%' : (tableData.tableWidth && tableData.tableWidth !== 'max-content' ? 'Khung: Tùy chỉnh' : 'Khung: Fit');
+
     container.innerHTML = `
         <div class="table-floating-toolbar" contenteditable="false">
             <button type="button" class="tbl-btn ${tableData.hasHeader ? 'active' : ''}" data-action="toggle-header" title="Bật/Tắt hàng tiêu đề">
                 <i class="ri-heading"></i> <span>Tiêu đề</span>
             </button>
             <button type="button" class="tbl-btn ${tableData.isFullWidth ? 'active' : ''}" data-action="toggle-frame-width" title="Đổi khung: Toàn trang (100%) hoặc Vừa vặn (Fit)">
-                <i class="ri-expand-width-line"></i> <span class="tbl-frame-label">${tableData.isFullWidth ? 'Khung: 100%' : 'Khung: Fit'}</span>
+                <i class="ri-expand-width-line"></i> <span class="tbl-frame-label">${frameLabel}</span>
             </button>
             <div class="tbl-divider"></div>
             <button type="button" class="tbl-btn" data-action="add-row" title="Thêm dòng bên dưới (Phím tắt: Enter / Tab)">
@@ -6242,17 +6269,46 @@ function renderTableBlock(contentEl, initialContent = '') {
             </button>
         </div>
         <div class="table-scroll-wrapper">
-            <table class="word-table ${tableData.hasHeader ? 'has-header' : ''} ${tableData.isFullWidth ? 'is-fullwidth' : 'is-fit'}">
-                <tbody></tbody>
-            </table>
+            <div class="table-wrap-inner">
+                <div class="table-resize-guide"></div>
+                <table class="word-table ${tableData.hasHeader ? 'has-header' : ''} ${tableData.isFullWidth ? 'is-fullwidth' : 'is-fit'}">
+                    <colgroup></colgroup>
+                    <tbody></tbody>
+                </table>
+                <div class="table-corner-resizer" title="Kéo để điều chỉnh kích thước khung bảng (như Word)"><i class="ri-drag-move-fill"></i></div>
+            </div>
         </div>
         <button type="button" class="table-quick-add-col-btn" data-action="add-col-direct" title="Thêm cột mới">+</button>
         <button type="button" class="table-quick-add-row-btn" data-action="add-row-direct" title="Thêm dòng mới">+</button>
     `;
 
+    const tableWrapInner = container.querySelector('.table-wrap-inner');
     const tbody = container.querySelector('tbody');
+    const colgroup = container.querySelector('colgroup');
     const tableEl = container.querySelector('table');
+    const guide = container.querySelector('.table-resize-guide');
+    const cornerResizer = container.querySelector('.table-corner-resizer');
     let activeCell = null;
+
+    function applyTableWidth() {
+        if (tableData.tableWidth && tableData.tableWidth !== '100%' && tableData.tableWidth !== 'max-content') {
+            tableEl.style.width = tableData.tableWidth;
+            tableWrapInner.style.width = tableData.tableWidth;
+            tableEl.classList.remove('is-fullwidth', 'is-fit');
+        } else if (!tableData.isFullWidth) {
+            tableEl.style.width = 'max-content';
+            tableWrapInner.style.width = 'max-content';
+            tableEl.classList.remove('is-fullwidth');
+            tableEl.classList.add('is-fit');
+        } else {
+            tableEl.style.width = '100%';
+            tableWrapInner.style.width = '100%';
+            tableEl.classList.add('is-fullwidth');
+            tableEl.classList.remove('is-fit');
+        }
+    }
+
+    applyTableWidth();
 
     function syncDataFromDom() {
         const rows = [];
@@ -6260,26 +6316,36 @@ function renderTableBlock(contentEl, initialContent = '') {
             const rowData = [];
             tr.querySelectorAll('th, td').forEach(cell => {
                 const clone = cell.cloneNode(true);
-                const resizer = clone.querySelector('.col-resizer');
-                if (resizer) resizer.remove();
+                clone.querySelectorAll('.col-resizer, .table-resize-guide, .table-corner-resizer').forEach(el => el.remove());
                 rowData.push(clone.innerHTML.trim());
             });
             if (rowData.length > 0) rows.push(rowData);
         });
         tableData.rows = rows;
 
-        // Lưu kích thước cột đã kéo
+        // Lưu kích thước cột
         const colWidths = [];
-        const firstTr = tbody.querySelector('tr');
-        if (firstTr) {
-            firstTr.querySelectorAll('th, td').forEach(c => {
-                colWidths.push(c.style.width || '');
-            });
+        const cols = colgroup.querySelectorAll('col');
+        if (cols.length > 0) {
+            cols.forEach(col => colWidths.push(col.style.width || ''));
         }
         tableData.colWidths = colWidths;
+        tableData.tableWidth = tableEl.style.width || (tableData.isFullWidth ? '100%' : 'max-content');
     }
 
     function renderRows() {
+        const numCols = tableData.rows[0] ? tableData.rows[0].length : 1;
+
+        // Render colgroup
+        colgroup.innerHTML = '';
+        for (let i = 0; i < numCols; i++) {
+            const col = document.createElement('col');
+            if (tableData.colWidths && tableData.colWidths[i]) {
+                col.style.width = tableData.colWidths[i];
+            }
+            colgroup.appendChild(col);
+        }
+
         tbody.innerHTML = '';
         tableData.rows.forEach((row, rIdx) => {
             const tr = document.createElement('tr');
@@ -6290,37 +6356,70 @@ function renderTableBlock(contentEl, initialContent = '') {
                 cell.setAttribute('data-placeholder', isHeader ? `Tiêu đề ${cIdx + 1}` : 'Nội dung...');
                 cell.innerHTML = cellVal || '';
 
-                if (tableData.colWidths && tableData.colWidths[cIdx]) {
-                    cell.style.width = tableData.colWidths[cIdx];
-                    tableEl.style.tableLayout = 'fixed';
-                }
-
                 // Thêm thanh kéo chỉnh độ rộng cột ở hàng đầu tiên (như Word)
                 if (rIdx === 0) {
                     const resizer = document.createElement('div');
-                    resizer.className = 'col-resizer';
+                    resizer.className = 'col-resizer' + (cIdx === numCols - 1 ? ' is-last-col' : '');
                     resizer.contentEditable = 'false';
                     resizer.title = 'Kéo để chỉnh độ rộng cột (như Word)';
 
                     resizer.addEventListener('mousedown', (e) => {
                         e.preventDefault();
                         e.stopPropagation();
+
                         resizer.classList.add('is-resizing');
                         const startX = e.pageX;
-                        const startWidth = cell.offsetWidth;
-                        tableEl.style.tableLayout = 'fixed';
+
+                        // Chuyển toàn bộ các cột sang độ rộng pixel thực tế
+                        const cols = Array.from(colgroup.querySelectorAll('col'));
+                        const thCells = Array.from(tr.children);
+                        const initialWidths = thCells.map(th => th.getBoundingClientRect().width);
+                        cols.forEach((col, idx) => {
+                            col.style.width = `${initialWidths[idx]}px`;
+                        });
+                        const initialColWidth = initialWidths[cIdx];
+                        const initialTableWidth = tableEl.getBoundingClientRect().width;
+                        tableEl.style.width = `${initialTableWidth}px`;
+                        tableWrapInner.style.width = `${initialTableWidth}px`;
+                        tableEl.classList.remove('is-fullwidth', 'is-fit');
+                        tableData.isFullWidth = false;
+
+                        // Hiển thị đường gióng dọc
+                        guide.style.display = 'block';
+                        guide.style.top = '0';
+                        guide.style.height = `${tableEl.offsetHeight}px`;
+                        guide.style.left = `${cell.offsetLeft + cell.offsetWidth}px`;
 
                         function onMouseMove(moveEvent) {
                             const deltaX = moveEvent.pageX - startX;
-                            const newWidth = Math.max(50, startWidth + deltaX);
-                            cell.style.width = `${newWidth}px`;
+                            const newWidth = Math.max(45, initialColWidth + deltaX);
+                            cols[cIdx].style.width = `${newWidth}px`;
+
+                            // Cập nhật tổng độ rộng bảng
+                            let totalW = 0;
+                            cols.forEach(c => {
+                                totalW += parseFloat(c.style.width) || 50;
+                            });
+                            tableEl.style.width = `${totalW}px`;
+                            tableWrapInner.style.width = `${totalW}px`;
+
+                            // Cập nhật vị trí đường gióng
+                            guide.style.left = `${cell.offsetLeft + cell.offsetWidth}px`;
+                            guide.style.height = `${tableEl.offsetHeight}px`;
                         }
 
                         function onMouseUp() {
                             resizer.classList.remove('is-resizing');
+                            guide.style.display = 'none';
                             document.removeEventListener('mousemove', onMouseMove);
                             document.removeEventListener('mouseup', onMouseUp);
                             syncDataFromDom();
+                            const frameBtn = container.querySelector('[data-action="toggle-frame-width"]');
+                            if (frameBtn) {
+                                frameBtn.classList.remove('active');
+                                const label = frameBtn.querySelector('.tbl-frame-label');
+                                if (label) label.textContent = 'Khung: ' + Math.round(tableEl.getBoundingClientRect().width) + 'px';
+                            }
                             triggerSave();
                         }
 
@@ -6381,6 +6480,52 @@ function renderTableBlock(contentEl, initialContent = '') {
             tbody.appendChild(tr);
         });
     }
+
+    // Nút kéo chỉnh khung bảng góc dưới bên phải (Word-style frame adjustment)
+    cornerResizer.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        cornerResizer.classList.add('is-resizing');
+
+        const startX = e.pageX;
+        const initialTableWidth = tableEl.getBoundingClientRect().width;
+        const cols = Array.from(colgroup.querySelectorAll('col'));
+        const thCells = Array.from(tbody.querySelector('tr')?.children || []);
+        const initialColWidths = thCells.map(c => c.getBoundingClientRect().width);
+
+        tableEl.classList.remove('is-fullwidth', 'is-fit');
+        tableData.isFullWidth = false;
+
+        function onMouseMove(moveEvent) {
+            const deltaX = moveEvent.pageX - startX;
+            const newTableWidth = Math.max(180, initialTableWidth + deltaX);
+            tableEl.style.width = `${newTableWidth}px`;
+            tableWrapInner.style.width = `${newTableWidth}px`;
+
+            const ratio = newTableWidth / initialTableWidth;
+            cols.forEach((col, idx) => {
+                const nw = Math.max(40, Math.round(initialColWidths[idx] * ratio));
+                col.style.width = `${nw}px`;
+            });
+        }
+
+        function onMouseUp() {
+            cornerResizer.classList.remove('is-resizing');
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+            syncDataFromDom();
+            const frameBtn = container.querySelector('[data-action="toggle-frame-width"]');
+            if (frameBtn) {
+                frameBtn.classList.remove('active');
+                const label = frameBtn.querySelector('.tbl-frame-label');
+                if (label) label.textContent = 'Khung: ' + Math.round(tableEl.getBoundingClientRect().width) + 'px';
+            }
+            triggerSave();
+        }
+
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+    });
 
     function addRow() {
         syncDataFromDom();
@@ -6465,13 +6610,28 @@ function renderTableBlock(contentEl, initialContent = '') {
     function toggleFrameWidth() {
         syncDataFromDom();
         tableData.isFullWidth = !tableData.isFullWidth;
-        tableEl.classList.toggle('is-fullwidth', tableData.isFullWidth);
-        tableEl.classList.toggle('is-fit', !tableData.isFullWidth);
+        const cols = Array.from(colgroup.querySelectorAll('col'));
         const frameBtn = container.querySelector('[data-action="toggle-frame-width"]');
-        if (frameBtn) {
-            frameBtn.classList.toggle('active', tableData.isFullWidth);
-            const label = frameBtn.querySelector('.tbl-frame-label');
-            if (label) label.textContent = tableData.isFullWidth ? 'Khung: 100%' : 'Khung: Fit';
+        const label = frameBtn ? frameBtn.querySelector('.tbl-frame-label') : null;
+
+        if (tableData.isFullWidth) {
+            tableEl.style.width = '100%';
+            tableWrapInner.style.width = '100%';
+            tableEl.classList.add('is-fullwidth');
+            tableEl.classList.remove('is-fit');
+            tableData.tableWidth = '100%';
+            tableData.colWidths = [];
+            cols.forEach(c => c.style.width = '');
+            if (frameBtn) frameBtn.classList.add('active');
+            if (label) label.textContent = 'Khung: 100%';
+        } else {
+            tableEl.style.width = 'max-content';
+            tableWrapInner.style.width = 'max-content';
+            tableEl.classList.remove('is-fullwidth');
+            tableEl.classList.add('is-fit');
+            tableData.tableWidth = 'max-content';
+            if (frameBtn) frameBtn.classList.remove('active');
+            if (label) label.textContent = 'Khung: Fit';
         }
         triggerSave();
     }
