@@ -24,7 +24,7 @@
     <!-- KaTeX CSS for Math Equations (LaTeX) -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
     
-    <link rel="stylesheet" href="styles.css?v=3.5">
+    <link rel="stylesheet" href="styles.css?v=3.8">
 </head>
 <body>
     <div class="app-background">
@@ -135,7 +135,9 @@
                     </div>
                 </div>
                 <div class="topbar-right">
-                    <span class="save-status text-muted" id="save-status">Saved</span>
+                    <button class="save-status text-muted" id="save-status" title="Nhấn để đồng bộ toàn bộ dữ liệu lên Cloud ngay lập tức" onclick="app.manualSync()">
+                        <i class="ri-checkbox-circle-line"></i> <span class="save-status-text">Đã đồng bộ</span>
+                    </button>
                     <button class="icon-btn topbar-mini-btn" id="topbar-mini-btn" title="Ghi nhanh (Mini Note)" onclick="app.openMiniNote()">
                         <i class="ri-flashlight-line"></i>
                     </button>
@@ -401,6 +403,13 @@
             <div class="item-info">
                 <div class="item-title">Table of contents</div>
                 <div class="item-desc">Outline your page with clickable headings.</div>
+            </div>
+        </div>
+        <div class="slash-menu-item" data-type="table" data-keywords="table bang grid spreadsheet cot hang row column du lieu">
+            <div class="item-icon"><i class="ri-table-line"></i></div>
+            <div class="item-info">
+                <div class="item-title">Table (Bảng)</div>
+                <div class="item-desc">Tạo bảng dữ liệu hàng & cột linh hoạt.</div>
             </div>
         </div>
         <div class="slash-menu-item" data-type="image">
@@ -695,6 +704,7 @@
                     <div class="nft-dropdown-item" data-type="quote"><i class="ri-double-quotes-l"></i> Trích dẫn</div>
                     <div class="nft-dropdown-item" data-type="code"><i class="ri-code-box-line"></i> Khối code</div>
                     <div class="nft-dropdown-item" data-type="math"><i class="ri-functions"></i> Công thức toán (Math)</div>
+                    <div class="nft-dropdown-item" data-type="table"><i class="ri-table-line"></i> Bảng (Table)</div>
                 </div>
             </div>
 
@@ -970,7 +980,7 @@
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 
     <script src="firebase-config.js"></script>
-    <script src="shared/note-schema.js?v=3.5"></script>
-    <script src="app.js?v=3.5"></script>
+    <script src="shared/note-schema.js?v=3.8"></script>
+    <script src="app.js?v=3.8"></script>
 </body>
 </html>

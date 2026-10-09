@@ -21,7 +21,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
     <script src="firebase-config.js"></script>
-    <script src="shared/note-schema.js?v=3.5"></script>
+    <script src="shared/note-schema.js?v=3.8"></script>
 
     <style>
         :root[data-theme="dark"] {
@@ -655,7 +655,7 @@
             try {
                 if (!firebase.apps.length) firebase.initializeApp(window.firebaseConfig);
                 db = firebase.firestore();
-                db.enablePersistence().catch(err => console.warn('Offline persistence:', err));
+                db.enablePersistence({ synchronizeTabs: true }).catch(err => console.warn('Offline persistence:', err));
             } catch (e) { console.warn('Firebase init error:', e); }
         }
 
@@ -1077,6 +1077,7 @@
                         // Gửi lên Firestore nếu có
                         if (db) {
                             cloudPromises.push(db.collection('vocab_inbox').doc(item.id).set(item));
+                            cloudPromises.push(db.collection('vocab_items').doc(item.id).set(item));
                         }
                     } else {
                         const page = NoteSchema.makePage({

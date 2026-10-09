@@ -20,11 +20,75 @@ const elements = {
 
 // --- FIREBASE SYNC ---
 let db;
+let firebaseSyncTimeout;
+let vocabSyncTimeout;
+
 if (typeof window.USE_FIREBASE !== 'undefined' && window.USE_FIREBASE) {
     if (!firebase.apps.length) {
         firebase.initializeApp(window.firebaseConfig);
     }
     db = firebase.firestore();
+    try {
+        db.enablePersistence({ synchronizeTabs: true }).catch(err => {
+            if (err.code === 'failed-precondition') {
+                console.warn('Firestore multi-tab persistence: active in another tab');
+            } else if (err.code === 'unimplemented') {
+                console.warn('Firestore persistence not supported in this browser');
+            }
+        });
+    } catch (e) {
+        console.warn('Firestore persistence init warning:', e);
+    }
+}
+
+function broadcastLocalChange(type, payload) {
+    if ('BroadcastChannel' in window) {
+        try {
+            const ch = new BroadcastChannel(NoteSchema.CHANNEL);
+            ch.postMessage(Object.assign({ type: type }, payload || {}));
+        } catch (e) {}
+    }
+}
+
+function updateSyncStatusUI(status, customMsg) {
+    const el = (typeof elements !== 'undefined' && elements.saveStatus) || document.getElementById('save-status');
+    if (!el) return;
+    
+    el.className = 'save-status ' + (status || '');
+    let icon = 'ri-cloud-line';
+    let text = 'Đã lưu';
+
+    switch (status) {
+        case 'saving':
+            icon = 'ri-loader-4-line ri-spin';
+            text = customMsg || 'Đang lưu...';
+            break;
+        case 'syncing':
+            icon = 'ri-refresh-line ri-spin';
+            text = customMsg || 'Đang đồng bộ...';
+            break;
+        case 'synced':
+            icon = 'ri-checkbox-circle-line';
+            text = customMsg || 'Đã đồng bộ';
+            break;
+        case 'offline':
+            icon = 'ri-wifi-off-line';
+            text = customMsg || 'Offline (Lưu máy)';
+            break;
+        case 'error':
+            icon = 'ri-error-warning-line';
+            text = customMsg || 'Lỗi Cloud';
+            break;
+        case 'local-only':
+            icon = 'ri-save-line';
+            text = customMsg || 'Đã lưu máy';
+            break;
+        default:
+            icon = 'ri-checkbox-circle-line';
+            text = customMsg || 'Đã đồng bộ';
+    }
+
+    el.innerHTML = `<i class="${icon}"></i> <span class="save-status-text">${text}</span>`;
 }
 
 // --- INITIALIZATION ---
@@ -324,43 +388,76 @@ function createNewPage() {
         icon: '📄',
         blocks: [{ id: generateId(), type: 'text', content: '' }]
     };
+    openPage(id);
     saveToStorage();
     renderSidebar();
-    openPage(id);
+}
+
+function showCloudLoadingPlaceholder() {
+    if (elements.pageTitleInput) elements.pageTitleInput.value = '';
+    if (elements.blockEditor) {
+        elements.blockEditor.innerHTML = `
+            <div class="cloud-loading-banner" style="text-align: center; padding: 60px 20px; color: var(--text-secondary);">
+                <i class="ri-refresh-line ri-spin" style="font-size: 36px; display: block; margin-bottom: 12px; color: var(--accent-color);"></i>
+                <div style="font-size: 16px; font-weight: 500;">Đang kết nối và tải ghi chú từ Cloud...</div>
+                <div style="font-size: 13px; margin-top: 6px; opacity: 0.7;">Dữ liệu sẽ hiển thị ngay khi đồng bộ xong</div>
+            </div>
+        `;
+    }
+}
+
+function createDefaultWelcomePage() {
+    const defaultId = generateId();
+    appState.pages[defaultId] = {
+        id: defaultId,
+        title: 'Welcome to School NoteBook',
+        icon: '👋',
+        blocks: [
+            { id: generateId(), type: 'h1', content: 'Chào mừng bạn!' },
+            { id: generateId(), type: 'text', content: 'Gõ / để mở menu lệnh.' }
+        ]
+    };
+    saveToStorage();
+    renderSidebar();
+    openPage(defaultId);
 }
 
 function loadPages() {
     const stored = localStorage.getItem('schooldb_pages');
+    let hasLocalPages = false;
     if (stored) {
-        appState.pages = JSON.parse(stored);
-        renderSidebar();
-        const firstPageId = Object.keys(appState.pages)[0];
-        if (firstPageId) openPage(firstPageId);
-    } else {
-        // Create default page
-        const defaultId = generateId();
-        appState.pages[defaultId] = {
-            id: defaultId,
-            title: 'Welcome to School NoteBook',
-            icon: '👋',
-            blocks: [
-                { id: generateId(), type: 'h1', content: 'Chào mừng bạn!' },
-                { id: generateId(), type: 'text', content: 'Gõ / để mở menu lệnh.' }
-            ]
-        };
-        saveToStorage();
-        renderSidebar();
-        openPage(defaultId);
+        try {
+            const parsed = JSON.parse(stored);
+            if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+                appState.pages = parsed;
+                hasLocalPages = true;
+                renderSidebar();
+                const firstPageId = Object.keys(appState.pages)[0];
+                if (firstPageId) openPage(firstPageId);
+            }
+        } catch (e) {
+            console.warn('Lỗi đọc local pages:', e);
+        }
+    }
+
+    if (!hasLocalPages) {
+        if (!db) {
+            createDefaultWelcomePage();
+        } else {
+            showCloudLoadingPlaceholder();
+        }
     }
 
     const workspaceName = localStorage.getItem('schooldb_workspace');
     if (workspaceName) {
-        document.querySelector('.workspace-name').textContent = workspaceName;
+        const wsEl = document.querySelector('.workspace-name');
+        if (wsEl) wsEl.textContent = workspaceName;
     }
     
     // Realtime sync from cloud + cross-tab sync (Mini Note on same device)
     startCloudSync();
     startLocalSync();
+    setupNetworkSyncListeners();
 }
 
 // --- REALTIME SYNC ---
@@ -368,15 +465,28 @@ function loadPages() {
 // do Mini Note / CLI cũ gửi lên sẽ được chuyển sang blocks và ghi đè lại lên Cloud.
 function isEditingActivePage() {
     const ae = document.activeElement;
-    return !!ae && (ae === elements.pageTitleInput || elements.blockEditor.contains(ae));
+    return !!ae && (ae === elements.pageTitleInput || (elements.blockEditor && elements.blockEditor.contains(ae)));
 }
 
 function startCloudSync() {
-    if (!db) return;
+    if (!db) {
+        updateSyncStatusUI('local-only');
+        return;
+    }
+
+    updateSyncStatusUI(navigator.onLine ? 'syncing' : 'offline', navigator.onLine ? 'Đang kết nối Cloud...' : 'Offline (Lưu máy)');
+
+    // 1. Sync ghi chú (notes)
     db.collection('notes').onSnapshot(snapshot => {
         let sidebarDirty = false;
         let activeDirty = false;
         let newInbox = 0;
+
+        if (snapshot.empty && Object.keys(appState.pages).length === 0) {
+            createDefaultWelcomePage();
+            updateSyncStatusUI('synced');
+            return;
+        }
 
         snapshot.docChanges().forEach(change => {
             const doc = change.doc;
@@ -406,7 +516,14 @@ function startCloudSync() {
 
             appState.pages[page.id] = Object.assign({}, appState.pages[page.id] || {}, page);
             sidebarDirty = true;
-            if (page.id === appState.activePageId) activeDirty = true;
+            
+            // Cập nhật trang đang mở: nếu trùng activePageId, hoặc chưa mở trang nào hợp lệ
+            if (page.id === appState.activePageId || !appState.activePageId || !appState.pages[appState.activePageId]) {
+                activeDirty = true;
+                if (!appState.activePageId || !appState.pages[appState.activePageId]) {
+                    appState.activePageId = page.id;
+                }
+            }
             if (!existed && page.inbox && change.type === 'added' && cloudSyncReady) newInbox++;
         });
 
@@ -419,21 +536,62 @@ function startCloudSync() {
             else openFirstPageOrCreate();
         }
         if (newInbox > 0) showToast(`📥 ${newInbox} ghi chú mới từ Mini Note`);
+        
+        // Đẩy bất kỳ trang local nào chưa có trên Cloud lên (initial push nếu app 1 có trang cũ)
+        if (!cloudSyncReady) {
+            pushLocalMissingPagesToCloud();
+        }
         cloudSyncReady = true;
+        updateSyncStatusUI(navigator.onLine ? 'synced' : 'offline');
     }, err => {
         console.error('Firebase realtime error:', err);
-        elements.saveStatus.textContent = 'Cloud Error';
+        updateSyncStatusUI('error');
     });
 
-    // Từ vựng gửi từ Mini Note ở thiết bị khác
+    // 2. Đồng bộ Kho từ vựng hai chiều (vocab_items)
+    db.collection('vocab_items').onSnapshot(snapshot => {
+        let vocabDirty = false;
+        snapshot.docChanges().forEach(change => {
+            if (change.doc.metadata.hasPendingWrites) return;
+            const id = change.doc.id;
+            const data = change.doc.data();
+            if (change.type === 'removed') {
+                const idx = vocab.items.findIndex(i => i.id === id);
+                if (idx !== -1) {
+                    vocab.items.splice(idx, 1);
+                    vocabDirty = true;
+                }
+            } else if (change.type === 'added' || change.type === 'modified') {
+                if (data && data.word) {
+                    const existingIdx = vocab.items.findIndex(i => i.id === id);
+                    if (existingIdx !== -1) {
+                        vocab.items[existingIdx] = Object.assign({}, vocab.items[existingIdx], data);
+                    } else {
+                        vocab.items.unshift(data);
+                    }
+                    vocabDirty = true;
+                }
+            }
+        });
+        if (vocabDirty) {
+            localStorage.setItem('schooldb_vocab_items', JSON.stringify(vocab.items));
+            vocab.renderStats();
+            vocab.renderGrid();
+            if (vocab.currentView === 'flashcard') vocab.initDeck();
+        }
+    }, err => console.warn('vocab_items sync warning:', err));
+
+    // 3. Từ vựng gửi từ Mini Note ở thiết bị khác (vocab_inbox trung chuyển)
     db.collection('vocab_inbox').onSnapshot(snapshot => {
         let added = 0;
         snapshot.docChanges().forEach(change => {
             if (change.type !== 'added' || change.doc.metadata.hasPendingWrites) return;
             const data = change.doc.data();
             if (data && data.word && !vocab.items.some(i => i.id === data.id)) {
-                vocab.items.unshift(Object.assign(NoteSchema.makeVocabItem(data), data.id ? { id: data.id } : {}));
+                const item = Object.assign(NoteSchema.makeVocabItem(data), data.id ? { id: data.id } : {});
+                vocab.items.unshift(item);
                 added++;
+                db.collection('vocab_items').doc(item.id).set(item).catch(() => {});
             }
             change.doc.ref.delete().catch(() => {});
         });
@@ -444,6 +602,116 @@ function startCloudSync() {
             showToast(`📚 Đã nhận ${added} từ vựng mới từ Mini Note`);
         }
     }, err => console.warn('vocab_inbox sync error:', err));
+}
+
+async function pushLocalMissingPagesToCloud() {
+    if (!db || !navigator.onLine) return;
+    try {
+        const localPageIds = Object.keys(appState.pages);
+        if (localPageIds.length === 0) return;
+        
+        const batch = db.batch();
+        let batchCount = 0;
+        for (const id of localPageIds) {
+            const page = appState.pages[id];
+            if (page) {
+                batch.set(db.collection('notes').doc(id), pageToCloud(page), { merge: true });
+                batchCount++;
+                if (batchCount >= 400) break;
+            }
+        }
+        if (batchCount > 0) {
+            await batch.commit();
+        }
+
+        if (vocab && Array.isArray(vocab.items) && vocab.items.length > 0) {
+            const vBatch = db.batch();
+            let vCount = 0;
+            vocab.items.forEach(item => {
+                if (item && item.id && item.word) {
+                    vBatch.set(db.collection('vocab_items').doc(item.id), item, { merge: true });
+                    vCount++;
+                    if (vCount >= 400) return;
+                }
+            });
+            if (vCount > 0) {
+                await vBatch.commit();
+            }
+        }
+    } catch (e) {
+        console.warn('pushLocalMissingPagesToCloud warning:', e);
+    }
+}
+
+async function syncAllToCloud(silent = false) {
+    if (!db) {
+        if (!silent) showToast('⚠️ Chưa cấu hình Firebase Cloud');
+        return;
+    }
+    if (!navigator.onLine) {
+        if (!silent) showToast('📡 Đang ngoại tuyến. Dữ liệu đã lưu an toàn trên máy.');
+        updateSyncStatusUI('offline');
+        return;
+    }
+
+    updateSyncStatusUI('syncing', 'Đang đồng bộ...');
+    try {
+        if (appState.activePageId && appState.pages[appState.activePageId]) {
+            appState.pages[appState.activePageId].title = elements.pageTitleInput.value;
+            appState.pages[appState.activePageId].blocks = serializeBlocks();
+            localStorage.setItem('schooldb_pages', JSON.stringify(appState.pages));
+        }
+
+        const pageIds = Object.keys(appState.pages);
+        const batch = db.batch();
+        let count = 0;
+        for (const id of pageIds) {
+            const page = appState.pages[id];
+            if (page) {
+                batch.set(db.collection('notes').doc(id), pageToCloud(page), { merge: true });
+                count++;
+                if (count >= 400) break;
+            }
+        }
+
+        if (vocab && Array.isArray(vocab.items)) {
+            vocab.items.forEach(item => {
+                if (item && item.id && item.word) {
+                    batch.set(db.collection('vocab_items').doc(item.id), item, { merge: true });
+                }
+            });
+        }
+
+        await batch.commit();
+        updateSyncStatusUI('synced');
+        broadcastLocalChange('pages-updated', { count });
+        broadcastLocalChange('vocab-updated');
+        if (!silent) {
+            showToast(`☁️ Đã đồng bộ ${count} ghi chú & ${vocab.items.length} từ vựng lên Cloud!`);
+        }
+    } catch (err) {
+        console.error('Manual sync error:', err);
+        updateSyncStatusUI('error');
+        if (!silent) showToast('❌ Lỗi đồng bộ: ' + (err.message || 'Thử lại'));
+    }
+}
+
+function setupNetworkSyncListeners() {
+    window.addEventListener('online', () => {
+        console.log('Network connected. Resuming cloud sync...');
+        showToast('🌐 Đã có mạng trở lại! Đang tự động đồng bộ...');
+        updateSyncStatusUI('syncing', 'Đang đồng bộ...');
+        if (db && typeof db.enableNetwork === 'function') {
+            db.enableNetwork().catch(() => {});
+        }
+        syncAllToCloud(true);
+    });
+
+    window.addEventListener('offline', () => {
+        console.log('Network disconnected.');
+        showToast('📡 Đang ngoại tuyến. Dữ liệu sẽ lưu trên máy và đồng bộ khi có mạng.');
+        updateSyncStatusUI('offline');
+    });
 }
 let cloudSyncReady = false;
 
@@ -658,7 +926,7 @@ const EditorHistory = {
 
 let saveTimeout;
 function triggerSave() {
-    elements.saveStatus.textContent = 'Saving...';
+    updateSyncStatusUI('saving');
     clearTimeout(saveTimeout);
     
     // Update active page state from DOM
@@ -671,34 +939,38 @@ function triggerSave() {
 
     saveTimeout = setTimeout(() => {
         saveToStorage();
-        elements.saveStatus.textContent = 'Saved';
-    }, 500);
+    }, 400);
 }
-
-let firebaseSyncTimeout;
 
 function saveToStorage() {
     // 1. Save locally immediately
     localStorage.setItem('schooldb_pages', JSON.stringify(appState.pages));
     
+    // Broadcast to other open tabs on same device
+    broadcastLocalChange('pages-updated', { activeId: appState.activePageId });
+
     // 2. Sync to Firebase (Debounced)
     if (db) {
         clearTimeout(firebaseSyncTimeout);
+        updateSyncStatusUI('syncing');
         firebaseSyncTimeout = setTimeout(() => {
-            elements.saveStatus.textContent = 'Syncing...';
             // Sync active page
             if (appState.activePageId && appState.pages[appState.activePageId]) {
                 const pageData = appState.pages[appState.activePageId];
                 db.collection('notes').doc(appState.activePageId).set(pageToCloud(pageData), { merge: true })
                 .then(() => {
-                    elements.saveStatus.textContent = 'Saved to Cloud';
+                    updateSyncStatusUI(navigator.onLine ? 'synced' : 'offline');
                 })
                 .catch(err => {
                     console.error("Firebase sync error:", err);
-                    elements.saveStatus.textContent = 'Cloud Error';
+                    updateSyncStatusUI('error');
                 });
+            } else {
+                updateSyncStatusUI(navigator.onLine ? 'synced' : 'offline');
             }
-        }, 1500);
+        }, 800);
+    } else {
+        updateSyncStatusUI('local-only');
     }
 }
 
@@ -778,8 +1050,11 @@ function deletePage(pageId) {
         return;
     }
     delete appState.pages[pageId];
-    if (db) db.collection('notes').doc(pageId).delete();
-    saveToStorage();
+    if (db) {
+        db.collection('notes').doc(pageId).delete().catch(err => console.warn('Cloud delete error:', err));
+    }
+    localStorage.setItem('schooldb_pages', JSON.stringify(appState.pages));
+    broadcastLocalChange('pages-updated', { deletedId: pageId });
     renderSidebar();
     showToast(`Đã xóa trang "${pageTitle}"`);
     if (pageId === appState.activePageId) {
@@ -1519,6 +1794,7 @@ window.showCoverPicker = showCoverPicker;
 
 const app = {
     createNewPage,
+    manualSync: () => syncAllToCloud(false),
     showVocab: () => {
         elements.editorContainer.style.display = 'none';
         elements.vocabContainer.style.display = 'block';
@@ -1623,7 +1899,24 @@ const app = {
         const page = appState.pages[appState.activePageId];
         if (!page) return;
         let text = `# ${page.title || 'Untitled'}\n\n`;
-        page.blocks.forEach(b => text += b.content + '\n');
+        page.blocks.forEach(b => {
+            if (b.type === 'table') {
+                try {
+                    const parsed = JSON.parse(b.content);
+                    if (parsed && Array.isArray(parsed.rows) && parsed.rows.length > 0) {
+                        const numCols = parsed.rows[0].length;
+                        text += '\n| ' + parsed.rows[0].map(c => String(c).replace(/<[^>]*>/g, '').trim()).join(' | ') + ' |\n';
+                        text += '| ' + new Array(numCols).fill('---').join(' | ') + ' |\n';
+                        for (let i = 1; i < parsed.rows.length; i++) {
+                            text += '| ' + parsed.rows[i].map(c => String(c).replace(/<[^>]*>/g, '').trim()).join(' | ') + ' |\n';
+                        }
+                        text += '\n';
+                        return;
+                    }
+                } catch (e) {}
+            }
+            text += b.content + '\n';
+        });
         
         const blob = new Blob([text], { type: 'text/plain' });
         const a = document.createElement('a');
@@ -1693,9 +1986,41 @@ function renderBlocks(blocks) {
         blocks = [{ id: generateId(), type: 'text', content: '', indent: 0 }];
     }
     blocks.forEach(block => {
-        const blockEl = createBlockElement(block.type, block.content, block.id, block.indent || 0);
+        const blockEl = createBlockElement(
+            block.type, 
+            block.content, 
+            block.id, 
+            block.indent || 0,
+            block.color || null,
+            block.bgColor || null,
+            block.collapsed || false
+        );
         elements.blockEditor.appendChild(blockEl);
     });
+
+    // Cập nhật trạng thái ẩn/hiện ban đầu cho các khối con của Toggle đang đóng
+    let hideIndentThreshold = null;
+    const allWrappers = Array.from(elements.blockEditor.querySelectorAll('.block-wrapper'));
+    allWrappers.forEach(w => {
+        const myIndent = parseInt(w.getAttribute('data-indent') || '0', 10);
+        if (hideIndentThreshold !== null) {
+            if (myIndent > hideIndentThreshold) {
+                w.style.display = 'none';
+            } else {
+                hideIndentThreshold = null;
+            }
+        }
+        const isCollapsed = w.getAttribute('data-collapsed') === 'true';
+        const wType = w.getAttribute('data-type') || '';
+        if (isCollapsed && (wType === 'toggle' || wType.startsWith('toggle-'))) {
+            const icon = w.querySelector('.toggle-icon');
+            if (icon) icon.classList.remove('open');
+            if (hideIndentThreshold === null) {
+                hideIndentThreshold = myIndent;
+            }
+        }
+    });
+
     initSortable();
 }
 
@@ -1775,6 +2100,29 @@ function serializeBlocks() {
             return;
         }
 
+        // Lưu trữ khối bảng (Table)
+        if (type === 'table') {
+            const tableEl = contentEl.querySelector('table.notion-table');
+            const hasHeader = tableEl ? tableEl.classList.contains('has-header') : true;
+            const rows = [];
+            if (tableEl) {
+                tableEl.querySelectorAll('tr').forEach(tr => {
+                    const rowData = [];
+                    tr.querySelectorAll('th, td').forEach(cell => {
+                        rowData.push(cell.innerHTML.trim());
+                    });
+                    if (rowData.length > 0) rows.push(rowData);
+                });
+            }
+            blocks.push({
+                id: wrapper.getAttribute('data-id'),
+                type: 'table',
+                content: JSON.stringify({ hasHeader, rows }),
+                indent: parseInt(wrapper.getAttribute('data-indent') || '0', 10)
+            });
+            return;
+        }
+
         let content = contentEl.innerHTML !== undefined ? contentEl.innerHTML : (contentEl.innerText || '');
         if (content === '<br>' || content === '<div><br></div>') {
             content = '';
@@ -1790,12 +2138,26 @@ function serializeBlocks() {
             }
         }
         
-        blocks.push({
+        const blockObj = {
             id: wrapper.getAttribute('data-id'),
             type: type,
             content: content,
             indent: parseInt(wrapper.getAttribute('data-indent') || '0', 10)
-        });
+        };
+
+        if (contentEl.style.color) {
+            blockObj.color = contentEl.style.color;
+        }
+        if (contentEl.style.backgroundColor) {
+            blockObj.bgColor = contentEl.style.backgroundColor;
+        }
+        if (type === 'toggle' || (type && type.startsWith('toggle-'))) {
+            const isCollapsed = wrapper.getAttribute('data-collapsed') === 'true' || 
+                (wrapper.querySelector('.toggle-icon') && !wrapper.querySelector('.toggle-icon').classList.contains('open'));
+            blockObj.collapsed = !!isCollapsed;
+        }
+        
+        blocks.push(blockObj);
     });
     return blocks;
 }
@@ -1890,6 +2252,19 @@ function updateNumberPrefixes() {
     });
 }
 
+function stripLeadingMarkdownPrefix(target, prefixRegex, fallbackText) {
+    let stripped = false;
+    const walker = document.createTreeWalker(target, NodeFilter.SHOW_TEXT, null, false);
+    const firstTextNode = walker.nextNode();
+    if (firstTextNode && prefixRegex.test(firstTextNode.textContent)) {
+        firstTextNode.textContent = firstTextNode.textContent.replace(prefixRegex, '');
+        stripped = true;
+    }
+    if (!stripped) {
+        target.innerHTML = fallbackText;
+    }
+}
+
 function checkMarkdownShortcuts(target) {
     const text = target.innerText || target.textContent || '';
 
@@ -1902,13 +2277,21 @@ function checkMarkdownShortcuts(target) {
         triggerSave();
         return true;
     }
+
+    // 0.1 Table Block: "/table" or "||"
+    if (text.trim() === '/table' || text.trim() === '||') {
+        EditorHistory.recordBeforeAction();
+        setBlockType(target, 'table');
+        triggerSave();
+        return true;
+    }
     
     // 1. Bullet list: "* " or "- "
     const bulletMatch = text.match(/^(\*|-)\s(.*)/s);
     if (bulletMatch) {
         EditorHistory.recordBeforeAction();
         setBlockType(target, 'bullet');
-        target.innerHTML = bulletMatch[2];
+        stripLeadingMarkdownPrefix(target, /^(\*|-)\s/, bulletMatch[2]);
         setCaretAtStart(target);
         triggerSave();
         return true;
@@ -1919,7 +2302,7 @@ function checkMarkdownShortcuts(target) {
     if (numberMatch) {
         EditorHistory.recordBeforeAction();
         setBlockType(target, 'number');
-        target.innerHTML = numberMatch[1];
+        stripLeadingMarkdownPrefix(target, /^1[\.\)]\s/, numberMatch[1]);
         setCaretAtStart(target);
         updateNumberPrefixes();
         triggerSave();
@@ -1931,7 +2314,7 @@ function checkMarkdownShortcuts(target) {
     if (todoMatch) {
         EditorHistory.recordBeforeAction();
         setBlockType(target, 'todo');
-        target.innerHTML = todoMatch[2];
+        stripLeadingMarkdownPrefix(target, /^(\[\]|\[\s\])\s/, todoMatch[2]);
         setCaretAtStart(target);
         triggerSave();
         return true;
@@ -1947,7 +2330,7 @@ function checkMarkdownShortcuts(target) {
             wrapper.setAttribute('data-indent', 0);
             wrapper.style.marginLeft = '0px';
         }
-        target.innerHTML = h1Match[1];
+        stripLeadingMarkdownPrefix(target, /^#\s/, h1Match[1]);
         setCaretAtStart(target);
         triggerSave();
         return true;
@@ -1965,7 +2348,7 @@ function checkMarkdownShortcuts(target) {
             wrapper.setAttribute('data-indent', curIndent);
             wrapper.style.marginLeft = `${curIndent * 24}px`;
         }
-        target.innerHTML = h2Match[1];
+        stripLeadingMarkdownPrefix(target, /^##\s/, h2Match[1]);
         setCaretAtStart(target);
         triggerSave();
         return true;
@@ -1983,7 +2366,7 @@ function checkMarkdownShortcuts(target) {
             wrapper.setAttribute('data-indent', curIndent);
             wrapper.style.marginLeft = `${curIndent * 24}px`;
         }
-        target.innerHTML = h3Match[1];
+        stripLeadingMarkdownPrefix(target, /^###\s/, h3Match[1]);
         setCaretAtStart(target);
         triggerSave();
         return true;
@@ -1994,7 +2377,7 @@ function checkMarkdownShortcuts(target) {
     if (quoteMatch) {
         EditorHistory.recordBeforeAction();
         setBlockType(target, 'quote');
-        target.innerHTML = quoteMatch[1];
+        stripLeadingMarkdownPrefix(target, /^>\s/, quoteMatch[1]);
         setCaretAtStart(target);
         triggerSave();
         return true;
@@ -2081,12 +2464,15 @@ function selectBlockAndShowMenu(wrapper) {
     }
 }
 
-function createBlockElement(type, content, id = generateId(), indent = 0) {
+function createBlockElement(type, content, id = generateId(), indent = 0, color = null, bgColor = null, collapsed = false) {
     const wrapper = document.createElement('div');
     wrapper.className = 'block-wrapper';
     wrapper.setAttribute('data-id', id);
     wrapper.setAttribute('data-indent', indent);
     wrapper.style.marginLeft = `${indent * 24}px`;
+    if (collapsed && (type === 'toggle' || (type && type.startsWith('toggle-')))) {
+        wrapper.setAttribute('data-collapsed', 'true');
+    }
 
     wrapper.innerHTML = `
         <div class="block-handle" contenteditable="false" title="Bấm để chọn dòng hoặc đổi kiểu khối, giữ để kéo"><i class="ri-drag-move-2-line"></i></div>
@@ -2096,18 +2482,36 @@ function createBlockElement(type, content, id = generateId(), indent = 0) {
     
     const contentEl = wrapper.querySelector('.block-content');
     const handleEl = wrapper.querySelector('.block-handle');
+    const prefixEl = wrapper.querySelector('.block-prefix');
     
-    if (type !== 'image' && type !== 'math') {
+    if (type !== 'image' && type !== 'math' && type !== 'table') {
         contentEl.innerHTML = content;
     }
 
     setBlockType(contentEl, type, content);
+
+    if (color) contentEl.style.color = color;
+    if (bgColor) contentEl.style.backgroundColor = bgColor;
+    if (collapsed && (type === 'toggle' || (type && type.startsWith('toggle-')))) {
+        const icon = wrapper.querySelector('.toggle-icon');
+        if (icon) icon.classList.remove('open');
+    }
     
     // Handle click to select line and show block menu
     if (handleEl) {
         handleEl.addEventListener('click', (e) => {
             e.stopPropagation();
             selectBlockAndShowMenu(wrapper);
+        });
+    }
+
+    // Cho phép nhấp vào vùng prefix của toggle để đóng/mở mượt mà
+    if (prefixEl) {
+        prefixEl.addEventListener('click', (e) => {
+            const icon = prefixEl.querySelector('.toggle-icon');
+            if (icon && e.target !== icon) {
+                toggleBlockOpen(icon, e);
+            }
         });
     }
 
@@ -2168,26 +2572,55 @@ function toggleTodo(cb) {
     triggerSave();
 }
 
-function toggleBlockOpen(icon) {
+function toggleBlockOpen(icon, e) {
+    if (e) {
+        e.stopPropagation();
+        e.preventDefault();
+    }
     icon.classList.toggle('open');
     const wrapper = icon.closest('.block-wrapper');
+    if (!wrapper) return;
     const myIndent = parseInt(wrapper.getAttribute('data-indent') || '0', 10);
     const isOpen = icon.classList.contains('open');
     
-    icon.style.transform = isOpen ? 'rotate(90deg)' : 'rotate(0deg)';
+    wrapper.setAttribute('data-collapsed', isOpen ? 'false' : 'true');
     
     let next = wrapper.nextElementSibling;
+    let skipChildIndent = null;
+    
     while (next && next.classList.contains('block-wrapper')) {
         const nextIndent = parseInt(next.getAttribute('data-indent') || '0', 10);
-        if (nextIndent <= myIndent) break; // Not a child anymore
+        if (nextIndent <= myIndent) break; // Ra khỏi phạm vi con của toggle này
         
         if (isOpen) {
-            next.style.display = 'flex'; // show
+            // Đang mở toggle: hiển thị các khối con trực tiếp
+            if (skipChildIndent !== null) {
+                if (nextIndent > skipChildIndent) {
+                    next = next.nextElementSibling;
+                    continue; // Bỏ qua vì nằm trong một toggle con đang đóng
+                } else {
+                    skipChildIndent = null; // Đã ra khỏi toggle con đóng đó
+                }
+            }
+            
+            next.style.display = 'flex';
+            
+            // Nếu khối con này lại là một toggle và đang đóng, không mở các cháu chắt của nó
+            const nextType = next.getAttribute('data-type') || '';
+            const isChildCollapsed = next.getAttribute('data-collapsed') === 'true' || 
+                (next.querySelector('.toggle-icon') && !next.querySelector('.toggle-icon').classList.contains('open'));
+            if (isChildCollapsed && (nextType === 'toggle' || nextType.startsWith('toggle-'))) {
+                skipChildIndent = nextIndent;
+            }
         } else {
-            next.style.display = 'none'; // hide
+            // Đang đóng toggle: ẩn toàn bộ các con, cháu phía dưới
+            next.style.display = 'none';
         }
         next = next.nextElementSibling;
     }
+
+    triggerSave();
+    EditorHistory.record(true);
 }
 
 function focusFirstBlockOrCreate() {
@@ -2205,6 +2638,42 @@ function handleBlockKeydown(e) {
     const target = e.target;
     const wrapper = target.closest('.block-wrapper');
     if (!wrapper) return;
+
+    // Điều hướng bàn phím khi Menu lệnh Slash ('/') đang mở
+    if (elements.slashMenu && elements.slashMenu.style.display === 'block') {
+        const visibleItems = Array.from(elements.slashMenu.querySelectorAll('.slash-menu-item')).filter(it => it.style.display !== 'none');
+        if (visibleItems.length > 0) {
+            let selectedIdx = visibleItems.findIndex(it => it.classList.contains('selected'));
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                visibleItems.forEach(it => it.classList.remove('selected'));
+                selectedIdx = (selectedIdx + 1) % visibleItems.length;
+                visibleItems[selectedIdx].classList.add('selected');
+                visibleItems[selectedIdx].scrollIntoView({ block: 'nearest' });
+                return;
+            }
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                visibleItems.forEach(it => it.classList.remove('selected'));
+                selectedIdx = (selectedIdx - 1 + visibleItems.length) % visibleItems.length;
+                visibleItems[selectedIdx].classList.add('selected');
+                visibleItems[selectedIdx].scrollIntoView({ block: 'nearest' });
+                return;
+            }
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const targetItem = selectedIdx >= 0 ? visibleItems[selectedIdx] : visibleItems[0];
+                const itemType = targetItem.getAttribute('data-type');
+                applySlashCommand(itemType);
+                return;
+            }
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                closeSlashMenu();
+                return;
+            }
+        }
+    }
     
     // Handle Indentation with Tab
     if (e.key === 'Tab') {
@@ -2563,12 +3032,75 @@ function preprocessClipboardHtml(html) {
     }
 }
 
-function parsePastedContentToBlocks(rawText, baseIndent = 0) {
+function parsePastedContentToBlocks(rawText, baseIndent = 0, rawHtml = '') {
     let text = (rawText || '').replace(/\r\n?/g, '\n').replace(/\u00A0/g, ' ');
     // Chuẩn hóa ký hiệu LaTeX display \[ ... \] thành $$ ... $$
     text = text.replace(/\\\[([\s\S]*?)\\\]/g, '$$$$$1$$$$');
     // Tự động bọc các môi trường ma trận / mảng phép tính đứng riêng vào $$
     text = text.replace(/(?<!\$)(?:\\begin\{(array|align|matrix|pmatrix|bmatrix|cases|equation|gather)\}[\s\S]*?\\end\{\1\})(?!\$)/g, (m) => `\n$$${m}$$\n`);
+
+    // 0. Kiểm tra nếu có dán HTML table (Excel, Word, Google Docs/Sheets, Web)
+    if (rawHtml && rawHtml.includes('<table')) {
+        try {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(rawHtml, 'text/html');
+            const tableEl = doc.querySelector('table');
+            if (tableEl) {
+                const rows = [];
+                tableEl.querySelectorAll('tr').forEach(tr => {
+                    const rowCells = [];
+                    tr.querySelectorAll('th, td').forEach(td => {
+                        rowCells.push(td.innerHTML.trim());
+                    });
+                    if (rowCells.length > 0) rows.push(rowCells);
+                });
+                if (rows.length > 0) {
+                    return [{
+                        type: 'table',
+                        content: JSON.stringify({ hasHeader: true, rows }),
+                        indent: baseIndent
+                    }];
+                }
+            }
+        } catch (e) {}
+    }
+
+    // 0.1 Kiểm tra nếu là bảng dữ liệu phân tách bằng tab (TSV copied from Excel / Google Sheets)
+    if (text.includes('\t') && text.includes('\n')) {
+        const rawLines = text.trim().split('\n');
+        if (rawLines.length >= 2 && rawLines.some(l => l.includes('\t'))) {
+            const rows = rawLines.map(l => l.split('\t').map(c => c.trim()));
+            if (rows.every(r => r.length === rows[0].length && r.length >= 2)) {
+                return [{
+                    type: 'table',
+                    content: JSON.stringify({ hasHeader: true, rows }),
+                    indent: baseIndent
+                }];
+            }
+        }
+    }
+
+    // 0.2 Kiểm tra nếu toàn bộ đoạn text là bảng Markdown (| Col 1 | Col 2 |)
+    const mdLines = text.trim().split('\n').map(l => l.trim());
+    if (mdLines.length >= 2 && mdLines.every(l => l.startsWith('|') && l.endsWith('|'))) {
+        const parsedRows = [];
+        let hasSeparator = false;
+        mdLines.forEach(line => {
+            if (/^\|[\s\-:|]+\|$/.test(line)) {
+                hasSeparator = true;
+                return;
+            }
+            const cells = line.split('|').slice(1, -1).map(c => formatInlineMarkdown(c.trim()));
+            if (cells.length > 0) parsedRows.push(cells);
+        });
+        if (parsedRows.length > 0) {
+            return [{
+                type: 'table',
+                content: JSON.stringify({ hasHeader: hasSeparator, rows: parsedRows }),
+                indent: baseIndent
+            }];
+        }
+    }
 
     const blocks = [];
     const pattern = /\$\$([\s\S]*?)\$\$/g;
@@ -2763,15 +3295,48 @@ function handleBlockPaste(e) {
 
     // 4. Phân tích nội dung clipboard thành danh sách khối hoàn chỉnh
     const currentIndent = parseInt(wrapper.getAttribute('data-indent') || '0', 10);
-    const parsedBlocks = parsePastedContentToBlocks(text, currentIndent);
+    const parsedBlocks = parsePastedContentToBlocks(text, currentIndent, html);
 
     if (parsedBlocks.length > 1 || (parsedBlocks.length === 1 && parsedBlocks[0].type !== 'text')) {
         e.preventDefault();
         EditorHistory.recordBeforeAction();
 
-        // Khối đầu tiên: cập nhật trực tiếp vào khối hiện tại
+        // Tách nội dung trước và sau con trỏ trong khối hiện tại nếu có
+        let beforeHtml = '';
+        let afterHtml = '';
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount > 0 && target.contains(sel.anchorNode)) {
+            try {
+                const range = sel.getRangeAt(0);
+                const beforeRange = range.cloneRange();
+                beforeRange.selectNodeContents(target);
+                beforeRange.setEnd(range.startContainer, range.startOffset);
+                const beforeFrag = beforeRange.cloneContents();
+                const tempDivBefore = document.createElement('div');
+                tempDivBefore.appendChild(beforeFrag);
+                beforeHtml = tempDivBefore.innerHTML.trim();
+
+                const afterRange = range.cloneRange();
+                afterRange.selectNodeContents(target);
+                afterRange.setStart(range.endContainer, range.endOffset);
+                const afterFrag = afterRange.cloneContents();
+                const tempDivAfter = document.createElement('div');
+                tempDivAfter.appendChild(afterFrag);
+                afterHtml = tempDivAfter.innerHTML.trim();
+            } catch (err) {}
+        }
+
         const firstBlock = parsedBlocks[0];
-        setBlockType(target, firstBlock.type, firstBlock.content);
+
+        // Khối đầu tiên: cập nhật trực tiếp vào khối hiện tại với nội dung đầy đủ
+        if (firstBlock.type !== 'image' && firstBlock.type !== 'math' && firstBlock.type !== 'table' && firstBlock.type !== 'divider' && firstBlock.type !== 'toc') {
+            target.innerHTML = (beforeHtml ? beforeHtml + ' ' : '') + firstBlock.content;
+            setBlockType(target, firstBlock.type, target.innerHTML);
+        } else {
+            // Khối đặc biệt (math, table, image, divider, toc)
+            setBlockType(target, firstBlock.type, firstBlock.content);
+        }
+
         if (firstBlock.indent !== undefined) {
             wrapper.setAttribute('data-indent', firstBlock.indent);
             wrapper.style.marginLeft = `${firstBlock.indent * 24}px`;
@@ -2783,15 +3348,20 @@ function handleBlockPaste(e) {
 
         for (let i = 1; i < parsedBlocks.length; i++) {
             const b = parsedBlocks[i];
-            const newWrapper = createBlockElement(b.type, b.content, generateId(), b.indent || currentIndent);
+            const newWrapper = createBlockElement(b.type, b.content, generateId(), b.indent !== undefined ? b.indent : currentIndent);
             lastWrapper.parentNode.insertBefore(newWrapper, lastWrapper.nextSibling);
             lastWrapper = newWrapper;
             lastContentEl = newWrapper.querySelector('.block-content');
         }
 
+        // Nếu có phần nội dung sau con trỏ, ghép vào khối cuối cùng
+        if (afterHtml && lastContentEl && lastContentEl.contentEditable !== 'false') {
+            lastContentEl.innerHTML += (lastContentEl.innerHTML ? ' ' : '') + afterHtml;
+        }
+
         updateNumberPrefixes();
 
-        if (lastContentEl) {
+        if (lastContentEl && lastContentEl.contentEditable !== 'false') {
             lastContentEl.focus();
             setCaretAtEnd(lastContentEl);
         }
@@ -2802,28 +3372,25 @@ function handleBlockPaste(e) {
         return;
     }
 
-    // 5. Nếu chỉ là đoạn text ngắn 1 dòng thông thường: giữ nguyên chèn tự nhiên
-    const lines = text.split('\n');
-    if (lines.length <= 1) {
-        const cleanInlineHtml = extractCleanInlineHtml(html);
-        if (cleanInlineHtml && (cleanInlineHtml.includes('<') || cleanInlineHtml.includes('style='))) {
-            e.preventDefault();
-            EditorHistory.recordBeforeAction();
-            document.execCommand('insertHTML', false, cleanInlineHtml);
-            checkMarkdownShortcuts(target);
-            triggerSave();
-            EditorHistory.updateLastSnapshot();
-            return;
-        }
-
+    // 5. Nếu chỉ là 1 khối text hoặc đoạn văn bản đơn giản: giữ nguyên chèn tự nhiên
+    const cleanInlineHtml = extractCleanInlineHtml(html);
+    if (cleanInlineHtml && (cleanInlineHtml.includes('<') || cleanInlineHtml.includes('style='))) {
         e.preventDefault();
         EditorHistory.recordBeforeAction();
-        document.execCommand('insertText', false, lines[0] !== undefined ? lines[0] : text);
+        document.execCommand('insertHTML', false, cleanInlineHtml);
         checkMarkdownShortcuts(target);
         triggerSave();
         EditorHistory.updateLastSnapshot();
         return;
     }
+
+    e.preventDefault();
+    EditorHistory.recordBeforeAction();
+    document.execCommand('insertText', false, text);
+    checkMarkdownShortcuts(target);
+    triggerSave();
+    EditorHistory.updateLastSnapshot();
+    return;
 
     closeSlashMenu();
     triggerSave();
@@ -2835,20 +3402,52 @@ function openSlashMenu(target, query = '') {
     elements.slashMenu.style.top = `${rect.bottom + 5}px`;
     elements.slashMenu.style.left = `${rect.left}px`;
     
+    // Đảm bảo mục Bảng (Table) luôn có mặt trong DOM ngay cả khi HTML bị cache cũ
+    let tableItem = elements.slashMenu.querySelector('.slash-menu-item[data-type="table"]');
+    if (!tableItem) {
+        tableItem = document.createElement('div');
+        tableItem.className = 'slash-menu-item';
+        tableItem.setAttribute('data-type', 'table');
+        tableItem.setAttribute('data-keywords', 'table bang grid spreadsheet cot hang row column du lieu');
+        tableItem.innerHTML = `
+            <div class="item-icon"><i class="ri-table-line"></i></div>
+            <div class="item-info">
+                <div class="item-title">Table (Bảng)</div>
+                <div class="item-desc">Tạo bảng dữ liệu hàng & cột linh hoạt.</div>
+            </div>
+        `;
+        tableItem.addEventListener('click', () => applySlashCommand('table'));
+        const tocItem = elements.slashMenu.querySelector('.slash-menu-item[data-type="toc"]');
+        if (tocItem && tocItem.nextSibling) {
+            elements.slashMenu.insertBefore(tableItem, tocItem.nextSibling);
+        } else {
+            elements.slashMenu.appendChild(tableItem);
+        }
+    }
+
     // Filter items
     const items = elements.slashMenu.querySelectorAll('.slash-menu-item');
     let hasVisible = false;
+    let firstVisible = null;
     items.forEach(item => {
-        const title = item.querySelector('.item-title').textContent.toLowerCase();
+        const title = (item.querySelector('.item-title')?.textContent || '').toLowerCase();
         const type = (item.getAttribute('data-type') || '').toLowerCase();
         const keywords = (item.getAttribute('data-keywords') || '').toLowerCase();
         if (title.includes(query) || type.includes(query) || keywords.includes(query)) {
             item.style.display = 'flex';
             hasVisible = true;
+            if (!firstVisible) firstVisible = item;
         } else {
             item.style.display = 'none';
+            item.classList.remove('selected');
         }
     });
+
+    // Tự động đánh dấu mục đầu tiên phù hợp để nhấn Enter là chọn ngay
+    items.forEach(it => it.classList.remove('selected'));
+    if (firstVisible) {
+        firstVisible.classList.add('selected');
+    }
     
     if (!hasVisible) {
         closeSlashMenu();
@@ -2880,6 +3479,13 @@ function applySlashCommand(type) {
                 const input = editorPanel.querySelector('.math-latex-input');
                 if (input) setTimeout(() => input.focus(), 60);
             }
+            triggerSave();
+            return;
+        }
+
+        if (type === 'table') {
+            closeSlashMenu();
+            setBlockType(activeBlockElement, 'table', '');
             triggerSave();
             return;
         }
@@ -2944,6 +3550,9 @@ function setBlockType(element, type, initialContent = '') {
         } else if (type === 'math') {
             renderMathBlock(element, initialContent);
             element.contentEditable = false;
+        } else if (type === 'table') {
+            renderTableBlock(element, initialContent);
+            element.contentEditable = false;
         }
     }
     
@@ -2967,7 +3576,7 @@ function setBlockType(element, type, initialContent = '') {
         }
     }
 
-    if (type !== 'divider' && type !== 'image' && type !== 'toc' && type !== 'math') {
+    if (type !== 'divider' && type !== 'image' && type !== 'toc' && type !== 'math' && type !== 'table') {
         const page = appState.pages[appState.activePageId];
         const isLocked = page && page.locked;
         element.contentEditable = !isLocked;
@@ -3001,7 +3610,7 @@ function setBlockType(element, type, initialContent = '') {
     if (type === 'code') placeholder = "Code snippet";
     if (type === 'quote') placeholder = "Empty quote";
     if (type === 'toggle') placeholder = "Toggle";
-    if (type === 'image' || type === 'divider' || type === 'toc' || type === 'math') {
+    if (type === 'image' || type === 'divider' || type === 'toc' || type === 'math' || type === 'table') {
         element.removeAttribute('data-placeholder');
     } else {
         element.setAttribute('data-placeholder', placeholder);
@@ -3181,9 +3790,31 @@ const vocab = {
         vocab.initDeck();
     },
 
-    save: () => {
+    save: (itemToSync) => {
         localStorage.setItem('schooldb_vocab_items', JSON.stringify(vocab.items));
         vocab.renderStats();
+        broadcastLocalChange('vocab-updated', { count: vocab.items.length });
+
+        if (db) {
+            if (itemToSync && itemToSync.id) {
+                db.collection('vocab_items').doc(itemToSync.id).set(itemToSync, { merge: true })
+                    .catch(err => console.warn('Vocab cloud sync warning:', err));
+            } else {
+                clearTimeout(vocabSyncTimeout);
+                vocabSyncTimeout = setTimeout(() => {
+                    const batch = db.batch();
+                    let count = 0;
+                    vocab.items.forEach(item => {
+                        if (item && item.id && item.word) {
+                            batch.set(db.collection('vocab_items').doc(item.id), item, { merge: true });
+                            count++;
+                            if (count >= 400) return;
+                        }
+                    });
+                    if (count > 0) batch.commit().catch(err => console.warn('Vocab batch sync warning:', err));
+                }, 800);
+            }
+        }
     },
 
     renderStats: () => {
@@ -3378,6 +4009,7 @@ const vocab = {
                 item.example = example;
                 item.tag = tag;
                 showToast(`Đã cập nhật từ "${word}"!`);
+                vocab.save(item);
             }
         } else {
             // Add new
@@ -3393,9 +4025,9 @@ const vocab = {
             };
             vocab.items.unshift(newItem);
             showToast(`⭐ Đã thêm "${word}" vào Kho từ vựng!`);
+            vocab.save(newItem);
         }
 
-        vocab.save();
         vocab.closeModal();
         vocab.renderGrid();
         if (vocab.currentView === 'flashcard') {
@@ -3408,6 +4040,9 @@ const vocab = {
         if (!item) return;
         if (confirm(`Bạn có chắc muốn xóa từ "${item.word}"?`)) {
             vocab.items = vocab.items.filter(i => i.id !== id);
+            if (db) {
+                db.collection('vocab_items').doc(id).delete().catch(err => console.warn('Vocab delete cloud error:', err));
+            }
             vocab.save();
             vocab.renderGrid();
             if (vocab.currentView === 'flashcard') {
@@ -3421,7 +4056,7 @@ const vocab = {
         const item = vocab.items.find(i => i.id === id);
         if (!item) return;
         item.status = item.status === 'mastered' ? 'learning' : 'mastered';
-        vocab.save();
+        vocab.save(item);
         vocab.renderGrid();
     },
 
@@ -3503,7 +4138,7 @@ const vocab = {
         // update in main items
         const orig = vocab.items.find(i => i.id === currentItem.id);
         if (orig) orig.status = currentItem.status;
-        vocab.save();
+        vocab.save(orig || currentItem);
 
         showToast(isMastered ? `✅ Đã đánh dấu "${currentItem.word}" là ĐÃ NHỚ!` : `⏳ Sẽ ôn lại "${currentItem.word}"!`);
         vocab.nextCard();
@@ -3522,6 +4157,8 @@ const vocab = {
 };
 
 // --- FLOATING SELECTION TOOLBAR LOGIC (NOTION STYLE) ---
+let lastActiveRange = null;
+
 function initFloatingToolbar() {
     const toolbar = document.getElementById('floating-toolbar');
     const colorBtn = document.getElementById('bubble-color-btn');
@@ -3738,6 +4375,7 @@ function initFloatingToolbar() {
                 text = sel.toString().trim();
                 currentSelectedText = text;
                 const range = sel.getRangeAt(0);
+                lastActiveRange = range.cloneRange();
                 let container = range.commonAncestorContainer;
                 if (container && container.nodeType === Node.TEXT_NODE) container = container.parentElement;
 
@@ -3843,7 +4481,8 @@ function updateBlockTypeBadge(type) {
         todo: { label: 'To-do', icon: 'ri-checkbox-line' },
         quote: { label: 'Trích dẫn', icon: 'ri-double-quotes-l' },
         code: { label: 'Code', icon: 'ri-code-box-line' },
-        math: { label: 'Toán học', icon: 'ri-functions' }
+        math: { label: 'Toán học', icon: 'ri-functions' },
+        table: { label: 'Bảng (Table)', icon: 'ri-table-line' }
     };
 
     const cfg = typeConfig[type] || typeConfig.text;
@@ -3867,7 +4506,8 @@ function getBlockTypeName(type) {
         quote: 'Trích dẫn',
         code: 'Khối code',
         divider: 'Đường kẻ',
-        math: 'Công thức toán (Math)'
+        math: 'Công thức toán (Math)',
+        table: 'Bảng (Table)'
     };
     return names[type] || (type ? type.toUpperCase() : 'Khối');
 }
@@ -4264,8 +4904,27 @@ function applyFormattingToSelection(formatType, value = null) {
     }
 
     // 2. Kiểm tra vùng bôi đen chữ (Text Selection)
-    const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+    let sel = window.getSelection();
+    if ((!sel || sel.rangeCount === 0 || sel.isCollapsed) && lastActiveRange) {
+        try {
+            sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(lastActiveRange);
+        } catch (e) {}
+    }
+
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+        // Nếu không có vùng bôi đen cụ thể nhưng đang ở một khối dòng đang hoạt động (activeBlockElement)
+        if (activeBlockElement) {
+            const targetEl = activeBlockElement.classList.contains('block-content') ? activeBlockElement : activeBlockElement.querySelector('.block-content');
+            if (targetEl && targetEl.contentEditable !== 'false') {
+                applyBlockFormat(targetEl, formatType, value);
+                triggerSave();
+                EditorHistory.updateLastSnapshot();
+            }
+        }
+        return;
+    }
     const range = sel.getRangeAt(0);
 
     // Tìm tất cả các khối block giao nhau với vùng bôi đen
@@ -4366,6 +5025,7 @@ function applyBlockFormat(contentEl, formatType, value = null) {
             });
         } else {
             contentEl.style.color = value;
+            contentEl.querySelectorAll('font[color]').forEach(el => el.removeAttribute('color'));
         }
     } else if (formatType === 'hiliteColor') {
         if (value === 'transparent') {
@@ -5451,6 +6111,305 @@ function renderMathBlock(contentEl, initialFormula = '') {
     });
 }
 
+function renderTableBlock(contentEl, initialContent = '') {
+    contentEl.contentEditable = false;
+    contentEl.setAttribute('data-type', 'table');
+
+    let tableData = {
+        hasHeader: true,
+        rows: [
+            ['Tiêu đề 1', 'Tiêu đề 2', 'Tiêu đề 3'],
+            ['', '', ''],
+            ['', '', '']
+        ]
+    };
+
+    if (initialContent) {
+        if (typeof initialContent === 'object' && initialContent.rows) {
+            tableData = initialContent;
+        } else if (typeof initialContent === 'string' && initialContent.trim().startsWith('{')) {
+            try {
+                const parsed = JSON.parse(initialContent);
+                if (parsed && Array.isArray(parsed.rows) && parsed.rows.length > 0) {
+                    tableData = parsed;
+                }
+            } catch (e) {}
+        }
+    }
+
+    if (!Array.isArray(tableData.rows) || tableData.rows.length === 0) {
+        tableData.rows = [
+            ['Tiêu đề 1', 'Tiêu đề 2', 'Tiêu đề 3'],
+            ['', '', ''],
+            ['', '', '']
+        ];
+    }
+
+    const maxCols = Math.max(...tableData.rows.map(r => Array.isArray(r) ? r.length : 0), 1);
+    tableData.rows.forEach(r => {
+        while (r.length < maxCols) r.push('');
+    });
+
+    const container = document.createElement('div');
+    container.className = 'table-block-container';
+    container.contentEditable = 'false';
+
+    container.innerHTML = `
+        <div class="table-toolbar" contenteditable="false">
+            <button type="button" class="tbl-btn ${tableData.hasHeader ? 'active' : ''}" data-action="toggle-header" title="Bật/Tắt dòng tiêu đề">
+                <i class="ri-heading"></i> Tiêu đề
+            </button>
+            <div class="tbl-divider"></div>
+            <button type="button" class="tbl-btn" data-action="add-row" title="Thêm dòng bên dưới ô đang chọn">
+                <i class="ri-insert-row-bottom"></i> + Dòng
+            </button>
+            <button type="button" class="tbl-btn" data-action="add-col" title="Thêm cột bên phải ô đang chọn">
+                <i class="ri-insert-column-right"></i> + Cột
+            </button>
+            <button type="button" class="tbl-btn" data-action="del-row" title="Xóa dòng hiện tại">
+                <i class="ri-delete-row"></i> - Dòng
+            </button>
+            <button type="button" class="tbl-btn" data-action="del-col" title="Xóa cột hiện tại">
+                <i class="ri-delete-column"></i> - Cột
+            </button>
+            <div class="tbl-divider"></div>
+            <button type="button" class="tbl-btn" data-action="copy-md" title="Sao chép dưới dạng Markdown table">
+                <i class="ri-file-copy-line"></i> Markdown
+            </button>
+            <button type="button" class="tbl-btn danger" data-action="delete" title="Xóa toàn bộ bảng">
+                <i class="ri-delete-bin-line"></i>
+            </button>
+        </div>
+        <div class="table-scroll-wrapper">
+            <table class="notion-table ${tableData.hasHeader ? 'has-header' : ''}">
+                <tbody></tbody>
+            </table>
+        </div>
+        <div class="table-quick-add-row" title="Thêm dòng mới vào cuối bảng">
+            <i class="ri-add-line"></i> Thêm dòng
+        </div>
+    `;
+
+    const tbody = container.querySelector('tbody');
+    const tableEl = container.querySelector('table');
+    let activeCell = null;
+
+    function syncDataFromDom() {
+        const rows = [];
+        tbody.querySelectorAll('tr').forEach(tr => {
+            const rowData = [];
+            tr.querySelectorAll('th, td').forEach(cell => {
+                rowData.push(cell.innerHTML.trim());
+            });
+            if (rowData.length > 0) rows.push(rowData);
+        });
+        tableData.rows = rows;
+    }
+
+    function renderRows() {
+        tbody.innerHTML = '';
+        tableData.rows.forEach((row, rIdx) => {
+            const tr = document.createElement('tr');
+            row.forEach((cellVal, cIdx) => {
+                const isHeader = tableData.hasHeader && rIdx === 0;
+                const cell = document.createElement(isHeader ? 'th' : 'td');
+                cell.contentEditable = 'true';
+                cell.setAttribute('data-placeholder', isHeader ? `Tiêu đề ${cIdx + 1}` : 'Nội dung...');
+                cell.innerHTML = cellVal || '';
+
+                cell.addEventListener('focus', () => {
+                    activeCell = cell;
+                });
+
+                cell.addEventListener('input', () => {
+                    triggerSave();
+                });
+
+                cell.addEventListener('keydown', (e) => {
+                    if (e.key === 'Tab') {
+                        e.preventDefault();
+                        const allCells = Array.from(tbody.querySelectorAll('th, td'));
+                        const curIdx = allCells.indexOf(cell);
+                        if (!e.shiftKey) {
+                            if (curIdx < allCells.length - 1) {
+                                allCells[curIdx + 1].focus();
+                            } else {
+                                addRow();
+                                const updatedCells = Array.from(tbody.querySelectorAll('th, td'));
+                                if (updatedCells[curIdx + 1]) {
+                                    updatedCells[curIdx + 1].focus();
+                                }
+                            }
+                        } else {
+                            if (curIdx > 0) {
+                                allCells[curIdx - 1].focus();
+                            }
+                        }
+                    } else if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        const trEl = cell.parentElement;
+                        const cellIdx = Array.from(trEl.children).indexOf(cell);
+                        const nextTr = trEl.nextElementSibling;
+                        if (nextTr && nextTr.children[cellIdx]) {
+                            nextTr.children[cellIdx].focus();
+                        } else {
+                            addRow();
+                            const newNextTr = trEl.nextElementSibling;
+                            if (newNextTr && newNextTr.children[cellIdx]) {
+                                newNextTr.children[cellIdx].focus();
+                            }
+                        }
+                    }
+                });
+
+                tr.appendChild(cell);
+            });
+            tbody.appendChild(tr);
+        });
+    }
+
+    function addRow() {
+        syncDataFromDom();
+        const numCols = tableData.rows[0] ? tableData.rows[0].length : 3;
+        const newRow = new Array(numCols).fill('');
+        let insertIndex = tableData.rows.length;
+        if (activeCell) {
+            const curTr = activeCell.parentElement;
+            const curIdx = Array.from(tbody.children).indexOf(curTr);
+            if (curIdx >= 0) insertIndex = curIdx + 1;
+        }
+        tableData.rows.splice(insertIndex, 0, newRow);
+        renderRows();
+        triggerSave();
+        const trs = tbody.children;
+        if (trs[insertIndex] && trs[insertIndex].children[0]) {
+            trs[insertIndex].children[0].focus();
+        }
+    }
+
+    function addCol() {
+        syncDataFromDom();
+        let insertColIdx = tableData.rows[0] ? tableData.rows[0].length : 1;
+        if (activeCell) {
+            const curTr = activeCell.parentElement;
+            insertColIdx = Array.from(curTr.children).indexOf(activeCell) + 1;
+        }
+        tableData.rows.forEach(r => r.splice(insertColIdx, 0, ''));
+        renderRows();
+        triggerSave();
+    }
+
+    function delRow() {
+        syncDataFromDom();
+        if (tableData.rows.length <= 1) {
+            showToast('Bảng cần có ít nhất 1 dòng.');
+            return;
+        }
+        let targetRowIdx = tableData.rows.length - 1;
+        if (activeCell) {
+            const curTr = activeCell.parentElement;
+            targetRowIdx = Array.from(tbody.children).indexOf(curTr);
+        }
+        tableData.rows.splice(targetRowIdx, 1);
+        renderRows();
+        triggerSave();
+    }
+
+    function delCol() {
+        syncDataFromDom();
+        const currentCols = tableData.rows[0] ? tableData.rows[0].length : 1;
+        if (currentCols <= 1) {
+            showToast('Bảng cần có ít nhất 1 cột.');
+            return;
+        }
+        let targetColIdx = currentCols - 1;
+        if (activeCell) {
+            const curTr = activeCell.parentElement;
+            targetColIdx = Array.from(curTr.children).indexOf(activeCell);
+        }
+        tableData.rows.forEach(r => r.splice(targetColIdx, 1));
+        renderRows();
+        triggerSave();
+    }
+
+    function toggleHeader() {
+        syncDataFromDom();
+        tableData.hasHeader = !tableData.hasHeader;
+        tableEl.classList.toggle('has-header', tableData.hasHeader);
+        const headerBtn = container.querySelector('[data-action="toggle-header"]');
+        if (headerBtn) headerBtn.classList.toggle('active', tableData.hasHeader);
+        renderRows();
+        triggerSave();
+    }
+
+    function copyMarkdown() {
+        syncDataFromDom();
+        if (tableData.rows.length === 0) return;
+        const numCols = tableData.rows[0].length;
+        let md = '';
+        const headerRow = tableData.rows[0];
+        md += '| ' + headerRow.map(c => c.replace(/<[^>]*>/g, '').trim()).join(' | ') + ' |\n';
+        md += '| ' + new Array(numCols).fill('---').join(' | ') + ' |\n';
+        for (let i = 1; i < tableData.rows.length; i++) {
+            md += '| ' + tableData.rows[i].map(c => c.replace(/<[^>]*>/g, '').trim()).join(' | ') + ' |\n';
+        }
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(md).then(() => {
+                showToast('📋 Đã sao chép bảng dưới dạng Markdown!');
+            }).catch(() => {
+                showToast('Không thể sao chép vào bộ nhớ tạm.');
+            });
+        }
+    }
+
+    function deleteTable() {
+        const wrapper = contentEl.closest('.block-wrapper');
+        if (wrapper && confirm('Bạn có chắc muốn xóa bảng này không?')) {
+            wrapper.remove();
+            triggerSave();
+        }
+    }
+
+    container.querySelector('[data-action="toggle-header"]').addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleHeader();
+    });
+    container.querySelector('[data-action="add-row"]').addEventListener('click', (e) => {
+        e.stopPropagation();
+        addRow();
+    });
+    container.querySelector('[data-action="add-col"]').addEventListener('click', (e) => {
+        e.stopPropagation();
+        addCol();
+    });
+    container.querySelector('[data-action="del-row"]').addEventListener('click', (e) => {
+        e.stopPropagation();
+        delRow();
+    });
+    container.querySelector('[data-action="del-col"]').addEventListener('click', (e) => {
+        e.stopPropagation();
+        delCol();
+    });
+    container.querySelector('[data-action="copy-md"]').addEventListener('click', (e) => {
+        e.stopPropagation();
+        copyMarkdown();
+    });
+    container.querySelector('[data-action="delete"]').addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteTable();
+    });
+
+    container.querySelector('.table-quick-add-row').addEventListener('click', (e) => {
+        e.stopPropagation();
+        addRow();
+    });
+
+    renderRows();
+    contentEl.innerHTML = '';
+    contentEl.appendChild(container);
+}
+
+window.renderTableBlock = renderTableBlock;
 window.renderMathBlock = renderMathBlock;
 window.sanitizeLatexForKatex = sanitizeLatexForKatex;
 

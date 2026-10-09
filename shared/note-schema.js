@@ -25,7 +25,7 @@
     }
 
     function block(type, content, indent) {
-        const safeContent = (type === 'image') ? String(content || '') : escapeHtml(content);
+        const safeContent = (type === 'image' || type === 'math' || type === 'table') ? String(content || '') : escapeHtml(content);
         return { id: generateId(), type: type, content: safeContent, indent: indent || 0 };
     }
 
