@@ -1,4 +1,5 @@
 // --- CONFIG & STATE ---
+const APP_VERSION = 'v3.9';
 const appState = {
     theme: localStorage.getItem('theme') || 'dark',
     activePageId: null,
@@ -161,6 +162,8 @@ function initApp() {
     document.getElementById('settings-btn').addEventListener('click', () => {
         document.getElementById('settings-modal').style.display = 'flex';
         document.getElementById('setting-workspace-name').value = localStorage.getItem('schooldb_workspace') || 'School NoteBook';
+        const settingVer = document.getElementById('setting-app-version');
+        if (settingVer) settingVer.textContent = APP_VERSION;
     });
     
     // Settings Save
@@ -170,6 +173,35 @@ function initApp() {
         document.querySelector('.workspace-name').textContent = newName || 'School NoteBook';
         updatePageTitle(elements.pageTitleInput.value);
     });
+
+    // Force Update / Clear Cache & Reload
+    const forceUpdateBtn = document.getElementById('btn-force-update');
+    if (forceUpdateBtn) {
+        forceUpdateBtn.addEventListener('click', async () => {
+            forceUpdateBtn.innerHTML = '<i class="ri-loader-4-line ri-spin"></i> Đang làm mới...';
+            try {
+                if ('serviceWorker' in navigator) {
+                    const regs = await navigator.serviceWorker.getRegistrations();
+                    for (let reg of regs) {
+                        await reg.unregister();
+                    }
+                }
+                if ('caches' in window) {
+                    const keys = await caches.keys();
+                    for (let key of keys) {
+                        await caches.delete(key);
+                    }
+                }
+                showToast('🔄 Đã dọn dẹp cache, đang nạp bản mới nhất...');
+                setTimeout(() => {
+                    window.location.reload(true);
+                }, 500);
+            } catch (err) {
+                console.error('Lỗi khi làm mới cache:', err);
+                window.location.reload(true);
+            }
+        });
+    }
     
     // Topbar Actions (Share & More)
     const shareBtn = document.getElementById('topbar-share-btn');
@@ -5175,7 +5207,18 @@ function initFlashcardSwipe() {
 // --- PWA: SERVICE WORKER ---
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW register failed:', err));
+        navigator.serviceWorker.register('sw.js').then((registration) => {
+            registration.addEventListener('updatefound', () => {
+                const newWorker = registration.installing;
+                if (newWorker) {
+                    newWorker.addEventListener('statechange', () => {
+                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                            showToast('🚀 Đã có phiên bản cập nhật mới! Nhấn để làm mới trang.', 8000);
+                        }
+                    });
+                }
+            });
+        }).catch(err => console.warn('SW register failed:', err));
     });
 }
 
@@ -6155,38 +6198,44 @@ function renderTableBlock(contentEl, initialContent = '') {
     container.contentEditable = 'false';
 
     container.innerHTML = `
-        <div class="table-toolbar" contenteditable="false">
+        <div class="table-floating-toolbar" contenteditable="false">
             <button type="button" class="tbl-btn ${tableData.hasHeader ? 'active' : ''}" data-action="toggle-header" title="Bật/Tắt dòng tiêu đề">
-                <i class="ri-heading"></i> Tiêu đề
+                <i class="ri-heading"></i> <span>Tiêu đề</span>
             </button>
             <div class="tbl-divider"></div>
-            <button type="button" class="tbl-btn" data-action="add-row" title="Thêm dòng bên dưới ô đang chọn">
-                <i class="ri-insert-row-bottom"></i> + Dòng
+            <button type="button" class="tbl-btn" data-action="add-row" title="Thêm dòng bên dưới ô đang chọn (Hoặc phím Enter / Tab)">
+                <i class="ri-insert-row-bottom"></i> <span>+ Dòng</span>
             </button>
             <button type="button" class="tbl-btn" data-action="add-col" title="Thêm cột bên phải ô đang chọn">
-                <i class="ri-insert-column-right"></i> + Cột
+                <i class="ri-insert-column-right"></i> <span>+ Cột</span>
             </button>
             <button type="button" class="tbl-btn" data-action="del-row" title="Xóa dòng hiện tại">
-                <i class="ri-delete-row"></i> - Dòng
+                <i class="ri-delete-row"></i> <span>- Dòng</span>
             </button>
             <button type="button" class="tbl-btn" data-action="del-col" title="Xóa cột hiện tại">
-                <i class="ri-delete-column"></i> - Cột
+                <i class="ri-delete-column"></i> <span>- Cột</span>
             </button>
             <div class="tbl-divider"></div>
             <button type="button" class="tbl-btn" data-action="copy-md" title="Sao chép dưới dạng Markdown table">
-                <i class="ri-file-copy-line"></i> Markdown
+                <i class="ri-file-copy-line"></i>
             </button>
             <button type="button" class="tbl-btn danger" data-action="delete" title="Xóa toàn bộ bảng">
                 <i class="ri-delete-bin-line"></i>
             </button>
         </div>
-        <div class="table-scroll-wrapper">
-            <table class="notion-table ${tableData.hasHeader ? 'has-header' : ''}">
-                <tbody></tbody>
-            </table>
+        <div class="table-main-wrapper">
+            <div class="table-scroll-wrapper">
+                <table class="notion-table ${tableData.hasHeader ? 'has-header' : ''}">
+                    <tbody></tbody>
+                </table>
+            </div>
+            <button type="button" class="table-add-col-btn" data-action="add-col-direct" title="Thêm cột mới">+</button>
         </div>
-        <div class="table-quick-add-row" title="Thêm dòng mới vào cuối bảng">
-            <i class="ri-add-line"></i> Thêm dòng
+        <div class="table-bottom-bar">
+            <button type="button" class="table-add-row-btn" data-action="add-row-direct" title="Thêm dòng mới (Phím tắt: Tab hoặc Enter)">
+                <i class="ri-add-line"></i> <span>Thêm dòng</span>
+            </button>
+            <span class="table-hint-text">Mẹo: Bấm <kbd>Tab</kbd> hoặc <kbd>Enter</kbd> để thêm nhanh dòng mới</span>
         </div>
     `;
 
@@ -6399,10 +6448,21 @@ function renderTableBlock(contentEl, initialContent = '') {
         deleteTable();
     });
 
-    container.querySelector('.table-quick-add-row').addEventListener('click', (e) => {
-        e.stopPropagation();
-        addRow();
-    });
+    const addColDirectBtn = container.querySelector('[data-action="add-col-direct"]');
+    if (addColDirectBtn) {
+        addColDirectBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            addCol();
+        });
+    }
+
+    const addRowDirectBtn = container.querySelector('[data-action="add-row-direct"]');
+    if (addRowDirectBtn) {
+        addRowDirectBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            addRow();
+        });
+    }
 
     renderRows();
     contentEl.innerHTML = '';

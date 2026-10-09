@@ -24,7 +24,7 @@
     <!-- KaTeX CSS for Math Equations (LaTeX) -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
     
-    <link rel="stylesheet" href="styles.css?v=3.8">
+    <link rel="stylesheet" href="styles.css?v=3.9">
 </head>
 <body>
     <div class="app-background">
@@ -45,7 +45,10 @@
                     </div>
                     <div class="workspace-info">
                         <span class="workspace-name">School NoteBook</span>
-                        <span class="workspace-plan">Personal</span>
+                        <div class="workspace-meta">
+                            <span class="workspace-plan">Personal</span>
+                            <span class="workspace-version-badge" id="app-version-badge" title="Phiên bản School NoteBook hiện tại">v3.9</span>
+                        </div>
                     </div>
                     <i class="ri-expand-up-down-line text-muted"></i>
                 </div>
@@ -670,12 +673,33 @@
 
     <div class="modal-overlay" id="settings-modal" style="display: none;">
         <div class="modal-content settings-modal-content">
-            <h3>Settings</h3>
+            <div class="modal-header" style="margin-bottom: 14px;">
+                <h3 style="margin: 0;"><i class="ri-settings-3-line"></i> Cài đặt (Settings)</h3>
+                <button class="modal-close-btn" onclick="document.getElementById('settings-modal').style.display='none'" type="button"><i class="ri-close-line"></i></button>
+            </div>
             <div class="settings-group">
-                <label>Workspace Name</label>
+                <label>Tên không gian (Workspace Name)</label>
                 <input type="text" id="setting-workspace-name" value="School NoteBook">
             </div>
-            <button class="btn btn-primary" onclick="document.getElementById('settings-modal').style.display='none'">Close</button>
+            <div class="settings-group version-info-group">
+                <label>Thông tin phiên bản & Cập nhật</label>
+                <div class="version-info-box">
+                    <div class="version-info-row">
+                        <span>Phiên bản đang chạy:</span>
+                        <strong class="version-number-tag" id="setting-app-version">v3.9</strong>
+                    </div>
+                    <div class="version-info-row">
+                        <span>Trạng thái:</span>
+                        <span class="version-status-pill online"><i class="ri-checkbox-circle-fill"></i> Đã nạp mới nhất</span>
+                    </div>
+                    <button type="button" class="btn btn-secondary btn-update-check" id="btn-force-update" title="Xóa cache Service Worker cũ và tải lại phiên bản mới nhất">
+                        <i class="ri-refresh-line"></i> Kiểm tra & Cập nhật ngay
+                    </button>
+                </div>
+            </div>
+            <div style="display: flex; justify-content: flex-end; margin-top: 14px;">
+                <button class="btn btn-primary" onclick="document.getElementById('settings-modal').style.display='none'">Đóng</button>
+            </div>
         </div>
     </div>
 
@@ -980,7 +1004,7 @@
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 
     <script src="firebase-config.js"></script>
-    <script src="shared/note-schema.js?v=3.8"></script>
-    <script src="app.js?v=3.8"></script>
+    <script src="shared/note-schema.js?v=3.9"></script>
+    <script src="app.js?v=3.9"></script>
 </body>
 </html>

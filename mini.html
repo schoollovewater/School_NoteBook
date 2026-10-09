@@ -21,7 +21,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
     <script src="firebase-config.js"></script>
-    <script src="shared/note-schema.js?v=3.8"></script>
+    <script src="shared/note-schema.js?v=3.9"></script>
 
     <style>
         :root[data-theme="dark"] {
@@ -108,6 +108,18 @@
         .network-status.offline {
             background: rgba(245, 158, 11, 0.2);
             color: var(--accent);
+        }
+        .mini-version-badge {
+            font-size: 11px;
+            padding: 2px 7px;
+            border-radius: 12px;
+            background: rgba(245, 158, 11, 0.15);
+            color: var(--accent);
+            font-weight: 600;
+            letter-spacing: 0.3px;
+            display: inline-flex;
+            align-items: center;
+            border: 1px solid rgba(245, 158, 11, 0.25);
         }
         .header-actions {
             display: flex;
@@ -547,6 +559,7 @@
                 <i class="ri-flashlight-fill"></i>
                 <span>Mini Note</span>
             </a>
+            <span class="mini-version-badge" title="Phiên bản Mini Note">v3.9</span>
             <span class="network-status" id="net-status">
                 <i class="ri-wifi-line"></i> <span id="net-text">Online</span>
             </span>

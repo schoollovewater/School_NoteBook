@@ -164,6 +164,28 @@ body {
     color: var(--text-secondary);
 }
 
+.workspace-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 2px;
+}
+
+.workspace-version-badge {
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 10px;
+    background: rgba(37, 99, 235, 0.15);
+    color: var(--accent);
+    font-weight: 600;
+    line-height: 1.4;
+    letter-spacing: 0.3px;
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid rgba(37, 99, 235, 0.25);
+    user-select: none;
+}
+
 .sidebar-actions {
     padding: 0 12px 12px;
     display: flex;
@@ -3757,46 +3779,61 @@ body.is-dragging {
 
 .table-block-container {
     width: 100%;
-    margin: 8px 0;
+    margin: 14px 0;
     position: relative;
     border-radius: 8px;
     background: var(--bg-surface);
     border: 1px solid var(--border-color);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
     transition: border-color 0.15s, box-shadow 0.15s;
     user-select: text;
 }
 
 .table-block-container:hover,
 .table-block-container:focus-within {
-    border-color: var(--accent);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    border-color: rgba(99, 102, 241, 0.35);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
 }
 
-/* Toolbar phía trên bảng */
-.table-toolbar {
+/* Toolbar nổi tinh tế kiểu Notion (chỉ hiện khi hover hoặc focus vào bảng) */
+.table-floating-toolbar {
+    position: absolute;
+    top: -15px;
+    right: 12px;
+    z-index: 20;
     display: flex;
     align-items: center;
-    flex-wrap: wrap;
-    gap: 4px;
-    padding: 6px 10px;
-    border-bottom: 1px solid var(--border-color);
+    gap: 3px;
+    padding: 3px 8px;
     background: var(--bg-elevated);
-    border-top-left-radius: 8px;
-    border-top-right-radius: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+    backdrop-filter: blur(10px);
+    opacity: 0;
+    transform: translateY(4px);
+    pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.2s ease;
     user-select: none;
+}
+
+.table-block-container:hover .table-floating-toolbar,
+.table-block-container:focus-within .table-floating-toolbar {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
 }
 
 .tbl-btn {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    padding: 4px 9px;
+    gap: 4px;
+    padding: 3px 7px;
     background: transparent;
     border: 1px solid transparent;
-    border-radius: 5px;
+    border-radius: 6px;
     color: var(--text-secondary);
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.15s ease;
@@ -3810,29 +3847,37 @@ body.is-dragging {
 }
 
 .tbl-btn.active {
-    background: rgba(37, 99, 235, 0.12);
+    background: rgba(37, 99, 235, 0.15);
     color: var(--accent);
-    border-color: rgba(37, 99, 235, 0.3);
+    border-color: rgba(37, 99, 235, 0.35);
 }
 
 .tbl-btn.danger:hover {
-    background: rgba(220, 38, 38, 0.12);
+    background: rgba(220, 38, 38, 0.15);
     color: #ef4444;
-    border-color: rgba(220, 38, 38, 0.3);
+    border-color: rgba(220, 38, 38, 0.35);
 }
 
 .tbl-divider {
     width: 1px;
-    height: 16px;
+    height: 14px;
     background: var(--border-color);
-    margin: 0 4px;
+    margin: 0 3px;
 }
 
-/* Khung cuộn ngang bảng */
-.table-scroll-wrapper {
+/* Layout bảng chính kèm nút thêm cột bên phải */
+.table-main-wrapper {
+    display: flex;
+    align-items: stretch;
+    position: relative;
     width: 100%;
+}
+
+.table-scroll-wrapper {
+    flex: 1;
+    min-width: 0;
     overflow-x: auto;
-    padding: 8px;
+    padding: 6px;
     scrollbar-width: thin;
 }
 
@@ -3840,7 +3885,7 @@ body.is-dragging {
     width: 100%;
     border-collapse: collapse;
     table-layout: auto;
-    min-width: 320px;
+    min-width: 280px;
     font-size: 14px;
     line-height: 1.5;
     color: var(--text-primary);
@@ -3854,7 +3899,7 @@ body.is-dragging {
 .notion-table td {
     border: 1px solid var(--border-color);
     padding: 8px 12px;
-    min-width: 110px;
+    min-width: 100px;
     text-align: left;
     vertical-align: top;
     outline: none;
@@ -3881,33 +3926,176 @@ body.is-dragging {
     border-color: var(--accent);
 }
 
-/* Kiểu dáng Hàng tiêu đề (Header row) */
+/* Kiểu dáng Hàng tiêu đề (Header row) - phong cách Notion nhẹ nhàng, không bị kẻ xanh dày cộm */
 .notion-table.has-header tr:first-child th,
 .notion-table.has-header tr:first-child td {
-    background: var(--bg-elevated);
+    background: rgba(255, 255, 255, 0.04);
     font-weight: 600;
     color: var(--text-primary);
-    border-bottom: 2px solid var(--accent);
+    border-bottom: 2px solid var(--border-color);
+}
+:root[data-theme="light"] .notion-table.has-header tr:first-child th,
+:root[data-theme="light"] .notion-table.has-header tr:first-child td {
+    background: rgba(0, 0, 0, 0.03);
 }
 
-/* Nút thêm nhanh dòng ở đáy bảng */
-.table-quick-add-row {
+/* Nút thêm cột bên phải (Notion style) */
+.table-add-col-btn {
+    width: 24px;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
-    padding: 6px 12px;
-    border-top: 1px dashed var(--border-color);
+    background: transparent;
+    border: none;
+    border-left: 1px solid transparent;
+    color: var(--text-placeholder);
+    cursor: pointer;
+    opacity: 0;
+    transition: all 0.2s ease;
+    border-top-right-radius: 7px;
+    border-bottom-right-radius: 7px;
+}
+
+.table-block-container:hover .table-add-col-btn {
+    opacity: 0.5;
+}
+
+.table-add-col-btn:hover {
+    opacity: 1 !important;
+    background: var(--bg-sidebar-hover);
+    color: var(--accent);
+    border-left-color: var(--border-color);
+}
+
+/* Thanh chân bảng thanh lịch (ẩn mặc định, chỉ hiện khi hover/focus) */
+.table-bottom-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 5px 10px;
+    border-top: 1px solid var(--border-color);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    user-select: none;
+}
+
+.table-block-container:hover .table-bottom-bar,
+.table-block-container:focus-within .table-bottom-bar {
+    opacity: 1;
+}
+
+.table-add-row-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
     color: var(--text-placeholder);
     font-size: 12px;
     font-weight: 500;
     cursor: pointer;
-    transition: background 0.15s, color 0.15s;
-    user-select: none;
+    transition: all 0.15s ease;
 }
 
-.table-quick-add-row:hover {
+.table-add-row-btn:hover {
     background: var(--bg-sidebar-hover);
+    color: var(--accent);
+}
+
+.table-hint-text {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.table-hint-text kbd {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    padding: 1px 4px;
+    font-size: 10px;
+    color: var(--text-secondary);
+}
+
+@media (max-width: 640px) {
+    .table-floating-toolbar {
+        top: -18px;
+        right: 4px;
+        padding: 2px 6px;
+    }
+    .table-floating-toolbar .tbl-btn span {
+        display: none;
+    }
+    .table-hint-text {
+        display: none;
+    }
+}
+
+/* Version Info in Settings Modal */
+.version-info-group {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border-color);
+}
+
+.version-info-box {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 6px;
+}
+
+.version-info-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.version-number-tag {
+    font-size: 13px;
+    color: var(--accent);
+    font-weight: 700;
+    background: rgba(37, 99, 235, 0.12);
+    padding: 2px 8px;
+    border-radius: 6px;
+}
+
+.version-status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: #10b981;
+    font-weight: 500;
+}
+
+.btn-update-check {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    transition: all 0.15s ease;
+    margin-top: 4px;
+}
+
+.btn-update-check:hover {
+    background: var(--bg-sidebar-hover);
+    border-color: var(--accent);
     color: var(--accent);
 }
 
