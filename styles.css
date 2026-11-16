@@ -3218,7 +3218,13 @@ body.is-dragging {
     border-radius: 5px;
     border: 1px solid rgba(245, 158, 11, 0.32);
     vertical-align: baseline;
-    white-space: nowrap;
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 :root[data-theme="light"] .inline-code {
@@ -4396,7 +4402,7 @@ body.is-dragging {
 .notion-table {
     border-collapse: separate;
     border-spacing: 0;
-    table-layout: fixed;
+    table-layout: auto;
     margin: 0 !important;
     font-size: 14px;
     line-height: 1.4;
@@ -4408,10 +4414,14 @@ body.is-dragging {
     box-sizing: border-box;
 }
 
+.word-table.has-custom-col-widths,
+.notion-table.has-custom-col-widths {
+    table-layout: fixed;
+}
+
 .word-table.is-fullwidth,
 .notion-table.is-fullwidth {
     width: 100%;
-    table-layout: fixed;
 }
 
 .word-table.is-fit,
@@ -4439,11 +4449,23 @@ body.is-dragging {
     outline: none;
     position: relative;
     word-break: break-word;
+    overflow-wrap: anywhere;
     white-space: pre-wrap;
     background: transparent;
     box-sizing: border-box;
     font-size: 14px;
     line-height: 1.4;
+}
+
+.word-table .inline-code,
+.notion-table .inline-code {
+    display: inline-block;
+    max-width: 100%;
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    vertical-align: middle;
+    line-height: 1.35;
 }
 
 /* Placeholder cho ô trống */

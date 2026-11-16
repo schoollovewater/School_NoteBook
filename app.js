@@ -1,5 +1,5 @@
 // --- CONFIG & STATE ---
-const APP_VERSION = 'v4.0.2';
+const APP_VERSION = 'v4.0.3';
 const DELETED_PAGES_KEY = 'schooldb_deleted_pages';
 const appState = {
     theme: localStorage.getItem('theme') || 'dark',
@@ -8537,11 +8537,14 @@ function renderTableBlock(contentEl, initialContent = '') {
     function renderRows() {
         const numCols = tableData.rows[0] ? tableData.rows[0].length : 1;
 
+        const hasCustomWidths = Array.isArray(tableData.colWidths) && tableData.colWidths.some(w => w && w !== 'auto' && w !== '');
+        tableEl.classList.toggle('has-custom-col-widths', hasCustomWidths);
+
         // Render colgroup
         colgroup.innerHTML = '';
         for (let i = 0; i < numCols; i++) {
             const col = document.createElement('col');
-            if (tableData.colWidths && tableData.colWidths[i]) {
+            if (hasCustomWidths && tableData.colWidths[i]) {
                 col.style.width = tableData.colWidths[i];
             }
             colgroup.appendChild(col);
@@ -8586,6 +8589,7 @@ function renderTableBlock(contentEl, initialContent = '') {
                         tableEl.style.width = `${initialTableWidth}px`;
                         tableWrapInner.style.width = `${initialTableWidth}px`;
                         tableEl.classList.remove('is-fullwidth', 'is-fit');
+                        tableEl.classList.add('has-custom-col-widths');
                         tableData.isFullWidth = false;
 
                         // Hiển thị đường gióng dọc
@@ -8715,6 +8719,7 @@ function renderTableBlock(contentEl, initialContent = '') {
         const initialRowHeights = trs.map(r => r.getBoundingClientRect().height);
 
         tableEl.classList.remove('is-fullwidth', 'is-fit');
+        tableEl.classList.add('has-custom-col-widths');
         tableData.isFullWidth = false;
 
         function onMouseMove(moveEvent) {
