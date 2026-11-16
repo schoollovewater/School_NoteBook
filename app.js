@@ -1,5 +1,5 @@
 // --- CONFIG & STATE ---
-const APP_VERSION = 'v4.0.3';
+const APP_VERSION = 'v4.0.4';
 const DELETED_PAGES_KEY = 'schooldb_deleted_pages';
 const appState = {
     theme: localStorage.getItem('theme') || 'dark',
@@ -475,35 +475,80 @@ function initApp() {
     initSidebarResizer();
     initMultiBlockSelection();
 
-    // Nhấp vào khoảng trống bên dưới trang / khối để tự động tạo và đưa con trỏ xuống dòng
+    // Nhấp vào khoảng trống thực sự bên dưới trang / khối để tự động tạo và đưa con trỏ xuống dòng
+    // Chú ý: Tuyệt đối không nhảy xuống cuối trang khi người dùng đang bôi đen text, chọn khối,
+    // hoặc bấm vào khoảng đệm/lề (margins) ở cạnh các dòng phía trên!
     const editorContainer = document.getElementById('editor-container');
     if (editorContainer) {
         editorContainer.addEventListener('click', (e) => {
-            if (e.target === editorContainer || e.target.classList.contains('page-content') || e.target === elements.blockEditor) {
-                if (!elements.blockEditor) return;
-                const allWrappers = Array.from(elements.blockEditor.querySelectorAll('.block-wrapper'));
-                const last = allWrappers[allWrappers.length - 1];
-                if (!last) {
-                    focusFirstBlockOrCreate();
-                    return;
+            // 1. Không làm gì nếu người dùng đang bôi đen văn bản
+            const sel = window.getSelection();
+            if (sel && !sel.isCollapsed && sel.toString().trim().length > 0) {
+                return;
+            }
+
+            // 2. Không làm gì nếu đang chọn nhiều khối bằng kéo chuột / phím tắt
+            if (typeof selectedBlockWrappers !== 'undefined' && selectedBlockWrappers && selectedBlockWrappers.length > 0) {
+                return;
+            }
+
+            // 3. Không xử lý nếu click trúng vào khối nội dung hoặc các phần tử tương tác
+            if (e.target.closest('.block-wrapper, .block-content, .block-handle, button, input, textarea, .notion-floating-toolbar, .table-block-container, .code-block-shell, .popover, .modal')) {
+                return;
+            }
+
+            // 4. Chỉ xử lý khi click vào chính container hoặc page-content hoặc block-editor
+            if (e.target !== editorContainer && !e.target.classList.contains('page-content') && e.target !== elements.blockEditor) {
+                return;
+            }
+
+            if (!elements.blockEditor) return;
+            const allWrappers = Array.from(elements.blockEditor.querySelectorAll('.block-wrapper'));
+            if (allWrappers.length === 0) {
+                focusFirstBlockOrCreate();
+                return;
+            }
+
+            const last = allWrappers[allWrappers.length - 1];
+            if (!last) {
+                focusFirstBlockOrCreate();
+                return;
+            }
+
+            // 5. CỰC KỲ QUAN TRỌNG: Chỉ kích hoạt khi click THỰC SỰ NẰM BÊN DƯỚI mép đáy của khối cuối cùng!
+            // Nếu click ở lề trái/phải hay khoảng trống ngang hàng với các khối bên trên, TUYỆT ĐỐI không nhảy về cuối trang.
+            const lastRect = last.getBoundingClientRect();
+            if (e.clientY <= lastRect.bottom + 20) {
+                return;
+            }
+
+            const lastType = last.getAttribute('data-type');
+            if (['table', 'code', 'math', 'image', 'divider', 'toc'].includes(lastType)) {
+                const newBlock = createBlockElement('text', '', generateId(), 0);
+                elements.blockEditor.appendChild(newBlock);
+                const c = newBlock.querySelector('.block-content');
+                if (c) {
+                    c.focus();
+                    setCaretAtEnd(c);
                 }
-                const lastType = last.getAttribute('data-type');
-                if (['table', 'code', 'math', 'image', 'divider', 'toc'].includes(lastType)) {
-                    const newBlock = createBlockElement('text', '', generateId(), 0);
-                    elements.blockEditor.appendChild(newBlock);
-                    const c = newBlock.querySelector('.block-content');
-                    if (c) {
-                        c.focus();
-                        setCaretAtEnd(c);
-                    }
-                    triggerSave();
-                    return;
+                triggerSave();
+                return;
+            }
+
+            const lastContent = last.querySelector('.block-content');
+            const text = lastContent ? (lastContent.innerText || '').trim() : '';
+            if (!text && lastContent && lastContent.contentEditable !== 'false') {
+                lastContent.focus();
+                setCaretAtEnd(lastContent);
+            } else {
+                const newBlock = createBlockElement('text', '', generateId(), 0);
+                elements.blockEditor.appendChild(newBlock);
+                const c = newBlock.querySelector('.block-content');
+                if (c) {
+                    c.focus();
+                    setCaretAtEnd(c);
                 }
-                const lastContent = last.querySelector('.block-content');
-                if (lastContent && lastContent.contentEditable !== 'false') {
-                    lastContent.focus();
-                    setCaretAtEnd(lastContent);
-                }
+                triggerSave();
             }
         });
     }
