@@ -24,7 +24,7 @@
     <!-- KaTeX CSS for Math Equations (LaTeX) -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
     
-    <link rel="stylesheet" href="styles.css?v=4.0.0">
+    <link rel="stylesheet" href="styles.css?v=4.0.1">
 </head>
 <body>
     <div class="app-background">
@@ -46,7 +46,7 @@
                         <span class="workspace-name">School NoteBook</span>
                         <div class="workspace-meta">
                             <span class="workspace-plan">Personal</span>
-                            <span class="workspace-version-badge" id="app-version-badge" title="Phiên bản School NoteBook hiện tại">v4.0.0</span>
+                            <span class="workspace-version-badge" id="app-version-badge" title="Phiên bản School NoteBook hiện tại">v4.0.1</span>
                         </div>
                     </div>
                     <i class="ri-expand-up-down-line text-muted"></i>
@@ -690,7 +690,7 @@
                 <div class="version-info-box">
                     <div class="version-info-row">
                         <span>Phiên bản đang chạy:</span>
-                        <strong class="version-number-tag" id="setting-app-version">v4.0.0</strong>
+                        <strong class="version-number-tag" id="setting-app-version">v4.0.1</strong>
                     </div>
                     <div class="version-info-row">
                         <span>Trạng thái:</span>
@@ -820,6 +820,31 @@
                     <span class="nft-action-desc">Gộp các dòng đang chọn thành khung code có màu cú pháp</span>
                 </div>
                 <span class="nft-badge nft-badge-code">Code</span>
+            </div>
+
+            <div class="nft-section-title">⚡ Node Lệnh / Tech Tag (Nổi bật trong dòng)</div>
+            <div class="nft-tech-pills-row" id="nft-tech-pills-row">
+                <button class="nft-tech-pill-btn pill-amber" data-tech-pill="amber" type="button" title="Node Lệnh vàng cam (Mặc định - Ctrl+E)">
+                    <code>cmd()</code> Vàng
+                </button>
+                <button class="nft-tech-pill-btn pill-cyan" data-tech-pill="cyan" type="button" title="Node Hàm / API xanh dương">
+                    <code>fn</code> Xanh
+                </button>
+                <button class="nft-tech-pill-btn pill-green" data-tech-pill="green" type="button" title="Node Trạng thái RUNNING / OK">
+                    <code>RUN</code> Lá
+                </button>
+                <button class="nft-tech-pill-btn pill-red" data-tech-pill="red" type="button" title="Node Lỗi / STOPPED / Error">
+                    <code>ERR</code> Đỏ
+                </button>
+                <button class="nft-tech-pill-btn pill-purple" data-tech-pill="purple" type="button" title="Node Hằng số / Macro">
+                    <code>DEF</code> Tím
+                </button>
+                <button class="nft-tech-pill-btn pill-slate" data-tech-pill="slate" type="button" title="Node Số / Tham số / Phím">
+                    <code>0..9</code> Phím
+                </button>
+                <button class="nft-tech-pill-btn pill-clear" data-tech-pill="clear" type="button" title="Gỡ khung Node về chữ thường">
+                    <i class="ri-close-line"></i>
+                </button>
             </div>
 
             <div class="nft-section-title" id="nft-case-title">Đổi kiểu chữ (Word Case)</div>
@@ -1024,7 +1049,7 @@
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 
     <script src="firebase-config.js"></script>
-    <script src="shared/note-schema.js?v=4.0.0"></script>
-    <script src="app.js?v=4.0.0"></script>
+    <script src="shared/note-schema.js?v=4.0.1"></script>
+    <script src="app.js?v=4.0.1"></script>
 </body>
 </html>

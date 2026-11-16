@@ -3,15 +3,15 @@
  * Hỗ trợ offline đầy đủ cho cả Sổ tay chính và Mini Note.
  */
 
-const CACHE_NAME = 'schooldb-v4.0.0';
+const CACHE_NAME = 'schooldb-v4.0.1';
 
 const PRECACHE_URLS = [
     './',
     './index.html',
     './mini.html',
-    './styles.css?v=4.0.0',
-    './app.js?v=4.0.0',
-    './shared/note-schema.js?v=4.0.0',
+    './styles.css?v=4.0.1',
+    './app.js?v=4.0.1',
+    './shared/note-schema.js?v=4.0.1',
     './firebase-config.js',
     './manifest.json',
     './manifest-mini.json',

@@ -1,5 +1,5 @@
 // --- CONFIG & STATE ---
-const APP_VERSION = 'v4.0.0';
+const APP_VERSION = 'v4.0.1';
 const DELETED_PAGES_KEY = 'schooldb_deleted_pages';
 const appState = {
     theme: localStorage.getItem('theme') || 'dark',
@@ -422,6 +422,14 @@ function initApp() {
             document.execCommand('italic', false, null);
             e.preventDefault();
             triggerSave();
+        }
+        if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'e') {
+            const activeEl = document.activeElement;
+            const wrapper = activeEl ? activeEl.closest('.block-wrapper') : null;
+            if (wrapper && wrapper.getAttribute('data-type') !== 'code') {
+                e.preventDefault();
+                applyTechPillToSelection('amber');
+            }
         }
     });
 
@@ -3581,6 +3589,12 @@ function handleBlockInput(e) {
         closeSlashMenu();
         return;
     }
+
+    // Auto-convert inline `lệnh` into highlighted Tech Node pill
+    if (tryAutoConvertInlineCodeOnInput(target, e)) {
+        closeSlashMenu();
+        return;
+    }
     
     const text = target.innerText || target.textContent || '';
     const match = text.match(/\/([a-zA-Z0-9_-]*)$/);
@@ -3591,6 +3605,51 @@ function handleBlockInput(e) {
         closeSlashMenu();
     }
     triggerSave();
+}
+
+function tryAutoConvertInlineCodeOnInput(target, e) {
+    if (!target || !e || e.data !== '`' || target.dataset.composing === '1') return false;
+    const blockType = target.getAttribute('data-type') || 'text';
+    if (['code', 'math', 'table', 'image', 'divider', 'toc'].includes(blockType)) return false;
+
+    const sel = window.getSelection();
+    if (!sel || !sel.isCollapsed || sel.rangeCount === 0) return false;
+    const range = sel.getRangeAt(0);
+    const node = range.startContainer;
+    if (!node || node.nodeType !== Node.TEXT_NODE) return false;
+    if (node.parentElement && node.parentElement.closest('code')) return false;
+
+    const offset = range.startOffset;
+    const before = node.nodeValue.slice(0, offset);
+    const m = before.match(/`([^`\n]{1,120})`$/);
+    if (!m) return false;
+    if (m.index > 0 && before[m.index - 1] === '`') return false;
+
+    EditorHistory.recordBeforeAction();
+    const prefixStr = node.nodeValue.slice(0, m.index);
+    const suffixStr = node.nodeValue.slice(offset);
+
+    const codeEl = document.createElement('code');
+    codeEl.className = 'inline-code tech-pill-amber';
+    codeEl.textContent = m[1];
+
+    const parent = node.parentNode;
+    if (prefixStr) parent.insertBefore(document.createTextNode(prefixStr), node);
+    parent.insertBefore(codeEl, node);
+
+    const afterNode = document.createTextNode(suffixStr ? suffixStr : '\u00A0');
+    parent.insertBefore(afterNode, node);
+    parent.removeChild(node);
+
+    const newRange = document.createRange();
+    newRange.setStart(afterNode, suffixStr ? 0 : 1);
+    newRange.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(newRange);
+
+    triggerSave();
+    EditorHistory.updateLastSnapshot();
+    return true;
 }
 
 function extractCleanInlineHtml(html) {
@@ -3612,12 +3671,13 @@ function extractCleanInlineHtml(html) {
 
 function formatInlineMarkdown(text) {
     if (!text) return '';
-    let res = escapeHtml(text);
-    // Chuyển `code` thành <code class="inline-code">code</code>
-    res = res.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
-    // Chuyển **bold** thành <strong>bold</strong>
-    res = res.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-    return res;
+    const escaped = escapeHtml(text);
+    return escaped.replace(/`([^`]+)`|\*\*([^*]+)\*\*/g, (full, codeBody, boldBody) => {
+        if (codeBody !== undefined) {
+            return `<code class="inline-code tech-pill-amber">${codeBody}</code>`;
+        }
+        return `<strong>${boldBody}</strong>`;
+    });
 }
 
 function decodeHtmlEntities(str) {
@@ -4289,6 +4349,15 @@ function isLikelyCodeSnippet(rawText, rawHtml = '') {
         } catch (e) {}
     }
 
+    // Nếu HTML có danh sách bullet/numbered (<ul>, <ol>, <li>) ngoài <pre> -> đây là ghi chú/tài liệu, không phải Code Block
+    if (rawHtml && /<(?:ul|ol|li)\b/i.test(rawHtml)) {
+        try {
+            const doc = new DOMParser().parseFromString(rawHtml, 'text/html');
+            const hasListOutsidePre = Array.from(doc.querySelectorAll('ul, ol, li')).some(el => !el.closest('pre'));
+            if (hasListOutsidePre) return false;
+        } catch (e) {}
+    }
+
     const lines = trimmed.split('\n');
     const nonEmptyLines = lines.filter(l => l.trim().length > 0);
     if (nonEmptyLines.length === 0) return false;
@@ -4298,6 +4367,19 @@ function isLikelyCodeSnippet(rawText, rawHtml = '') {
         return false;
     }
     if (nonEmptyLines.length >= 2 && nonEmptyLines.every(l => l.trim().startsWith('|') && l.trim().endsWith('|'))) {
+        return false;
+    }
+
+    // Nếu có các dòng danh sách Markdown (- , * , • , 1. ) hoặc nhiều dòng văn xuôi tiếng Việt có dấu ngoài comment/string -> là văn bản tech note
+    const hasBulletOrHeading = nonEmptyLines.some(l => /^\s*(?:[-*•]|\d+[.)]|#{1,3})\s+/.test(l));
+    if (hasBulletOrHeading) {
+        return false;
+    }
+    const vnProseLines = nonEmptyLines.filter(l => {
+        const stripped = l.replace(/\/\/.*$|#.*$|\/\*[\s\S]*?\*\/|"(?:\\.|[^"])*"|'(?:\\.|[^'])*'/g, '');
+        return /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i.test(stripped);
+    }).length;
+    if (vnProseLines >= Math.max(1, Math.ceil(nonEmptyLines.length * 0.35))) {
         return false;
     }
 
@@ -4499,6 +4581,7 @@ function preprocessClipboardHtml(html) {
     try {
         const parser = new DOMParser();
         const doc = parser.parseFromString(html, 'text/html');
+        if (!doc.body) return '';
 
         // 1. Bảo toàn khối <pre> (ChatGPT, Claude, GitHub, StackOverflow...) thành fenced code block
         doc.querySelectorAll('pre').forEach(pre => {
@@ -4509,14 +4592,21 @@ function preprocessClipboardHtml(html) {
             const clone = pre.cloneNode(true);
             clone.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
             const rawPre = (clone.textContent || '').replace(/\r\n?/g, '\n').replace(/\u00A0/g, ' ').replace(/\n+$/, '');
-            pre.replaceWith(document.createTextNode(`\n\`\`\`${lang}\n${rawPre}\n\`\`\`\n`));
+            const span = doc.createElement('span');
+            span.setAttribute('data-clip-raw', '1');
+            span.textContent = `\n\`\`\`${lang}\n${rawPre}\n\`\`\`\n`;
+            pre.replaceWith(span);
         });
 
-        // 2. Chuyển các thẻ code inline thành dạng `code`
+        // 2. Chuyển các thẻ code inline thành dạng `code` (giữ nguyên khoảng trắng xung quanh)
         doc.querySelectorAll('code').forEach(c => {
+            if (c.closest('[data-clip-raw]')) return;
             const codeText = c.textContent || '';
             if (codeText && !codeText.includes('\n')) {
-                c.replaceWith(document.createTextNode(' `' + codeText.trim() + '` '));
+                const span = doc.createElement('span');
+                span.setAttribute('data-clip-raw', '1');
+                span.textContent = '`' + codeText.trim() + '`';
+                c.replaceWith(span);
             }
         });
 
@@ -4539,19 +4629,90 @@ function preprocessClipboardHtml(html) {
                                   mathEl.closest('.katex-display') || 
                                   mathEl.getAttribute('display') === 'block' ||
                                   tex.includes('\\begin{') || tex.includes('\\\\') || tex.length > 50;
-                const node = document.createTextNode(isDisplay ? `\n\n$$${tex}$$\n\n` : ` $${tex}$ `);
-                mathEl.replaceWith(node);
+                const span = doc.createElement('span');
+                span.setAttribute('data-clip-raw', '1');
+                span.textContent = isDisplay ? `\n\n$$${tex}$$\n\n` : ` $${tex}$ `;
+                mathEl.replaceWith(span);
             }
         });
 
-        // 4. Thêm dấu ngắt dòng cho các thẻ khối
-        doc.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
-        doc.querySelectorAll('p, div, tr, h1, h2, h3, h4, h5, h6').forEach(el => el.append('\n'));
-        doc.querySelectorAll('li').forEach(li => {
-            li.parentNode.insertBefore(document.createTextNode('\n• '), li);
-        });
+        function serializeClipboardNode(node, listDepth = 0, insideListItem = false) {
+            if (!node) return '';
+            if (node.nodeType === 3) {
+                return node.nodeValue.replace(/[\r\n\t]+/g, ' ').replace(/ {2,}/g, ' ');
+            }
+            if (node.nodeType !== 1) return '';
+            if (node.hasAttribute('data-clip-raw')) {
+                return node.textContent || '';
+            }
+            const tag = node.tagName;
+            if (['SCRIPT', 'STYLE', 'META', 'LINK'].includes(tag)) return '';
+            if (tag === 'BR') return '\n';
 
-        return (doc.body ? (doc.body.innerText || doc.body.textContent || '') : '').replace(/\r\n?/g, '\n').replace(/\u00A0/g, ' ');
+            if (tag === 'STRONG' || tag === 'B') {
+                const rawInner = Array.from(node.childNodes).map(ch => serializeClipboardNode(ch, listDepth, insideListItem)).join('');
+                const trimmed = rawInner.trim();
+                if (!trimmed) return rawInner;
+                // Nếu chỉ chứa duy nhất thẻ inline code `...` thì không bọc thêm **
+                if (/^`[^`]+`$/.test(trimmed)) return rawInner;
+                const leadSpace = /^\s/.test(rawInner) ? ' ' : '';
+                const trailSpace = /\s$/.test(rawInner) ? ' ' : '';
+                return `${leadSpace}**${trimmed}**${trailSpace}`;
+            }
+
+            if (tag === 'UL' || tag === 'OL') {
+                const isOrdered = tag === 'OL';
+                let out = '';
+                let num = 1;
+                Array.from(node.children).forEach(child => {
+                    if (child.tagName === 'LI') {
+                        const prefix = isOrdered ? `${num++}. ` : '- ';
+                        const indentStr = '  '.repeat(listDepth);
+                        let inlineBuf = '';
+                        let nestedBuf = '';
+                        Array.from(child.childNodes).forEach(liChild => {
+                            if (liChild.nodeType === 1 && (liChild.tagName === 'UL' || liChild.tagName === 'OL')) {
+                                nestedBuf += serializeClipboardNode(liChild, listDepth + 1, false);
+                            } else {
+                                const part = serializeClipboardNode(liChild, listDepth, true);
+                                if (part) {
+                                    if (inlineBuf && !inlineBuf.endsWith(' ') && !part.startsWith(' ')) {
+                                        inlineBuf += ' ';
+                                    }
+                                    inlineBuf += part;
+                                }
+                            }
+                        });
+                        const cleanInline = inlineBuf.replace(/[ \t]+/g, ' ').trim();
+                        if (cleanInline) {
+                            out += `\n${indentStr}${prefix}${cleanInline}\n`;
+                        }
+                        if (nestedBuf) {
+                            out += nestedBuf;
+                        }
+                    } else {
+                        out += serializeClipboardNode(child, listDepth, false);
+                    }
+                });
+                return out;
+            }
+
+            const inner = Array.from(node.childNodes).map(ch => serializeClipboardNode(ch, listDepth, insideListItem)).join('');
+            if (['P', 'DIV', 'TR', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE'].includes(tag)) {
+                if (insideListItem) {
+                    return inner.trim();
+                }
+                const clean = inner.trim();
+                return clean ? `\n${clean}\n` : '';
+            }
+            return inner;
+        }
+
+        return serializeClipboardNode(doc.body, 0, false)
+            .replace(/\r\n?/g, '\n')
+            .replace(/\u00A0/g, ' ')
+            .replace(/\n{3,}/g, '\n\n')
+            .trim();
     } catch (e) {
         return '';
     }
@@ -4906,8 +5067,8 @@ function handleBlockPaste(e) {
 
     let text = plainText;
 
-    // 3. Tiền xử lý clipboard: Khôi phục công thức LaTeX, <pre> & code pills nếu copy từ ChatGPT, Claude, DeepSeek, Wikipedia
-    const htmlHasSpecialNodes = /<(?:pre|code|math)\b|katex|mwe-math-element|data-latex/i.test(html);
+    // 3. Tiền xử lý clipboard: Khôi phục công thức LaTeX, danh sách, chữ đậm, <pre> & code pills nếu copy từ ChatGPT, Claude, DeepSeek, Web
+    const htmlHasSpecialNodes = /<(?:pre|code|math|ul|ol|li|strong|b)\b|katex|mwe-math-element|data-latex/i.test(html);
     if (html && (htmlHasSpecialNodes || !text.includes('\n'))) {
         const preprocessedFromHtml = preprocessClipboardHtml(html);
         if (preprocessedFromHtml && (preprocessedFromHtml.includes('$$') || preprocessedFromHtml.includes('`') || preprocessedFromHtml.includes('\n'))) {
@@ -6002,6 +6163,16 @@ function initFloatingToolbar() {
         });
     }
 
+    // 1.8 INLINE TECH PILLS (⚡ Node Lệnh / Tech Tag trong dòng)
+    toolbar.querySelectorAll('.nft-tech-pill-btn[data-tech-pill]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const pillStyle = btn.getAttribute('data-tech-pill');
+            applyTechPillToSelection(pillStyle);
+        });
+    });
+
     // 2. WORD CASE CONVERTERS (UPPERCASE, lowercase, Title Case)
     toolbar.querySelectorAll('.nft-case-btn[data-case]').forEach(btn => {
         btn.addEventListener('click', (e) => {
@@ -6787,11 +6958,7 @@ function applyInlineCommand(formatType, value = null) {
     } else if (formatType === 'removeFormat') {
         document.execCommand('removeFormat', false, null);
     } else if (formatType === 'code') {
-        const sel = window.getSelection();
-        if (sel && !sel.isCollapsed) {
-            const text = sel.toString();
-            document.execCommand('insertHTML', false, `<code class="inline-code">${escapeHtml(text)}</code>`);
-        }
+        applyTechPillToSelection('amber');
     } else if (formatType === 'copy') {
         const sel = window.getSelection();
         if (sel) {
@@ -6835,6 +7002,126 @@ function applyBlockFormat(contentEl, formatType, value = null) {
         contentEl.style.fontStyle = '';
         contentEl.style.textDecoration = '';
     }
+}
+
+const TECH_PILL_CLASSES = ['tech-pill-amber', 'tech-pill-cyan', 'tech-pill-green', 'tech-pill-red', 'tech-pill-purple', 'tech-pill-slate'];
+
+function unwrapInlineCodeElement(codeEl, selectResult = false) {
+    if (!codeEl || !codeEl.parentNode) return null;
+    const textNode = document.createTextNode(codeEl.textContent || '');
+    codeEl.parentNode.replaceChild(textNode, codeEl);
+    if (selectResult) {
+        const sel = window.getSelection();
+        if (sel) {
+            const r = document.createRange();
+            r.selectNodeContents(textNode);
+            sel.removeAllRanges();
+            sel.addRange(r);
+            lastActiveRange = r.cloneRange();
+        }
+    }
+    return textNode;
+}
+
+function applyTechPillToSelection(styleName = 'amber') {
+    let sel = window.getSelection();
+    if ((!sel || sel.rangeCount === 0 || sel.isCollapsed) && lastActiveRange) {
+        try {
+            sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(lastActiveRange);
+        } catch (e) {}
+    }
+    if (!sel || sel.rangeCount === 0) return;
+
+    const range = sel.getRangeAt(0);
+    let container = range.commonAncestorContainer;
+    if (container && container.nodeType === Node.TEXT_NODE) container = container.parentElement;
+
+    const wrapper = container ? container.closest('.block-wrapper') : null;
+    if (!wrapper || wrapper.getAttribute('data-type') === 'code') {
+        showToast('ℹ️ Node lệnh dùng trong các dòng văn bản hoặc danh sách.');
+        return;
+    }
+
+    const contentEl = wrapper.querySelector('.block-content');
+    if (!contentEl || !contentEl.contains(container)) return;
+
+    EditorHistory.recordBeforeAction();
+
+    const existingCode = container.closest ? container.closest('code.inline-code') : null;
+    if (existingCode && contentEl.contains(existingCode)) {
+        const targetClass = `tech-pill-${styleName}`;
+        const hasSameStyle = existingCode.classList.contains(targetClass) ||
+            (styleName === 'amber' && !TECH_PILL_CLASSES.some(c => existingCode.classList.contains(c)));
+
+        if (styleName === 'clear' || hasSameStyle) {
+            unwrapInlineCodeElement(existingCode, true);
+            showToast('Đã gỡ khung Node lệnh');
+        } else {
+            TECH_PILL_CLASSES.forEach(c => existingCode.classList.remove(c));
+            existingCode.classList.add(targetClass);
+            const r = document.createRange();
+            r.selectNodeContents(existingCode);
+            sel.removeAllRanges();
+            sel.addRange(r);
+            lastActiveRange = r.cloneRange();
+        }
+        triggerSave();
+        EditorHistory.updateLastSnapshot();
+        return;
+    }
+
+    if (styleName === 'clear') {
+        let unwrappedCount = 0;
+        contentEl.querySelectorAll('code.inline-code').forEach(c => {
+            try {
+                if (range.intersectsNode(c)) {
+                    unwrapInlineCodeElement(c, false);
+                    unwrappedCount++;
+                }
+            } catch (e) {}
+        });
+        if (unwrappedCount > 0) {
+            triggerSave();
+            EditorHistory.updateLastSnapshot();
+            showToast('Đã gỡ khung Node lệnh');
+        }
+        return;
+    }
+
+    if (sel.isCollapsed) return;
+    const plain = sel.toString();
+    if (!plain || !plain.trim()) return;
+
+    // Tránh bọc chéo qua nhiều dòng
+    const startBlock = range.startContainer.nodeType === Node.TEXT_NODE ? range.startContainer.parentElement.closest('.block-wrapper') : range.startContainer.closest('.block-wrapper');
+    const endBlock = range.endContainer.nodeType === Node.TEXT_NODE ? range.endContainer.parentElement.closest('.block-wrapper') : range.endContainer.closest('.block-wrapper');
+    if (startBlock !== endBlock) {
+        showToast('⚠️ Node lệnh nội dòng chỉ áp dụng trong cùng một dòng');
+        return;
+    }
+
+    const codeEl = document.createElement('code');
+    codeEl.className = `inline-code tech-pill-${styleName}`;
+    codeEl.textContent = plain;
+
+    range.deleteContents();
+    range.insertNode(codeEl);
+
+    // Đảm bảo có điểm thoát con trỏ sau thẻ <code> nếu đang ở cuối dòng
+    if (!codeEl.nextSibling) {
+        codeEl.parentNode.appendChild(document.createTextNode('\u00A0'));
+    }
+
+    const newRange = document.createRange();
+    newRange.selectNodeContents(codeEl);
+    sel.removeAllRanges();
+    sel.addRange(newRange);
+    lastActiveRange = newRange.cloneRange();
+
+    triggerSave();
+    EditorHistory.updateLastSnapshot();
 }
 
 function executeFormatAction(action) {
