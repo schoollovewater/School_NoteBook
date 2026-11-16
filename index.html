@@ -24,7 +24,7 @@
     <!-- KaTeX CSS for Math Equations (LaTeX) -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
     
-    <link rel="stylesheet" href="styles.css?v=3.9.3">
+    <link rel="stylesheet" href="styles.css?v=4.0.0">
 </head>
 <body>
     <div class="app-background">
@@ -33,9 +33,8 @@
         <div class="bokeh bokeh-3"></div>
     </div>
 
-    <div class="sidebar-overlay" id="sidebar-overlay"></div>
-
     <div class="app-container glass-panel">
+        <div class="sidebar-overlay" id="sidebar-overlay"></div>
         <!-- Sidebar -->
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
@@ -47,7 +46,7 @@
                         <span class="workspace-name">School NoteBook</span>
                         <div class="workspace-meta">
                             <span class="workspace-plan">Personal</span>
-                            <span class="workspace-version-badge" id="app-version-badge" title="Phiên bản School NoteBook hiện tại">v3.9.3</span>
+                            <span class="workspace-version-badge" id="app-version-badge" title="Phiên bản School NoteBook hiện tại">v4.0.0</span>
                         </div>
                     </div>
                     <i class="ri-expand-up-down-line text-muted"></i>
@@ -88,6 +87,7 @@
                             <span>PRIVATE</span>
                         </div>
                         <div class="section-title-actions">
+                            <i class="ri-brush-3-line add-icon" onclick="event.stopPropagation(); app.cleanupBlankPages()" title="Dọn sạch các trang trắng (Untitled)"></i>
                             <i class="ri-add-line add-icon" onclick="event.stopPropagation(); app.createNewPage()" title="Thêm trang mới"></i>
                         </div>
                     </div>
@@ -657,6 +657,10 @@
             <i class="ri-download-line"></i>
             <span>Export as TXT</span>
         </div>
+        <div class="menu-item" onclick="app.cleanupBlankPages()">
+            <i class="ri-brush-3-line"></i>
+            <span>Dọn dẹp các trang trắng (Untitled)</span>
+        </div>
         <div class="menu-item text-danger" onclick="app.deleteCurrentPage()">
             <i class="ri-delete-bin-line"></i>
             <span>Delete page</span>
@@ -686,7 +690,7 @@
                 <div class="version-info-box">
                     <div class="version-info-row">
                         <span>Phiên bản đang chạy:</span>
-                        <strong class="version-number-tag" id="setting-app-version">v3.9</strong>
+                        <strong class="version-number-tag" id="setting-app-version">v4.0.0</strong>
                     </div>
                     <div class="version-info-row">
                         <span>Trạng thái:</span>
@@ -789,13 +793,14 @@
                 <button class="bubble-btn" data-action="removeFormat" type="button" title="Xóa định dạng"><i class="ri-format-clear"></i></button>
                 <button class="bubble-btn" data-action="strikethrough" type="button" title="Gạch ngang"><i class="ri-strikethrough"></i></button>
                 <button class="bubble-btn" data-action="code" type="button" title="Mã nội dòng"><i class="ri-code-line"></i></button>
+                <button class="bubble-btn" data-action="codeBlock" type="button" title="Chuyển thành Khối Code (Code Block)"><i class="ri-terminal-box-line"></i></button>
                 <button class="bubble-btn" data-action="copy" type="button" title="Sao chép"><i class="ri-file-copy-line"></i></button>
             </div>
         </div>
 
         <div class="nft-divider" id="nft-divider-top"></div>
 
-        <!-- Action List (Word & Notion Tools: 1. Add Vocab, 2. Text Tools) -->
+        <!-- Action List (Word & Notion Tools: 1. Add Vocab, 2. Code Block, 3. Text Tools) -->
         <div class="nft-actions-list">
             <!-- 1. THÊM TỪ VỰNG (Main Action) -->
             <div class="nft-action-item nft-action-vocab" id="bubble-add-vocab-btn">
@@ -805,6 +810,16 @@
                     <span class="nft-action-desc">Lưu từ vào sổ học và tự động tạo thẻ 3D</span>
                 </div>
                 <span class="nft-badge">Sổ từ</span>
+            </div>
+
+            <!-- 2. HIỂN THỊ DẠNG KHỐI CODE -->
+            <div class="nft-action-item nft-action-codeblock" id="bubble-code-block-btn">
+                <div class="nft-action-icon"><i class="ri-terminal-box-line"></i></div>
+                <div class="nft-action-text">
+                    <span class="nft-action-title">💻 Hiển thị dạng Khối Code (Code Block)</span>
+                    <span class="nft-action-desc">Gộp các dòng đang chọn thành khung code có màu cú pháp</span>
+                </div>
+                <span class="nft-badge nft-badge-code">Code</span>
             </div>
 
             <div class="nft-section-title" id="nft-case-title">Đổi kiểu chữ (Word Case)</div>
@@ -891,6 +906,8 @@
                 </div>
             </form>
         </div>
+    </div>
+
     <!-- Insert Image Modal -->
     <div class="modal-overlay" id="image-modal" style="display: none;">
         <div class="modal-content image-modal-content">
@@ -969,6 +986,9 @@
         </div>
     </div>
 
+    <!-- Paste Format Option Pill -->
+    <div id="paste-option-pill" class="paste-option-pill" style="display: none;"></div>
+
     <!-- Toast Notification Container -->
     <div id="toast-container" class="toast-container"></div>
 
@@ -1004,7 +1024,7 @@
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 
     <script src="firebase-config.js"></script>
-    <script src="shared/note-schema.js?v=3.9.3"></script>
-    <script src="app.js?v=3.9.3"></script>
+    <script src="shared/note-schema.js?v=4.0.0"></script>
+    <script src="app.js?v=4.0.0"></script>
 </body>
 </html>

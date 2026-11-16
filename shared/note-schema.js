@@ -42,18 +42,27 @@
         const lines = String(text || '').replace(/\r\n?/g, '\n').split('\n');
         const blocks = [];
         let codeBuf = null;
+        let codeLang = 'auto';
 
         lines.forEach(function (raw) {
             if (codeBuf !== null) {
                 if (/^\s*```/.test(raw)) {
-                    blocks.push(block('code', codeBuf.join('\n')));
+                    const b = block('code', codeBuf.join('\n'));
+                    if (codeLang && codeLang !== 'auto') b.codeLang = codeLang;
+                    blocks.push(b);
                     codeBuf = null;
+                    codeLang = 'auto';
                 } else {
                     codeBuf.push(raw);
                 }
                 return;
             }
-            if (/^\s*```/.test(raw)) { codeBuf = []; return; }
+            const fenceMatch = raw.match(/^\s*```([a-zA-Z0-9_+#-]*)\s*$/);
+            if (fenceMatch) {
+                codeBuf = [];
+                codeLang = (fenceMatch[1] || '').toLowerCase() || 'auto';
+                return;
+            }
             if (!raw.trim()) return;
 
             const indent = Math.min(Math.floor((raw.match(/^ */)[0].length) / 2), 6);
@@ -83,7 +92,11 @@
             else blocks.push(block('text', line, indent));
         });
 
-        if (codeBuf !== null && codeBuf.length) blocks.push(block('code', codeBuf.join('\n')));
+        if (codeBuf !== null && codeBuf.length) {
+            const b = block('code', codeBuf.join('\n'));
+            if (codeLang && codeLang !== 'auto') b.codeLang = codeLang;
+            blocks.push(b);
+        }
         if (!blocks.length) blocks.push({ id: generateId(), type: 'text', content: '', indent: 0 });
         return blocks;
     }
@@ -160,7 +173,7 @@
     }
 
     return {
-        VERSION: '3.9',
+        VERSION: '4.0.0',
         STORAGE_KEYS: {
             pages: 'schooldb_pages',
             vocab: 'schooldb_vocab_items',

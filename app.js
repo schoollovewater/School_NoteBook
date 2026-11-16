@@ -1,5 +1,6 @@
 // --- CONFIG & STATE ---
-const APP_VERSION = 'v3.9.3';
+const APP_VERSION = 'v4.0.0';
+const DELETED_PAGES_KEY = 'schooldb_deleted_pages';
 const appState = {
     theme: localStorage.getItem('theme') || 'dark',
     activePageId: null,
@@ -19,10 +20,105 @@ const elements = {
     editorContainer: document.getElementById('editor-container')
 };
 
-// --- FIREBASE SYNC ---
+// --- FIREBASE SYNC & DELETION TRACKING ---
 let db;
 let firebaseSyncTimeout;
 let vocabSyncTimeout;
+let localViewStateTimeout;
+let hasPendingLocalSave = false;
+let cloudSyncReady = false;
+let cloudInitialServerSyncDone = false;
+let isCloudWriteInFlight = false;
+let cloudWriteReschedule = false;
+const pendingCloudPageIds = new Set();
+const lastCloudSyncedSignature = {};
+
+function getDeletedPagesMap() {
+    try {
+        const raw = JSON.parse(localStorage.getItem(DELETED_PAGES_KEY) || '{}');
+        return (raw && typeof raw === 'object') ? raw : {};
+    } catch (e) {
+        return {};
+    }
+}
+
+function saveDeletedPagesMap(map) {
+    try {
+        const entries = Object.entries(map || {})
+            .sort((a, b) => (Number(b[1]) || 0) - (Number(a[1]) || 0))
+            .slice(0, 500);
+        const trimmed = Object.fromEntries(entries);
+        localStorage.setItem(DELETED_PAGES_KEY, JSON.stringify(trimmed));
+        return trimmed;
+    } catch (e) {
+        return map || {};
+    }
+}
+
+function markPageDeleted(pageIds) {
+    const ids = (Array.isArray(pageIds) ? pageIds : [pageIds]).filter(Boolean);
+    if (!ids.length) return;
+    const map = getDeletedPagesMap();
+    const now = Date.now();
+    const cloudPatch = {};
+    ids.forEach(id => {
+        map[id] = now;
+        cloudPatch[id] = now;
+    });
+    saveDeletedPagesMap(map);
+    if (db && Object.keys(cloudPatch).length > 0) {
+        db.collection('meta').doc('deleted_pages').set(cloudPatch, { merge: true })
+            .catch(err => console.warn('Deleted tombstone sync warning:', err));
+    }
+    broadcastLocalChange('pages-deleted', { ids });
+}
+
+function isBlankPage(page) {
+    if (!page || typeof page !== 'object') return true;
+    const title = (page.title || '').trim();
+    if (title) return false;
+    if (page.cover) return false;
+    if (page.icon && page.icon !== '📄' && page.icon !== '⚡') return false;
+    const blocks = Array.isArray(page.blocks) ? page.blocks : [];
+    if (blocks.length === 0) return true;
+    return blocks.every(b => {
+        if (!b) return true;
+        if (b.type && b.type !== 'text') return false;
+        const plain = String(b.content || '')
+            .replace(/<br\s*\/?>/gi, '')
+            .replace(/<[^>]*>/g, '')
+            .replace(/&nbsp;/gi, ' ')
+            .trim();
+        return plain === '';
+    });
+}
+
+function getPageContentSignature(page) {
+    if (!page) return '';
+    const blocksSig = (Array.isArray(page.blocks) ? page.blocks : []).map(b => ({
+        id: b.id || '',
+        type: b.type || 'text',
+        content: b.content || '',
+        indent: b.indent || 0,
+        color: b.color || '',
+        bgColor: b.bgColor || '',
+        codeLang: b.codeLang || '',
+        lineNumbers: b.lineNumbers !== undefined ? !!b.lineNumbers : undefined,
+        wordWrap: b.wordWrap !== undefined ? !!b.wordWrap : undefined
+    }));
+    return JSON.stringify({
+        title: page.title || '',
+        icon: page.icon || '📄',
+        cover: page.cover || null,
+        font: page.font || 'default',
+        smallText: !!page.smallText,
+        fullWidth: !!page.fullWidth,
+        locked: !!page.locked,
+        inbox: !!page.inbox,
+        tags: page.tags || [],
+        blocks: blocksSig
+    });
+}
 
 if (typeof window.USE_FIREBASE !== 'undefined' && window.USE_FIREBASE) {
     if (!firebase.apps.length) {
@@ -402,6 +498,14 @@ function initApp() {
 
     // Load initial data
     loadPages();
+
+    // Flush any pending unsaved edits when leaving or backgrounding the tab
+    window.addEventListener('beforeunload', () => flushPendingSave(true));
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+            flushPendingSave(true);
+        }
+    });
 }
 
 function applyTheme(theme) {
@@ -459,16 +563,29 @@ function createDefaultWelcomePage() {
 
 function loadPages() {
     const stored = localStorage.getItem('schooldb_pages');
+    const deletedMap = getDeletedPagesMap();
     let hasLocalPages = false;
     if (stored) {
         try {
             const parsed = JSON.parse(stored);
-            if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
-                appState.pages = parsed;
-                hasLocalPages = true;
-                renderSidebar();
-                const firstPageId = Object.keys(appState.pages)[0];
-                if (firstPageId) openPage(firstPageId);
+            if (parsed && typeof parsed === 'object') {
+                let pruned = false;
+                Object.keys(deletedMap).forEach(id => {
+                    if (parsed[id]) {
+                        delete parsed[id];
+                        pruned = true;
+                    }
+                });
+                if (pruned) {
+                    localStorage.setItem('schooldb_pages', JSON.stringify(parsed));
+                }
+                if (Object.keys(parsed).length > 0) {
+                    appState.pages = parsed;
+                    hasLocalPages = true;
+                    renderSidebar();
+                    const firstPageId = Object.keys(appState.pages)[0];
+                    if (firstPageId) openPage(firstPageId);
+                }
             }
         } catch (e) {
             console.warn('Lỗi đọc local pages:', e);
@@ -503,6 +620,21 @@ function isEditingActivePage() {
     return !!ae && (ae === elements.pageTitleInput || (elements.blockEditor && elements.blockEditor.contains(ae)));
 }
 
+function preserveLocalToggleCollapsedStates(localPage, remotePage) {
+    if (!localPage || !Array.isArray(localPage.blocks) || !remotePage || !Array.isArray(remotePage.blocks)) return;
+    const localCollapsedById = {};
+    localPage.blocks.forEach(b => {
+        if (b && b.id && (b.type === 'toggle' || (b.type && b.type.startsWith('toggle-')))) {
+            localCollapsedById[b.id] = !!b.collapsed;
+        }
+    });
+    remotePage.blocks.forEach(b => {
+        if (b && b.id && Object.prototype.hasOwnProperty.call(localCollapsedById, b.id)) {
+            b.collapsed = localCollapsedById[b.id];
+        }
+    });
+}
+
 function startCloudSync() {
     if (!db) {
         updateSyncStatusUI('local-only');
@@ -511,25 +643,62 @@ function startCloudSync() {
 
     updateSyncStatusUI(navigator.onLine ? 'syncing' : 'offline', navigator.onLine ? 'Đang kết nối Cloud...' : 'Offline (Lưu máy)');
 
+    // 0. Lắng nghe danh sách trang đã xóa từ các thiết bị khác (tombstone)
+    db.collection('meta').doc('deleted_pages').onSnapshot(docSnap => {
+        if (!docSnap.exists) return;
+        const remoteDeleted = docSnap.data() || {};
+        const merged = Object.assign({}, getDeletedPagesMap(), remoteDeleted);
+        saveDeletedPagesMap(merged);
+
+        let removedAny = false;
+        let activeRemoved = false;
+        Object.keys(remoteDeleted).forEach(id => {
+            if (appState.pages[id]) {
+                delete appState.pages[id];
+                delete lastCloudSyncedSignature[id];
+                pendingCloudPageIds.delete(id);
+                removedAny = true;
+                if (id === appState.activePageId) activeRemoved = true;
+            }
+        });
+        if (removedAny) {
+            localStorage.setItem('schooldb_pages', JSON.stringify(appState.pages));
+            renderSidebar();
+            if (activeRemoved) openFirstPageOrCreate();
+        }
+    }, err => console.warn('deleted_pages sync warning:', err));
+
     // 1. Sync ghi chú (notes)
     db.collection('notes').onSnapshot(snapshot => {
+        const fromCache = !!(snapshot.metadata && snapshot.metadata.fromCache);
+        const deletedMap = getDeletedPagesMap();
         let sidebarDirty = false;
         let activeDirty = false;
         let newInbox = 0;
-
-        if (snapshot.empty && Object.keys(appState.pages).length === 0) {
-            createDefaultWelcomePage();
-            updateSyncStatusUI('synced');
-            return;
-        }
 
         snapshot.docChanges().forEach(change => {
             const doc = change.doc;
             if (doc.metadata.hasPendingWrites) return; // echo of our own local write
 
+            if (deletedMap[doc.id]) {
+                if (change.type !== 'removed' && !fromCache) {
+                    db.collection('notes').doc(doc.id).delete().catch(() => {});
+                }
+                if (appState.pages[doc.id]) {
+                    delete appState.pages[doc.id];
+                    delete lastCloudSyncedSignature[doc.id];
+                    pendingCloudPageIds.delete(doc.id);
+                    sidebarDirty = true;
+                    if (doc.id === appState.activePageId) activeDirty = true;
+                }
+                return;
+            }
+
             if (change.type === 'removed') {
                 if (appState.pages[doc.id]) {
                     delete appState.pages[doc.id];
+                    delete lastCloudSyncedSignature[doc.id];
+                    pendingCloudPageIds.delete(doc.id);
                     sidebarDirty = true;
                     if (doc.id === appState.activePageId) activeDirty = true;
                 }
@@ -541,15 +710,21 @@ function startCloudSync() {
             const page = result.page;
             const existed = !!appState.pages[page.id];
 
-            if (result.migrated) {
+            if (result.migrated && !fromCache) {
                 db.collection('notes').doc(doc.id).set(pageToCloud(page))
                     .catch(err => console.warn('Migration write failed:', err));
             }
 
-            // Không ghi đè trang đang được gõ dở
-            if (page.id === appState.activePageId && isEditingActivePage()) return;
+            // Không ghi đè trang đang được gõ dở hoặc đang chờ lưu cục bộ
+            if (page.id === appState.activePageId && (isEditingActivePage() || hasPendingLocalSave || pendingCloudPageIds.has(page.id))) {
+                if (appState.pages[page.id]) appState.pages[page.id].syncedToCloud = true;
+                return;
+            }
 
-            appState.pages[page.id] = Object.assign({}, appState.pages[page.id] || {}, page);
+            const existingLocal = appState.pages[page.id];
+            preserveLocalToggleCollapsedStates(existingLocal, page);
+            appState.pages[page.id] = Object.assign({}, existingLocal || {}, page, { syncedToCloud: true });
+            lastCloudSyncedSignature[page.id] = getPageContentSignature(appState.pages[page.id]);
             sidebarDirty = true;
             
             // Cập nhật trang đang mở: nếu trùng activePageId, hoặc chưa mở trang nào hợp lệ
@@ -562,6 +737,43 @@ function startCloudSync() {
             if (!existed && page.inbox && change.type === 'added' && cloudSyncReady) newInbox++;
         });
 
+        // Chỉ đối chiếu xóa trang & đẩy trang thiếu sau khi nhận snapshot thực từ Cloud server
+        if (!fromCache) {
+            const cloudIds = new Set(snapshot.docs.map(d => d.id));
+            Object.keys(appState.pages).forEach(id => {
+                if (!cloudIds.has(id)) {
+                    const p = appState.pages[id];
+                    const shouldPrune = !!(
+                        deletedMap[id] ||
+                        (p && p.syncedToCloud) ||
+                        (p && isBlankPage(p) && id !== appState.activePageId)
+                    );
+                    if (shouldPrune) {
+                        delete appState.pages[id];
+                        delete lastCloudSyncedSignature[id];
+                        pendingCloudPageIds.delete(id);
+                        sidebarDirty = true;
+                        if (id === appState.activePageId) activeDirty = true;
+                    }
+                }
+            });
+
+            if (snapshot.empty && Object.keys(appState.pages).length === 0) {
+                createDefaultWelcomePage();
+                cloudInitialServerSyncDone = true;
+                cloudSyncReady = true;
+                updateSyncStatusUI(navigator.onLine ? 'synced' : 'offline');
+                return;
+            }
+
+            if (!cloudInitialServerSyncDone) {
+                cloudInitialServerSyncDone = true;
+                pushLocalMissingPagesToCloud(cloudIds);
+            }
+        } else if (!navigator.onLine && snapshot.empty && Object.keys(appState.pages).length === 0) {
+            createDefaultWelcomePage();
+        }
+
         if (sidebarDirty) {
             localStorage.setItem('schooldb_pages', JSON.stringify(appState.pages));
             renderSidebar();
@@ -572,12 +784,14 @@ function startCloudSync() {
         }
         if (newInbox > 0) showToast(`📥 ${newInbox} ghi chú mới từ Mini Note`);
         
-        // Đẩy bất kỳ trang local nào chưa có trên Cloud lên (initial push nếu app 1 có trang cũ)
-        if (!cloudSyncReady) {
-            pushLocalMissingPagesToCloud();
-        }
         cloudSyncReady = true;
-        updateSyncStatusUI(navigator.onLine ? 'synced' : 'offline');
+        if (!navigator.onLine) {
+            updateSyncStatusUI('offline');
+        } else if (fromCache) {
+            updateSyncStatusUI('syncing', 'Đang đồng bộ Cloud...');
+        } else if (!isCloudWriteInFlight && pendingCloudPageIds.size === 0) {
+            updateSyncStatusUI('synced');
+        }
     }, err => {
         console.error('Firebase realtime error:', err);
         updateSyncStatusUI('error');
@@ -639,24 +853,34 @@ function startCloudSync() {
     }, err => console.warn('vocab_inbox sync error:', err));
 }
 
-async function pushLocalMissingPagesToCloud() {
+async function pushLocalMissingPagesToCloud(cloudIds = null) {
     if (!db || !navigator.onLine) return;
     try {
+        const deletedMap = getDeletedPagesMap();
         const localPageIds = Object.keys(appState.pages);
         if (localPageIds.length === 0) return;
         
         const batch = db.batch();
+        const pushedPages = [];
         let batchCount = 0;
         for (const id of localPageIds) {
             const page = appState.pages[id];
-            if (page) {
-                batch.set(db.collection('notes').doc(id), pageToCloud(page), { merge: true });
-                batchCount++;
-                if (batchCount >= 400) break;
-            }
+            if (!page || deletedMap[id]) continue;
+            if (cloudIds && cloudIds.has(id)) continue;
+            if (page.syncedToCloud) continue;
+            if (isBlankPage(page)) continue;
+            batch.set(db.collection('notes').doc(id), pageToCloud(page), { merge: true });
+            pushedPages.push(page);
+            batchCount++;
+            if (batchCount >= 400) break;
         }
         if (batchCount > 0) {
             await batch.commit();
+            pushedPages.forEach(p => {
+                p.syncedToCloud = true;
+                lastCloudSyncedSignature[p.id] = getPageContentSignature(p);
+            });
+            localStorage.setItem('schooldb_pages', JSON.stringify(appState.pages));
         }
 
         if (vocab && Array.isArray(vocab.items) && vocab.items.length > 0) {
@@ -689,24 +913,24 @@ async function syncAllToCloud(silent = false) {
         return;
     }
 
+    flushPendingSave(false);
     updateSyncStatusUI('syncing', 'Đang đồng bộ...');
     try {
-        if (appState.activePageId && appState.pages[appState.activePageId]) {
-            appState.pages[appState.activePageId].title = elements.pageTitleInput.value;
-            appState.pages[appState.activePageId].blocks = serializeBlocks();
-            localStorage.setItem('schooldb_pages', JSON.stringify(appState.pages));
-        }
-
+        const deletedMap = getDeletedPagesMap();
         const pageIds = Object.keys(appState.pages);
         const batch = db.batch();
+        const syncedPages = [];
         let count = 0;
         for (const id of pageIds) {
             const page = appState.pages[id];
-            if (page) {
-                batch.set(db.collection('notes').doc(id), pageToCloud(page), { merge: true });
-                count++;
-                if (count >= 400) break;
-            }
+            if (!page || deletedMap[id]) continue;
+            if (isBlankPage(page) && !page.syncedToCloud) continue;
+            const sig = getPageContentSignature(page);
+            if (silent && sig === lastCloudSyncedSignature[id]) continue;
+            batch.set(db.collection('notes').doc(id), pageToCloud(page), { merge: true });
+            syncedPages.push({ page, sig });
+            count++;
+            if (count >= 400) break;
         }
 
         if (vocab && Array.isArray(vocab.items)) {
@@ -717,7 +941,15 @@ async function syncAllToCloud(silent = false) {
             });
         }
 
-        await batch.commit();
+        if (count > 0 || (vocab && Array.isArray(vocab.items) && vocab.items.length > 0)) {
+            await batch.commit();
+        }
+        syncedPages.forEach(({ page, sig }) => {
+            page.syncedToCloud = true;
+            lastCloudSyncedSignature[page.id] = sig;
+            pendingCloudPageIds.delete(page.id);
+        });
+        localStorage.setItem('schooldb_pages', JSON.stringify(appState.pages));
         updateSyncStatusUI('synced');
         broadcastLocalChange('pages-updated', { count });
         broadcastLocalChange('vocab-updated');
@@ -748,18 +980,19 @@ function setupNetworkSyncListeners() {
         updateSyncStatusUI('offline');
     });
 }
-let cloudSyncReady = false;
 
 // Mini Note mở cùng trình duyệt ghi thẳng vào localStorage → cập nhật ngay, kể cả khi offline
 function startLocalSync() {
     const reloadPagesFromStorage = () => {
         try {
             const stored = JSON.parse(localStorage.getItem('schooldb_pages') || '{}');
+            const deletedMap = getDeletedPagesMap();
+            Object.keys(deletedMap).forEach(id => { delete stored[id]; });
             const activeId = appState.activePageId;
             const editing = isEditingActivePage();
             const activeCopy = appState.pages[activeId];
             appState.pages = stored;
-            if (editing && activeCopy) appState.pages[activeId] = activeCopy;
+            if (editing && activeCopy && !deletedMap[activeId]) appState.pages[activeId] = activeCopy;
             renderSidebar();
             if (!editing) {
                 if (appState.pages[activeId]) openPage(activeId);
@@ -772,7 +1005,7 @@ function startLocalSync() {
     };
 
     window.addEventListener('storage', (e) => {
-        if (e.key === 'schooldb_pages') reloadPagesFromStorage();
+        if (e.key === 'schooldb_pages' || e.key === DELETED_PAGES_KEY) reloadPagesFromStorage();
         if (e.key === 'schooldb_vocab_items') reloadVocab();
         if (e.key === 'theme' && e.newValue) {
             appState.theme = e.newValue;
@@ -787,6 +1020,13 @@ function startLocalSync() {
             if (e.data.type === 'pages-updated') {
                 reloadPagesFromStorage();
                 if (e.data.count) showToast(`📥 ${e.data.count} ghi chú mới từ Mini Note`);
+            }
+            if (e.data.type === 'pages-deleted' && Array.isArray(e.data.ids)) {
+                const map = getDeletedPagesMap();
+                const now = Date.now();
+                e.data.ids.forEach(id => { map[id] = now; });
+                saveDeletedPagesMap(map);
+                reloadPagesFromStorage();
             }
             if (e.data.type === 'vocab-updated') {
                 reloadVocab();
@@ -808,6 +1048,10 @@ function pageToCloud(pageData) {
         title: pageData.title || '',
         icon: pageData.icon || '📄',
         cover: pageData.cover || null,
+        font: pageData.font || 'default',
+        smallText: !!pageData.smallText,
+        fullWidth: !!pageData.fullWidth,
+        locked: !!pageData.locked,
         blocks: pageData.blocks || [],
         tags: pageData.tags || [],
         source: pageData.source || 'app',
@@ -960,50 +1204,213 @@ const EditorHistory = {
 };
 
 let saveTimeout;
-function triggerSave() {
-    updateSyncStatusUI('saving');
-    clearTimeout(saveTimeout);
-    
-    // Update active page state from DOM
-    if (appState.activePageId && appState.pages[appState.activePageId]) {
-        appState.pages[appState.activePageId].title = elements.pageTitleInput.value;
-        appState.pages[appState.activePageId].blocks = serializeBlocks();
-    }
-
-    refreshToc();
-
-    saveTimeout = setTimeout(() => {
-        saveToStorage();
-    }, 400);
+function syncActivePageFromDom() {
+    if (!appState.activePageId || !appState.pages[appState.activePageId]) return false;
+    if (elements.blockEditor && elements.blockEditor.querySelector('.cloud-loading-banner')) return false;
+    appState.pages[appState.activePageId].title = elements.pageTitleInput ? elements.pageTitleInput.value : '';
+    appState.pages[appState.activePageId].blocks = serializeBlocks();
+    return true;
 }
 
-function saveToStorage() {
+function saveLocalToggleStateOnly() {
+    clearTimeout(localViewStateTimeout);
+    localViewStateTimeout = setTimeout(() => {
+        localViewStateTimeout = null;
+        if (!appState.activePageId || !appState.pages[appState.activePageId] || !elements.blockEditor) return;
+        const page = appState.pages[appState.activePageId];
+        if (!Array.isArray(page.blocks)) return;
+
+        const collapsedMap = {};
+        elements.blockEditor.querySelectorAll('.block-wrapper').forEach(w => {
+            const bid = w.getAttribute('data-id');
+            const btype = w.getAttribute('data-type') || '';
+            if (bid && (btype === 'toggle' || btype.startsWith('toggle-'))) {
+                const icon = w.querySelector('.toggle-icon');
+                const isCol = w.getAttribute('data-collapsed') === 'true' || (icon && !icon.classList.contains('open'));
+                collapsedMap[bid] = !!isCol;
+            }
+        });
+        page.blocks.forEach(b => {
+            if (b && (b.type === 'toggle' || (b.type && b.type.startsWith('toggle-')))) {
+                if (Object.prototype.hasOwnProperty.call(collapsedMap, b.id)) {
+                    b.collapsed = collapsedMap[b.id];
+                }
+            }
+        });
+        localStorage.setItem('schooldb_pages', JSON.stringify(appState.pages));
+    }, 300);
+}
+
+function flushPendingSave(immediateCloud = false) {
+    if (localViewStateTimeout) {
+        clearTimeout(localViewStateTimeout);
+        localViewStateTimeout = null;
+        if (appState.activePageId && appState.pages[appState.activePageId] && elements.blockEditor && !elements.blockEditor.querySelector('.cloud-loading-banner')) {
+            const page = appState.pages[appState.activePageId];
+            if (Array.isArray(page.blocks)) {
+                const collapsedMap = {};
+                elements.blockEditor.querySelectorAll('.block-wrapper').forEach(w => {
+                    const bid = w.getAttribute('data-id');
+                    const btype = w.getAttribute('data-type') || '';
+                    if (bid && (btype === 'toggle' || btype.startsWith('toggle-'))) {
+                        const icon = w.querySelector('.toggle-icon');
+                        collapsedMap[bid] = w.getAttribute('data-collapsed') === 'true' || (icon && !icon.classList.contains('open'));
+                    }
+                });
+                page.blocks.forEach(b => {
+                    if (b && Object.prototype.hasOwnProperty.call(collapsedMap, b.id)) {
+                        b.collapsed = collapsedMap[b.id];
+                    }
+                });
+                localStorage.setItem('schooldb_pages', JSON.stringify(appState.pages));
+            }
+        }
+    }
+
+    if (hasPendingLocalSave || saveTimeout) {
+        clearTimeout(saveTimeout);
+        saveTimeout = null;
+        hasPendingLocalSave = false;
+        if (syncActivePageFromDom()) {
+            refreshToc();
+            saveToStorage(immediateCloud);
+        }
+    } else if (immediateCloud && pendingCloudPageIds.size > 0) {
+        clearTimeout(firebaseSyncTimeout);
+        flushCloudWriteQueue();
+    }
+}
+
+function triggerSave() {
+    hasPendingLocalSave = true;
+    updateSyncStatusUI('saving');
+    clearTimeout(saveTimeout);
+
+    saveTimeout = setTimeout(() => {
+        saveTimeout = null;
+        hasPendingLocalSave = false;
+        syncActivePageFromDom();
+        refreshToc();
+        saveToStorage(false);
+    }, 250);
+}
+
+function flushCloudWriteQueue() {
+    if (!db) return;
+    if (!navigator.onLine) {
+        updateSyncStatusUI('offline');
+        return;
+    }
+    if (isCloudWriteInFlight) {
+        cloudWriteReschedule = true;
+        return;
+    }
+
+    const deletedMap = getDeletedPagesMap();
+    const writes = [];
+    const idsToProcess = Array.from(pendingCloudPageIds);
+    pendingCloudPageIds.clear();
+
+    idsToProcess.forEach(pid => {
+        if (deletedMap[pid]) return;
+        const pageData = appState.pages[pid];
+        if (!pageData) return;
+        if (isBlankPage(pageData) && !pageData.syncedToCloud) return;
+        const sig = getPageContentSignature(pageData);
+        if (sig === lastCloudSyncedSignature[pid]) return;
+        writes.push({ pid, pageData, sig });
+    });
+
+    if (writes.length === 0) {
+        updateSyncStatusUI(navigator.onLine ? 'synced' : 'offline');
+        return;
+    }
+
+    isCloudWriteInFlight = true;
+    updateSyncStatusUI('syncing');
+
+    const commitPromise = writes.length === 1
+        ? db.collection('notes').doc(writes[0].pid).set(pageToCloud(writes[0].pageData), { merge: true })
+        : (() => {
+            const batch = db.batch();
+            writes.forEach(w => batch.set(db.collection('notes').doc(w.pid), pageToCloud(w.pageData), { merge: true }));
+            return batch.commit();
+        })();
+
+    commitPromise.then(() => {
+        let markChanged = false;
+        writes.forEach(w => {
+            lastCloudSyncedSignature[w.pid] = w.sig;
+            if (!w.pageData.syncedToCloud) {
+                w.pageData.syncedToCloud = true;
+                markChanged = true;
+            }
+        });
+        if (markChanged) {
+            localStorage.setItem('schooldb_pages', JSON.stringify(appState.pages));
+        }
+        isCloudWriteInFlight = false;
+        if (cloudWriteReschedule || pendingCloudPageIds.size > 0) {
+            cloudWriteReschedule = false;
+            flushCloudWriteQueue();
+        } else {
+            updateSyncStatusUI(navigator.onLine ? 'synced' : 'offline');
+        }
+    }).catch(err => {
+        console.error('Firebase sync error:', err);
+        writes.forEach(w => pendingCloudPageIds.add(w.pid));
+        isCloudWriteInFlight = false;
+        updateSyncStatusUI(navigator.onLine ? 'error' : 'offline');
+    });
+}
+
+function saveToStorage(immediateCloud = false) {
     // 1. Save locally immediately
     localStorage.setItem('schooldb_pages', JSON.stringify(appState.pages));
     
     // Broadcast to other open tabs on same device
     broadcastLocalChange('pages-updated', { activeId: appState.activePageId });
 
-    // 2. Sync to Firebase (Debounced)
+    // 2. Sync to Firebase (Debounced + Signature Checked)
     if (db) {
-        clearTimeout(firebaseSyncTimeout);
-        updateSyncStatusUI('syncing');
-        firebaseSyncTimeout = setTimeout(() => {
-            // Sync active page
-            if (appState.activePageId && appState.pages[appState.activePageId]) {
-                const pageData = appState.pages[appState.activePageId];
-                db.collection('notes').doc(appState.activePageId).set(pageToCloud(pageData), { merge: true })
-                .then(() => {
-                    updateSyncStatusUI(navigator.onLine ? 'synced' : 'offline');
-                })
-                .catch(err => {
-                    console.error("Firebase sync error:", err);
-                    updateSyncStatusUI('error');
-                });
-            } else {
+        const activeId = appState.activePageId;
+        const pageData = activeId ? appState.pages[activeId] : null;
+        if (!pageData) {
+            if (pendingCloudPageIds.size === 0 && !isCloudWriteInFlight) {
                 updateSyncStatusUI(navigator.onLine ? 'synced' : 'offline');
             }
-        }, 800);
+            return;
+        }
+
+        // Không đẩy trang trắng mới tạo (Untitled) lên Cloud khi chưa có nội dung
+        if (isBlankPage(pageData) && !pageData.syncedToCloud) {
+            if (pendingCloudPageIds.size === 0 && !isCloudWriteInFlight) {
+                updateSyncStatusUI(navigator.onLine ? 'synced' : 'offline');
+            }
+            return;
+        }
+
+        const sig = getPageContentSignature(pageData);
+        if (sig === lastCloudSyncedSignature[activeId] && pendingCloudPageIds.size === 0) {
+            if (!isCloudWriteInFlight) {
+                updateSyncStatusUI(navigator.onLine ? 'synced' : 'offline');
+            }
+            return;
+        }
+
+        if (sig !== lastCloudSyncedSignature[activeId]) {
+            pendingCloudPageIds.add(activeId);
+        }
+
+        clearTimeout(firebaseSyncTimeout);
+        updateSyncStatusUI(navigator.onLine ? 'syncing' : 'offline');
+        if (immediateCloud) {
+            flushCloudWriteQueue();
+        } else {
+            firebaseSyncTimeout = setTimeout(() => {
+                flushCloudWriteQueue();
+            }, 1500);
+        }
     } else {
         updateSyncStatusUI('local-only');
     }
@@ -1085,6 +1492,9 @@ function deletePage(pageId) {
         return;
     }
     delete appState.pages[pageId];
+    delete lastCloudSyncedSignature[pageId];
+    pendingCloudPageIds.delete(pageId);
+    markPageDeleted(pageId);
     if (db) {
         db.collection('notes').doc(pageId).delete().catch(err => console.warn('Cloud delete error:', err));
     }
@@ -1100,6 +1510,55 @@ function deletePage(pageId) {
             createNewPage();
         }
     }
+}
+
+function cleanupBlankPages() {
+    flushPendingSave(false);
+    const allIds = Object.keys(appState.pages);
+    let blankIds = allIds.filter(id => isBlankPage(appState.pages[id]));
+
+    // Nếu tất cả các trang đều trắng, giữ lại 1 trang đang mở (hoặc trang đầu) để không bị màn hình rỗng
+    if (blankIds.length > 0 && blankIds.length === allIds.length) {
+        const keepId = (appState.activePageId && appState.pages[appState.activePageId]) ? appState.activePageId : allIds[0];
+        blankIds = blankIds.filter(id => id !== keepId);
+    }
+
+    if (blankIds.length === 0) {
+        showToast('✨ Không có trang trắng (Untitled) nào cần dọn!');
+        const pop = document.getElementById('more-popover');
+        if (pop) pop.style.display = 'none';
+        return;
+    }
+
+    if (!confirm(`Tìm thấy ${blankIds.length} trang trắng (Untitled) không có nội dung.\nBạn có muốn dọn sạch toàn bộ không?`)) {
+        return;
+    }
+
+    const activeDeleted = blankIds.includes(appState.activePageId);
+    blankIds.forEach(id => {
+        delete appState.pages[id];
+        delete lastCloudSyncedSignature[id];
+        pendingCloudPageIds.delete(id);
+    });
+    markPageDeleted(blankIds);
+
+    if (db) {
+        for (let i = 0; i < blankIds.length; i += 400) {
+            const chunk = blankIds.slice(i, i + 400);
+            const batch = db.batch();
+            chunk.forEach(id => batch.delete(db.collection('notes').doc(id)));
+            batch.commit().catch(err => console.warn('Cleanup blank pages cloud error:', err));
+        }
+    }
+
+    localStorage.setItem('schooldb_pages', JSON.stringify(appState.pages));
+    renderSidebar();
+    if (activeDeleted) {
+        openFirstPageOrCreate();
+    }
+    const pop = document.getElementById('more-popover');
+    if (pop) pop.style.display = 'none';
+    showToast(`🧹 Đã dọn sạch ${blankIds.length} trang trắng!`);
 }
 
 function toggleSidebarSection(secName) {
@@ -1196,6 +1655,12 @@ function applyLockState(locked) {
 
 function openPage(id) {
     if (!appState.pages[id]) return;
+    if (appState.activePageId && appState.activePageId !== id) {
+        flushPendingSave(false);
+    }
+    if (typeof hidePasteOptionPill === 'function') {
+        hidePasteOptionPill();
+    }
     appState.activePageId = id;
     
     // Toggle UI
@@ -1890,7 +2355,8 @@ const app = {
             ...JSON.parse(JSON.stringify(curPage)),
             id: newId,
             title: (curPage.title || 'Untitled') + ' (Copy)',
-            blocks: clonedBlocks
+            blocks: clonedBlocks,
+            syncedToCloud: false
         };
         saveToStorage();
         renderSidebar();
@@ -1908,12 +2374,19 @@ const app = {
         if (pop) pop.style.display = 'none';
     },
     copyPageContents: () => {
+        flushPendingSave(false);
         const page = appState.pages[appState.activePageId];
         if (!page) return;
         let text = `# ${page.title || 'Untitled'}\n\n`;
         page.blocks.forEach(b => {
             const indentStr = '  '.repeat(b.indent || 0);
-            text += `${indentStr}${b.content}\n`;
+            if (b.type === 'code') {
+                const rawCode = decodeHtmlEntities(b.content || '');
+                const lang = (b.codeLang && b.codeLang !== 'auto' && b.codeLang !== 'text') ? b.codeLang : '';
+                text += `${indentStr}\`\`\`${lang}\n${rawCode}\n${indentStr}\`\`\`\n`;
+            } else {
+                text += `${indentStr}${b.content}\n`;
+            }
         });
         navigator.clipboard.writeText(text).then(() => {
             showToast('Đã copy toàn bộ nội dung trang!');
@@ -1931,10 +2404,17 @@ const app = {
         document.getElementById('more-popover').style.display = 'none';
     },
     exportToTxt: () => {
+        flushPendingSave(false);
         const page = appState.pages[appState.activePageId];
         if (!page) return;
         let text = `# ${page.title || 'Untitled'}\n\n`;
         page.blocks.forEach(b => {
+            if (b.type === 'code') {
+                const rawCode = decodeHtmlEntities(b.content || '');
+                const lang = (b.codeLang && b.codeLang !== 'auto' && b.codeLang !== 'text') ? b.codeLang : '';
+                text += `\n\`\`\`${lang}\n${rawCode}\n\`\`\`\n\n`;
+                return;
+            }
             if (b.type === 'table') {
                 try {
                     const parsed = JSON.parse(b.content);
@@ -1965,6 +2445,7 @@ const app = {
         const pop = document.getElementById('more-popover');
         if (pop) pop.style.display = 'none';
     },
+    cleanupBlankPages: () => cleanupBlankPages(),
     deletePage: (id) => deletePage(id),
     toggleSidebarSection: (sec) => toggleSidebarSection(sec),
     shareWeb: () => {
@@ -2028,7 +2509,8 @@ function renderBlocks(blocks) {
             block.indent || 0,
             block.color || null,
             block.bgColor || null,
-            block.collapsed || false
+            block.collapsed || false,
+            block
         );
         elements.blockEditor.appendChild(blockEl);
     });
@@ -2175,6 +2657,27 @@ function serializeBlocks() {
                 content: JSON.stringify({ hasHeader, isFullWidth, tableWidth, rows, colWidths, rowHeights }),
                 indent: parseInt(wrapper.getAttribute('data-indent') || '0', 10)
             });
+            return;
+        }
+
+        // Lưu trữ khối Code (IDE block) giữ nguyên code thuần & cấu hình hiển thị
+        if (type === 'code') {
+            const rawCode = extractCodeFromDom(contentEl);
+            const codeLang = wrapper.getAttribute('data-lang') || 'auto';
+            const lineNumbers = wrapper.getAttribute('data-linenums') !== 'false';
+            const wordWrap = wrapper.getAttribute('data-wrap') === 'true';
+            const blockObj = {
+                id: wrapper.getAttribute('data-id'),
+                type: 'code',
+                content: escapeHtml(rawCode),
+                indent: parseInt(wrapper.getAttribute('data-indent') || '0', 10),
+                codeLang: codeLang,
+                lineNumbers: lineNumbers,
+                wordWrap: wordWrap
+            };
+            if (contentEl.style.color) blockObj.color = contentEl.style.color;
+            if (contentEl.style.backgroundColor) blockObj.bgColor = contentEl.style.backgroundColor;
+            blocks.push(blockObj);
             return;
         }
 
@@ -2525,7 +3028,7 @@ function selectBlockAndShowMenu(wrapper) {
     }
 }
 
-function createBlockElement(type, content, id = generateId(), indent = 0, color = null, bgColor = null, collapsed = false) {
+function createBlockElement(type, content, id = generateId(), indent = 0, color = null, bgColor = null, collapsed = false, blockMeta = null) {
     const wrapper = document.createElement('div');
     wrapper.className = 'block-wrapper';
     wrapper.setAttribute('data-id', id);
@@ -2545,11 +3048,11 @@ function createBlockElement(type, content, id = generateId(), indent = 0, color 
     const handleEl = wrapper.querySelector('.block-handle');
     const prefixEl = wrapper.querySelector('.block-prefix');
     
-    if (type !== 'image' && type !== 'math' && type !== 'table') {
+    if (type !== 'image' && type !== 'math' && type !== 'table' && type !== 'code') {
         contentEl.innerHTML = content;
     }
 
-    setBlockType(contentEl, type, content);
+    setBlockType(contentEl, type, content, blockMeta);
 
     if (color) contentEl.style.color = color;
     if (bgColor) contentEl.style.backgroundColor = bgColor;
@@ -2680,8 +3183,7 @@ function toggleBlockOpen(icon, e) {
         next = next.nextElementSibling;
     }
 
-    triggerSave();
-    EditorHistory.record(true);
+    saveLocalToggleStateOnly();
 }
 
 function focusFirstBlockOrCreate() {
@@ -2736,6 +3238,62 @@ function handleBlockKeydown(e) {
         }
     }
     
+    const curBlockType = target.getAttribute('data-type') || wrapper.getAttribute('data-type') || 'text';
+
+    // Xử lý phím riêng cho khối Code (IDE-style: Enter xuống dòng trong khung, Shift/Ctrl+Enter thoát khối, Tab thụt 4 space)
+    if (curBlockType === 'code') {
+        if (e.key === 'Tab') {
+            e.preventDefault();
+            EditorHistory.recordBeforeAction();
+            const offsets = getCodeSelectionOffsets(target);
+            const raw = extractCodeFromDom(target);
+            const start = offsets.inEl ? offsets.start : raw.length;
+            const end = offsets.inEl ? offsets.end : raw.length;
+            const nextCode = raw.slice(0, start) + '    ' + raw.slice(end);
+            applyRawCodeAndHighlight(wrapper, target, nextCode, true, start + 4);
+            triggerSave();
+            EditorHistory.updateLastSnapshot();
+            return;
+        }
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey || e.shiftKey)) {
+            e.preventDefault();
+            EditorHistory.record(true);
+            const indent = parseInt(wrapper.getAttribute('data-indent') || '0', 10);
+            const newWrapper = createBlockElement('text', '', generateId(), indent);
+            wrapper.parentNode.insertBefore(newWrapper, wrapper.nextSibling);
+            const newContent = newWrapper.querySelector('.block-content');
+            if (newContent) setCaretAtStart(newContent);
+            triggerSave();
+            return;
+        }
+        if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+            e.preventDefault();
+            EditorHistory.record(true);
+            const offsets = getCodeSelectionOffsets(target);
+            const raw = extractCodeFromDom(target);
+            const start = offsets.inEl ? offsets.start : raw.length;
+            const end = offsets.inEl ? offsets.end : raw.length;
+            const nextCode = raw.slice(0, start) + '\n' + raw.slice(end);
+            applyRawCodeAndHighlight(wrapper, target, nextCode, true, start + 1);
+            triggerSave();
+            return;
+        }
+        if (e.key === 'Backspace') {
+            const offsets = getCodeSelectionOffsets(target);
+            const raw = extractCodeFromDom(target);
+            if (offsets.inEl && offsets.start === 0 && offsets.end === 0 && raw === '') {
+                e.preventDefault();
+                EditorHistory.record(true);
+                setBlockType(target, 'text');
+                updateNumberPrefixes();
+                closeSlashMenu();
+                triggerSave();
+                return;
+            }
+        }
+        return;
+    }
+
     // Handle Indentation with Tab
     if (e.key === 'Tab') {
         e.preventDefault();
@@ -2931,6 +3489,17 @@ function handleBlockKeydown(e) {
                     EditorHistory.record(true);
                     const prevContent = prev.querySelector('.block-content');
                     if (prevContent) {
+                        if (prevType === 'code') {
+                            const prevCode = extractCodeFromDom(prevContent);
+                            const curText = target.innerText || '';
+                            const joinOffset = prevCode.length;
+                            const combined = prevCode + (curText ? curText : '');
+                            applyRawCodeAndHighlight(prev, prevContent, combined, true, joinOffset);
+                            wrapper.remove();
+                            updateNumberPrefixes();
+                            triggerSave();
+                            return;
+                        }
                         const prevTextLen = prevContent.innerText ? prevContent.innerText.length : 0;
                         const currentHtml = target.innerHTML;
                         
@@ -2994,6 +3563,17 @@ function handleBlockInput(e) {
         activeBlockElement = target;
     }
     EditorHistory.record(false, e);
+
+    const blockType = target.getAttribute('data-type') || (wrapper ? wrapper.getAttribute('data-type') : '') || 'text';
+    if (blockType === 'code') {
+        updateCodeLineNumbers(wrapper, target);
+        if (target.dataset.composing !== '1') {
+            scheduleCodeBlockHighlight(wrapper, target);
+        }
+        closeSlashMenu();
+        triggerSave();
+        return;
+    }
     
     // Check for Word/Markdown shortcuts: "- ", "1. ", "[] ", "# ", etc.
     const converted = checkMarkdownShortcuts(target);
@@ -3040,22 +3620,907 @@ function formatInlineMarkdown(text) {
     return res;
 }
 
+function decodeHtmlEntities(str) {
+    if (!str) return '';
+    const temp = document.createElement('div');
+    temp.innerHTML = String(str).replace(/<br\s*\/?>/gi, '\n');
+    return extractCodeFromDom(temp);
+}
+
+// ==========================================================================
+// IDE CODE BLOCK ENGINE (SYNTAX HIGHLIGHTING, LANGUAGE DETECT, LINE NUMBERS, PASTE TOGGLE)
+// ==========================================================================
+
+const CODE_LANG_LABELS = {
+    auto: 'Auto',
+    c: 'C / C++',
+    python: 'Python',
+    js: 'JavaScript / TS',
+    html: 'HTML / CSS',
+    sql: 'SQL',
+    java: 'Java / C#',
+    bash: 'Bash / Shell',
+    json: 'JSON',
+    text: 'Plain Text'
+};
+
+function normalizeCodeLang(lang) {
+    const l = String(lang || '').trim().toLowerCase();
+    if (!l || l === 'auto') return 'auto';
+    if (['c', 'cpp', 'c++', 'h', 'hpp', 'cc', 'cxx', 'arduino', 'ino'].includes(l)) return 'c';
+    if (['py', 'python', 'python3'].includes(l)) return 'python';
+    if (['js', 'jsx', 'ts', 'tsx', 'javascript', 'typescript', 'node'].includes(l)) return 'js';
+    if (['html', 'htm', 'xml', 'svg', 'css', 'scss', 'less'].includes(l)) return 'html';
+    if (['sql', 'mysql', 'postgres', 'postgresql', 'sqlite'].includes(l)) return 'sql';
+    if (['java', 'cs', 'csharp', 'c#', 'kt', 'kotlin'].includes(l)) return 'java';
+    if (['sh', 'bash', 'zsh', 'shell', 'cmd', 'powershell', 'ps1', 'bat'].includes(l)) return 'bash';
+    if (['json', 'jsonc'].includes(l)) return 'json';
+    if (['txt', 'text', 'plain', 'plaintext'].includes(l)) return 'text';
+    return 'auto';
+}
+
+function detectCodeLanguage(code) {
+    const src = String(code || '').trim();
+    if (!src) return 'text';
+
+    if ((src.startsWith('{') && src.endsWith('}')) || (src.startsWith('[') && src.endsWith(']'))) {
+        try {
+            JSON.parse(src);
+            return 'json';
+        } catch (e) {}
+    }
+
+    if (/<!DOCTYPE\s+html|<html\b|<\/(?:div|span|p|body|head|script|style|section|table|ul|li|h[1-6])>/i.test(src) ||
+        (/^[.#a-zA-Z_-][^{]*\{[^}]*:[^}]*\}/m.test(src) && !/\b(function|const|let|var|int|void|def)\b/.test(src))) {
+        return 'html';
+    }
+
+    if (/\b(SELECT\s+[\s\S]+?\s+FROM|INSERT\s+INTO|UPDATE\s+\w+\s+SET|DELETE\s+FROM|CREATE\s+TABLE|ALTER\s+TABLE|DROP\s+TABLE)\b/i.test(src)) {
+        return 'sql';
+    }
+
+    if (/^\s*#\s*(include|define|ifdef|ifndef|pragma)\b/m.test(src) ||
+        /\b(printf|scanf|malloc|calloc|free|sizeof)\s*\(/.test(src) ||
+        /\bstd::|\bcout\s*<<|\bcin\s*>>|\bint\s+main\s*\(/.test(src) ||
+        /\buint(?:8|16|32|64)_t\b/.test(src)) {
+        return 'c';
+    }
+
+    if (/\bdef\s+\w+\s*\([^)]*\)\s*:/.test(src) ||
+        /\bif\s+__name__\s*==\s*['"]__main__['"]/.test(src) ||
+        /\bfrom\s+\w+\s+import\s+/.test(src) ||
+        (/\b(?:elif|lambda|yield)\b/.test(src) && !/[;{}]/.test(src)) ||
+        (/\bprint\s*\(/.test(src) && !/;/.test(src))) {
+        return 'python';
+    }
+
+    if (/\bpublic\s+(?:static\s+)?(?:class|void|int|String|boolean)\b/.test(src) ||
+        /\bSystem\.out\.print|\bConsole\.WriteLine/.test(src) ||
+        /\busing\s+System\b|\bnamespace\s+\w+/.test(src)) {
+        return 'java';
+    }
+
+    if (/^\s*#!\/(?:usr\/bin\/env\s+|bin\/)(?:ba)?sh/m.test(src) ||
+        /^\s*(?:sudo|apt(?:-get)?|npm|yarn|pnpm|git|pip|python3?|docker|curl|chmod|mkdir|cd|export)\s+/m.test(src)) {
+        return 'bash';
+    }
+
+    if (/\b(const|let|var|function|async|await|export|import)\b/.test(src) ||
+        /=>|===|!==|\bconsole\.(?:log|warn|error)\s*\(|\bdocument\.(?:getElementById|querySelector)/.test(src)) {
+        return 'js';
+    }
+
+    return 'text';
+}
+
+const CODE_LANG_SPECS = {
+    c: {
+        keywords: new Set(['auto', 'break', 'case', 'const', 'continue', 'default', 'do', 'else', 'enum', 'extern', 'for', 'goto', 'if', 'inline', 'register', 'restrict', 'return', 'sizeof', 'static', 'struct', 'switch', 'typedef', 'union', 'volatile', 'while', 'class', 'public', 'private', 'protected', 'namespace', 'using', 'template', 'typename', 'virtual', 'override', 'new', 'delete', 'try', 'catch', 'throw', 'true', 'false', 'nullptr', 'NULL', 'std', 'cout', 'cin', 'endl']),
+        types: new Set(['void', 'char', 'short', 'int', 'long', 'float', 'double', 'signed', 'unsigned', 'bool', 'size_t', 'ssize_t', 'uint8_t', 'uint16_t', 'uint32_t', 'uint64_t', 'int8_t', 'int16_t', 'int32_t', 'int64_t', 'string', 'vector', 'map', 'FILE']),
+        regex: /(\/\*[\s\S]*?\*\/|\/\/[^\n]*)|("(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')|(^[ \t]*#[a-zA-Z_]\w*[^\n]*)|(\b(?:0[xX][0-9a-fA-F]+|0[bB][01]+|\d+(?:\.\d+)?(?:[eE][+-]?\d+)?[uUlLfF]*)\b)|(\b[A-Za-z_]\w*\b)/gm
+    },
+    python: {
+        keywords: new Set(['False', 'None', 'True', 'and', 'as', 'assert', 'async', 'await', 'break', 'class', 'continue', 'def', 'del', 'elif', 'else', 'except', 'finally', 'for', 'from', 'global', 'if', 'import', 'in', 'is', 'lambda', 'nonlocal', 'not', 'or', 'pass', 'raise', 'return', 'try', 'while', 'with', 'yield', 'self']),
+        types: new Set(['int', 'float', 'str', 'bool', 'list', 'dict', 'set', 'tuple', 'range', 'len', 'print', 'input', 'open', 'enumerate', 'zip', 'map', 'filter', 'sum', 'min', 'max', 'abs', 'type', 'isinstance', 'Exception']),
+        regex: /(#[^\n]*)|("""[\s\S]*?"""|'''[\s\S]*?'''|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')|(\B@[A-Za-z_]\w*)|(\b(?:0[xX][0-9a-fA-F]+|0[bB][01]+|\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\b)|(\b[A-Za-z_]\w*\b)/gm
+    },
+    js: {
+        keywords: new Set(['async', 'await', 'break', 'case', 'catch', 'class', 'const', 'continue', 'debugger', 'default', 'delete', 'do', 'else', 'export', 'extends', 'false', 'finally', 'for', 'from', 'function', 'if', 'import', 'in', 'instanceof', 'let', 'new', 'null', 'of', 'return', 'static', 'super', 'switch', 'this', 'throw', 'true', 'try', 'typeof', 'undefined', 'var', 'void', 'while', 'with', 'yield', 'interface', 'type', 'implements']),
+        types: new Set(['Array', 'Boolean', 'Date', 'Error', 'Function', 'JSON', 'Map', 'Math', 'Number', 'Object', 'Promise', 'RegExp', 'Set', 'String', 'Symbol', 'console', 'document', 'window', 'navigator', 'localStorage', 'fetch', 'setTimeout', 'setInterval']),
+        regex: /(\/\*[\s\S]*?\*\/|\/\/[^\n]*)|(`(?:\\[\s\S]|[^`\\])*`|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')|(\b(?:0[xX][0-9a-fA-F]+|0[bB][01]+|\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\b)|(\b[A-Za-z_$][\w$]*\b)/gm
+    },
+    java: {
+        keywords: new Set(['abstract', 'assert', 'break', 'case', 'catch', 'class', 'const', 'continue', 'default', 'do', 'else', 'enum', 'extends', 'final', 'finally', 'for', 'if', 'implements', 'import', 'instanceof', 'interface', 'native', 'new', 'package', 'private', 'protected', 'public', 'return', 'static', 'super', 'switch', 'synchronized', 'this', 'throw', 'throws', 'try', 'void', 'volatile', 'while', 'true', 'false', 'null', 'namespace', 'using', 'var', 'async', 'await', 'override']),
+        types: new Set(['boolean', 'byte', 'char', 'double', 'float', 'int', 'long', 'short', 'string', 'String', 'Object', 'Integer', 'Double', 'List', 'ArrayList', 'Map', 'HashMap', 'Set', 'System', 'Console']),
+        regex: /(\/\*[\s\S]*?\*\/|\/\/[^\n]*)|("(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')|(@[A-Za-z_]\w*)|(\b(?:0[xX][0-9a-fA-F]+|\d+(?:\.\d+)?[fFdDlL]?)\b)|(\b[A-Za-z_]\w*\b)/gm
+    },
+    sql: {
+        keywords: new Set(['SELECT', 'FROM', 'WHERE', 'INSERT', 'INTO', 'VALUES', 'UPDATE', 'SET', 'DELETE', 'CREATE', 'TABLE', 'ALTER', 'DROP', 'JOIN', 'INNER', 'LEFT', 'RIGHT', 'OUTER', 'ON', 'AS', 'AND', 'OR', 'NOT', 'NULL', 'IS', 'IN', 'LIKE', 'BETWEEN', 'GROUP', 'BY', 'HAVING', 'ORDER', 'ASC', 'DESC', 'LIMIT', 'OFFSET', 'DISTINCT', 'UNION', 'PRIMARY', 'KEY', 'FOREIGN', 'REFERENCES', 'DEFAULT', 'TRUE', 'FALSE']),
+        types: new Set(['INT', 'INTEGER', 'BIGINT', 'SMALLINT', 'VARCHAR', 'CHAR', 'TEXT', 'BOOLEAN', 'BOOL', 'DATE', 'DATETIME', 'TIMESTAMP', 'FLOAT', 'DOUBLE', 'DECIMAL', 'COUNT', 'SUM', 'AVG', 'MIN', 'MAX']),
+        regex: /(--[^\n]*|\/\*[\s\S]*?\*\/)|('(?:\\.|''|[^'\n])*'|"(?:\\.|[^"\\\n])*")|(\b\d+(?:\.\d+)?\b)|(\b[A-Za-z_]\w*\b)/gm,
+        caseInsensitive: true
+    },
+    bash: {
+        keywords: new Set(['if', 'then', 'else', 'elif', 'fi', 'case', 'esac', 'for', 'while', 'until', 'do', 'done', 'in', 'function', 'return', 'exit', 'export', 'local', 'readonly', 'source', 'true', 'false']),
+        types: new Set(['echo', 'cd', 'ls', 'mkdir', 'rm', 'cp', 'mv', 'cat', 'grep', 'sed', 'awk', 'find', 'curl', 'wget', 'git', 'npm', 'node', 'python', 'python3', 'pip', 'sudo', 'apt', 'chmod', 'chown', 'docker']),
+        regex: /(#[^\n]*)|("(?:\\.|[^"\\])*"|'[^']*')|(\$[A-Za-z_]\w*|\$\{[^}]+\})|(\b\d+\b)|(\b[A-Za-z_][\w-]*\b)/gm
+    }
+};
+
+function highlightCodeSyntax(rawCode, lang = 'auto') {
+    const code = String(rawCode || '').replace(/\r\n?/g, '\n');
+    if (!code) return '';
+    const effective = (lang === 'auto' || !lang) ? detectCodeLanguage(code) : normalizeCodeLang(lang);
+    if (effective === 'text') return escapeHtml(code);
+
+    if (effective === 'json') {
+        const re = /("(?:\\.|[^"\\\n])*")(\s*:)?|(-?\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b)|(\b(?:true|false|null)\b)/g;
+        let out = '';
+        let last = 0;
+        let m;
+        while ((m = re.exec(code)) !== null) {
+            if (m.index > last) out += escapeHtml(code.slice(last, m.index));
+            if (m[1]) {
+                out += m[2]
+                    ? `<span class="tok-type">${escapeHtml(m[1])}</span>${escapeHtml(m[2])}`
+                    : `<span class="tok-str">${escapeHtml(m[1])}</span>`;
+            } else if (m[3]) {
+                out += `<span class="tok-num">${escapeHtml(m[3])}</span>`;
+            } else if (m[4]) {
+                out += `<span class="tok-kw">${escapeHtml(m[4])}</span>`;
+            }
+            last = re.lastIndex;
+        }
+        if (last < code.length) out += escapeHtml(code.slice(last));
+        return out;
+    }
+
+    if (effective === 'html') {
+        const re = /(<!--[\s\S]*?-->|\/\*[\s\S]*?\*\/)|("(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')|(<\/?[a-zA-Z][\w-]*)|(\b\d+(?:\.\d+)?(?:px|em|rem|%|vh|vw|s|ms)?\b|#[0-9a-fA-F]{3,8}\b)|(\b[a-zA-Z-]+(?=\s*=|\s*:))/g;
+        let out = '';
+        let last = 0;
+        let m;
+        while ((m = re.exec(code)) !== null) {
+            if (m.index > last) out += escapeHtml(code.slice(last, m.index));
+            if (m[1]) out += `<span class="tok-com">${escapeHtml(m[1])}</span>`;
+            else if (m[2]) out += `<span class="tok-str">${escapeHtml(m[2])}</span>`;
+            else if (m[3]) out += `<span class="tok-kw">${escapeHtml(m[3])}</span>`;
+            else if (m[4]) out += `<span class="tok-num">${escapeHtml(m[4])}</span>`;
+            else if (m[5]) out += `<span class="tok-type">${escapeHtml(m[5])}</span>`;
+            last = re.lastIndex;
+        }
+        if (last < code.length) out += escapeHtml(code.slice(last));
+        return out;
+    }
+
+    const spec = CODE_LANG_SPECS[effective] || CODE_LANG_SPECS.js;
+    const re = new RegExp(spec.regex.source, spec.regex.flags);
+    let out = '';
+    let last = 0;
+    let m;
+    while ((m = re.exec(code)) !== null) {
+        if (m.index > last) out += escapeHtml(code.slice(last, m.index));
+        const full = m[0];
+        if (m[1]) {
+            out += `<span class="tok-com">${escapeHtml(full)}</span>`;
+        } else if (m[2]) {
+            out += `<span class="tok-str">${escapeHtml(full)}</span>`;
+        } else if (m[3] && (effective === 'c' || effective === 'python' || effective === 'java' || effective === 'bash')) {
+            out += `<span class="tok-meta">${escapeHtml(full)}</span>`;
+        } else if ((effective === 'c' || effective === 'python' || effective === 'java' || effective === 'bash') && m[4]) {
+            out += `<span class="tok-num">${escapeHtml(full)}</span>`;
+        } else if ((effective === 'js' || effective === 'sql') && m[3]) {
+            out += `<span class="tok-num">${escapeHtml(full)}</span>`;
+        } else {
+            const word = spec.caseInsensitive ? full.toUpperCase() : full;
+            if (spec.keywords.has(word)) {
+                out += `<span class="tok-kw">${escapeHtml(full)}</span>`;
+            } else if (spec.types.has(word)) {
+                out += `<span class="tok-type">${escapeHtml(full)}</span>`;
+            } else if (/^\s*\(/.test(code.slice(re.lastIndex))) {
+                out += `<span class="tok-fn">${escapeHtml(full)}</span>`;
+            } else {
+                out += escapeHtml(full);
+            }
+        }
+        last = re.lastIndex;
+    }
+    if (last < code.length) out += escapeHtml(code.slice(last));
+    return out;
+}
+
+function extractCodeFromDomNode(node) {
+    if (!node) return 0;
+    if (node.nodeType === Node.TEXT_NODE) {
+        return node.nodeValue.replace(/\r\n?/g, '\n').replace(/\u00A0/g, ' ').length;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return 0;
+    if (node.tagName === 'BR') return node.hasAttribute('data-sentinel') ? 0 : 1;
+    let len = 0;
+    for (let i = 0; i < node.childNodes.length; i++) {
+        len += extractCodeFromDomNode(node.childNodes[i]);
+    }
+    return len;
+}
+
+function extractCodeFromDom(el) {
+    if (!el) return '';
+    let out = '';
+    const children = Array.from(el.childNodes);
+    children.forEach((node, idx) => {
+        if (node.nodeType === Node.TEXT_NODE) {
+            out += node.nodeValue.replace(/\r\n?/g, '\n').replace(/\u00A0/g, ' ');
+            return;
+        }
+        if (node.nodeType !== Node.ELEMENT_NODE) return;
+        const tag = node.tagName;
+        if (tag === 'BR') {
+            if (!node.hasAttribute('data-sentinel')) {
+                out += '\n';
+            }
+            return;
+        }
+        if (tag === 'DIV' || tag === 'P' || tag === 'LI') {
+            if (idx > 0 && !out.endsWith('\n')) {
+                out += '\n';
+            } else if (idx > 0 && children[idx - 1].nodeType === Node.ELEMENT_NODE && ['DIV', 'P', 'LI'].includes(children[idx - 1].tagName)) {
+                out += '\n';
+            }
+            const textInside = node.textContent || '';
+            const onlyPlaceholderBr = !textInside && node.querySelectorAll('br').length <= 1;
+            if (!onlyPlaceholderBr) {
+                out += extractCodeFromDom(node);
+            }
+            return;
+        }
+        out += extractCodeFromDom(node);
+    });
+    return out;
+}
+
+function getCodeSelectionOffsets(el) {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return { start: 0, end: 0, inEl: false };
+    const range = sel.getRangeAt(0);
+    if (!el.contains(range.startContainer) || !el.contains(range.endContainer)) {
+        return { start: 0, end: 0, inEl: false };
+    }
+
+    function pointToOffset(container, offset) {
+        let total = 0;
+        let found = false;
+        function walk(node) {
+            if (found) return;
+            if (node === container) {
+                if (node.nodeType === Node.TEXT_NODE) {
+                    total += Math.min(offset, node.nodeValue.length);
+                } else {
+                    for (let i = 0; i < Math.min(offset, node.childNodes.length); i++) {
+                        total += extractCodeFromDomNode(node.childNodes[i]);
+                    }
+                }
+                found = true;
+                return;
+            }
+            if (node.nodeType === Node.TEXT_NODE) {
+                total += node.nodeValue.replace(/\r\n?/g, '\n').replace(/\u00A0/g, ' ').length;
+            } else if (node.nodeType === Node.ELEMENT_NODE) {
+                if (node.tagName === 'BR') {
+                    if (!node.hasAttribute('data-sentinel')) total += 1;
+                } else {
+                    for (let i = 0; i < node.childNodes.length; i++) {
+                        walk(node.childNodes[i]);
+                        if (found) return;
+                    }
+                }
+            }
+        }
+        walk(el);
+        return total;
+    }
+
+    const start = pointToOffset(range.startContainer, range.startOffset);
+    const end = pointToOffset(range.endContainer, range.endOffset);
+    return { start: Math.min(start, end), end: Math.max(start, end), inEl: true };
+}
+
+function setCaretOffsetInCode(el, targetOffset) {
+    if (!el) return;
+    el.focus();
+    const sel = window.getSelection();
+    if (!sel) return;
+    let currentOffset = 0;
+    let foundNode = null;
+    let nodeOffset = 0;
+
+    function traverse(node) {
+        if (foundNode) return;
+        if (node.nodeType === Node.TEXT_NODE) {
+            const len = node.nodeValue.length;
+            if (currentOffset + len >= targetOffset) {
+                foundNode = node;
+                nodeOffset = targetOffset - currentOffset;
+                return;
+            }
+            currentOffset += len;
+        } else if (node.nodeType === Node.ELEMENT_NODE) {
+            if (node.tagName === 'BR') {
+                if (!node.hasAttribute('data-sentinel')) currentOffset += 1;
+                return;
+            }
+            for (let i = 0; i < node.childNodes.length; i++) {
+                traverse(node.childNodes[i]);
+                if (foundNode) return;
+            }
+        }
+    }
+
+    traverse(el);
+    const range = document.createRange();
+    if (foundNode) {
+        range.setStart(foundNode, Math.min(nodeOffset, foundNode.nodeValue.length));
+        range.collapse(true);
+    } else {
+        const sentinel = el.querySelector('br[data-sentinel="1"]');
+        if (sentinel) {
+            range.setStartBefore(sentinel);
+        } else {
+            range.selectNodeContents(el);
+            range.collapse(false);
+        }
+    }
+    sel.removeAllRanges();
+    sel.addRange(range);
+}
+
+function updateCodeLineNumbers(wrapper, contentEl, rawCodeOverride = null) {
+    if (!wrapper) return;
+    const numsEl = wrapper.querySelector('.code-line-numbers');
+    if (!numsEl) return;
+    const raw = rawCodeOverride !== null ? rawCodeOverride : extractCodeFromDom(contentEl);
+    const lineCount = Math.max(1, String(raw || '').split('\n').length);
+    const lines = [];
+    for (let i = 1; i <= lineCount; i++) lines.push(i);
+    numsEl.textContent = lines.join('\n');
+
+    const badge = wrapper.querySelector('.code-detected-badge');
+    const langSel = wrapper.getAttribute('data-lang') || 'auto';
+    if (badge) {
+        if (langSel === 'auto' && raw.trim()) {
+            const detected = detectCodeLanguage(raw);
+            if (detected !== 'text') {
+                badge.textContent = CODE_LANG_LABELS[detected] || detected;
+                badge.style.display = 'inline-block';
+            } else {
+                badge.style.display = 'none';
+            }
+        } else {
+            badge.style.display = 'none';
+        }
+    }
+}
+
+function applyRawCodeAndHighlight(wrapper, contentEl, rawCode, restoreCaret = false, explicitCaretOffset = null) {
+    if (!wrapper || !contentEl) return;
+    const clean = String(rawCode || '').replace(/\r\n?/g, '\n');
+    const lang = wrapper.getAttribute('data-lang') || 'auto';
+    const wasFocused = document.activeElement === contentEl;
+    let caretOffset = explicitCaretOffset;
+    if (caretOffset === null && restoreCaret && wasFocused) {
+        const offsets = getCodeSelectionOffsets(contentEl);
+        if (offsets.inEl) caretOffset = offsets.start;
+    }
+
+    if (clean === '') {
+        contentEl.innerHTML = '';
+    } else {
+        let html = highlightCodeSyntax(clean, lang);
+        if (clean.endsWith('\n')) {
+            html += '<br data-sentinel="1">';
+        }
+        contentEl.innerHTML = html;
+    }
+
+    updateCodeLineNumbers(wrapper, contentEl, clean);
+
+    if (restoreCaret && (wasFocused || explicitCaretOffset !== null) && caretOffset !== null) {
+        setCaretOffsetInCode(contentEl, Math.min(caretOffset, clean.length));
+    }
+}
+
+const codeHighlightTimers = new WeakMap();
+function scheduleCodeBlockHighlight(wrapper, contentEl) {
+    if (!wrapper || !contentEl) return;
+    const prevTimer = codeHighlightTimers.get(contentEl);
+    if (prevTimer) clearTimeout(prevTimer);
+    const timer = setTimeout(() => {
+        codeHighlightTimers.delete(contentEl);
+        if (contentEl.getAttribute('data-type') !== 'code') return;
+        if (contentEl.dataset.composing === '1') return;
+        const raw = extractCodeFromDom(contentEl);
+        applyRawCodeAndHighlight(wrapper, contentEl, raw, document.activeElement === contentEl);
+    }, 350);
+    codeHighlightTimers.set(contentEl, timer);
+}
+
+function cleanupCodeBlockUI(wrapper, contentEl) {
+    if (!wrapper || !contentEl) return;
+    const shell = wrapper.querySelector('.code-block-shell');
+    if (!shell) return;
+    const prevTimer = codeHighlightTimers.get(contentEl);
+    if (prevTimer) {
+        clearTimeout(prevTimer);
+        codeHighlightTimers.delete(contentEl);
+    }
+    const rawCode = extractCodeFromDom(contentEl);
+    const prefixEl = wrapper.querySelector('.block-prefix');
+    if (prefixEl && prefixEl.parentNode === wrapper) {
+        wrapper.insertBefore(contentEl, prefixEl.nextSibling);
+    } else {
+        wrapper.appendChild(contentEl);
+    }
+    shell.remove();
+    wrapper.removeAttribute('data-lang');
+    wrapper.removeAttribute('data-linenums');
+    wrapper.removeAttribute('data-wrap');
+    contentEl.removeAttribute('spellcheck');
+    contentEl.removeAttribute('autocomplete');
+    contentEl.removeAttribute('autocorrect');
+    contentEl.removeAttribute('autocapitalize');
+    contentEl.innerHTML = escapeHtml(rawCode).replace(/\n/g, '<br>');
+}
+
+function convertCodeBlockToText(wrapper) {
+    if (!wrapper) return;
+    const contentEl = wrapper.querySelector('.block-content');
+    if (!contentEl) return;
+    EditorHistory.recordBeforeAction();
+    const rawCode = extractCodeFromDom(contentEl);
+    const indent = parseInt(wrapper.getAttribute('data-indent') || '0', 10);
+    const lines = rawCode.split('\n');
+
+    cleanupCodeBlockUI(wrapper, contentEl);
+    setBlockType(contentEl, 'text');
+    contentEl.innerHTML = escapeHtml(lines[0] || '');
+
+    let lastWrapper = wrapper;
+    for (let i = 1; i < lines.length; i++) {
+        const newWrapper = createBlockElement('text', escapeHtml(lines[i]), generateId(), indent);
+        lastWrapper.parentNode.insertBefore(newWrapper, lastWrapper.nextSibling);
+        lastWrapper = newWrapper;
+    }
+
+    updateNumberPrefixes();
+    setCaretAtStart(contentEl);
+    triggerSave();
+    EditorHistory.updateLastSnapshot();
+    showToast('📝 Đã chuyển khối Code thành văn bản thường');
+}
+
+function setupCodeBlockUI(wrapper, contentEl, initialContent = '', blockMeta = null) {
+    if (!wrapper || !contentEl) return;
+
+    let rawCode = '';
+    if (blockMeta && typeof blockMeta.rawCode === 'string') {
+        rawCode = blockMeta.rawCode;
+    } else if (typeof initialContent === 'string' && initialContent !== '') {
+        rawCode = decodeHtmlEntities(initialContent);
+    } else {
+        rawCode = extractCodeFromDom(contentEl);
+    }
+    rawCode = rawCode.replace(/\r\n?/g, '\n');
+
+    const codeLang = normalizeCodeLang((blockMeta && blockMeta.codeLang) || wrapper.getAttribute('data-lang') || 'auto');
+    const showLineNums = (blockMeta && blockMeta.lineNumbers !== undefined)
+        ? !!blockMeta.lineNumbers
+        : (wrapper.getAttribute('data-linenums') !== 'false');
+    const wrapLines = (blockMeta && blockMeta.wordWrap !== undefined)
+        ? !!blockMeta.wordWrap
+        : (wrapper.getAttribute('data-wrap') === 'true');
+
+    wrapper.setAttribute('data-lang', codeLang);
+    wrapper.setAttribute('data-linenums', showLineNums ? 'true' : 'false');
+    wrapper.setAttribute('data-wrap', wrapLines ? 'true' : 'false');
+
+    let shell = wrapper.querySelector('.code-block-shell');
+    if (!shell) {
+        shell = document.createElement('div');
+        shell.className = 'code-block-shell';
+        shell.setAttribute('data-linenums', showLineNums ? 'true' : 'false');
+        shell.innerHTML = `
+            <div class="code-block-header" contenteditable="false">
+                <div class="code-header-left">
+                    <span class="code-window-dots" aria-hidden="true">
+                        <span class="code-dot red"></span>
+                        <span class="code-dot yellow"></span>
+                        <span class="code-dot green"></span>
+                    </span>
+                    <select class="code-lang-select" title="Chọn ngôn ngữ lập trình">
+                        <option value="auto">Auto (Tự nhận diện)</option>
+                        <option value="c">C / C++</option>
+                        <option value="python">Python</option>
+                        <option value="js">JavaScript / TS</option>
+                        <option value="html">HTML / CSS</option>
+                        <option value="sql">SQL</option>
+                        <option value="java">Java / C#</option>
+                        <option value="bash">Bash / Shell</option>
+                        <option value="json">JSON</option>
+                        <option value="text">Plain Text</option>
+                    </select>
+                    <span class="code-detected-badge" style="display:none;"></span>
+                </div>
+                <div class="code-header-actions">
+                    <button type="button" class="code-action-btn" data-action="toggle-linenums" title="Bật/tắt đánh số dòng">
+                        <i class="ri-list-ordered"></i> <span class="code-btn-label"># Dòng</span>
+                    </button>
+                    <button type="button" class="code-action-btn" data-action="toggle-wrap" title="Bật/tắt ngắt dòng tự động (Word Wrap)">
+                        <i class="ri-text-wrap"></i> <span class="code-btn-label">Wrap</span>
+                    </button>
+                    <button type="button" class="code-action-btn" data-action="to-text" title="Chuyển khối code về dạng văn bản thường">
+                        <i class="ri-file-text-line"></i> <span class="code-btn-label">Text</span>
+                    </button>
+                    <button type="button" class="code-action-btn" data-action="copy" title="Sao chép toàn bộ code">
+                        <i class="ri-file-copy-line"></i> <span class="code-btn-label">Copy code</span>
+                    </button>
+                </div>
+            </div>
+            <div class="code-body-wrap">
+                <div class="code-line-numbers" contenteditable="false" aria-hidden="true">1</div>
+            </div>
+        `;
+        const bodyWrap = shell.querySelector('.code-body-wrap');
+        wrapper.appendChild(shell);
+        bodyWrap.appendChild(contentEl);
+
+        const langSelect = shell.querySelector('.code-lang-select');
+        const lineBtn = shell.querySelector('[data-action="toggle-linenums"]');
+        const wrapBtn = shell.querySelector('[data-action="toggle-wrap"]');
+        const toTextBtn = shell.querySelector('[data-action="to-text"]');
+        const copyBtn = shell.querySelector('[data-action="copy"]');
+
+        langSelect.addEventListener('change', (e) => {
+            e.stopPropagation();
+            const newLang = normalizeCodeLang(langSelect.value);
+            wrapper.setAttribute('data-lang', newLang);
+            const curRaw = extractCodeFromDom(contentEl);
+            applyRawCodeAndHighlight(wrapper, contentEl, curRaw, false);
+            triggerSave();
+        });
+
+        lineBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const nextVal = wrapper.getAttribute('data-linenums') === 'false';
+            wrapper.setAttribute('data-linenums', nextVal ? 'true' : 'false');
+            shell.setAttribute('data-linenums', nextVal ? 'true' : 'false');
+            lineBtn.classList.toggle('active', nextVal);
+            triggerSave();
+        });
+
+        wrapBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const nextVal = wrapper.getAttribute('data-wrap') !== 'true';
+            wrapper.setAttribute('data-wrap', nextVal ? 'true' : 'false');
+            bodyWrap.classList.toggle('is-wrapped', nextVal);
+            wrapBtn.classList.toggle('active', nextVal);
+            triggerSave();
+        });
+
+        toTextBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            convertCodeBlockToText(wrapper);
+        });
+
+        copyBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const curRaw = extractCodeFromDom(contentEl);
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(curRaw).then(() => {
+                    copyBtn.innerHTML = '<i class="ri-check-line"></i> <span class="code-btn-label">Đã chép</span>';
+                    showToast('📋 Đã sao chép code vào clipboard!');
+                    setTimeout(() => {
+                        if (copyBtn.isConnected) {
+                            copyBtn.innerHTML = '<i class="ri-file-copy-line"></i> <span class="code-btn-label">Copy code</span>';
+                        }
+                    }, 1600);
+                }).catch(() => showToast('Không thể sao chép vào clipboard.'));
+            }
+        });
+    }
+
+    const bodyWrap = shell.querySelector('.code-body-wrap');
+    const langSelect = shell.querySelector('.code-lang-select');
+    const lineBtn = shell.querySelector('[data-action="toggle-linenums"]');
+    const wrapBtn = shell.querySelector('[data-action="toggle-wrap"]');
+
+    shell.setAttribute('data-linenums', showLineNums ? 'true' : 'false');
+    if (bodyWrap) bodyWrap.classList.toggle('is-wrapped', wrapLines);
+    if (langSelect) langSelect.value = codeLang;
+    if (lineBtn) lineBtn.classList.toggle('active', showLineNums);
+    if (wrapBtn) wrapBtn.classList.toggle('active', wrapLines);
+
+    contentEl.spellcheck = false;
+    contentEl.setAttribute('autocomplete', 'off');
+    contentEl.setAttribute('autocorrect', 'off');
+    contentEl.setAttribute('autocapitalize', 'off');
+
+    if (!contentEl.dataset.codeListenersBound) {
+        contentEl.dataset.codeListenersBound = '1';
+        contentEl.addEventListener('compositionstart', () => {
+            contentEl.dataset.composing = '1';
+        });
+        contentEl.addEventListener('compositionend', () => {
+            contentEl.dataset.composing = '0';
+            if (contentEl.getAttribute('data-type') === 'code') {
+                const w = contentEl.closest('.block-wrapper');
+                scheduleCodeBlockHighlight(w, contentEl);
+            }
+        });
+        contentEl.addEventListener('blur', () => {
+            if (contentEl.getAttribute('data-type') === 'code') {
+                const w = contentEl.closest('.block-wrapper');
+                const raw = extractCodeFromDom(contentEl);
+                applyRawCodeAndHighlight(w, contentEl, raw, false);
+            }
+        });
+    }
+
+    applyRawCodeAndHighlight(wrapper, contentEl, rawCode, false);
+}
+
+function isLikelyCodeSnippet(rawText, rawHtml = '') {
+    const text = String(rawText || '').replace(/\r\n?/g, '\n').replace(/\u00A0/g, ' ');
+    const trimmed = text.trim();
+    if (!trimmed) return false;
+
+    // Kiểm tra xem có phải 1 khối fenced code ```...``` duy nhất không
+    if (trimmed.startsWith('```') && trimmed.endsWith('```') && trimmed.length > 6) {
+        const inner = trimmed.replace(/^```[^\n]*\n?/, '').replace(/\n?```$/, '');
+        if (!inner.includes('\n```')) return true;
+    }
+
+    // Nếu HTML có <pre> mà không trộn lẫn nhiều thẻ văn bản bên ngoài
+    if (rawHtml && /<pre[\s>]/i.test(rawHtml)) {
+        try {
+            const doc = new DOMParser().parseFromString(rawHtml, 'text/html');
+            const preCount = doc.querySelectorAll('pre').length;
+            const outsideBlocks = Array.from(doc.body.querySelectorAll('p, h1, h2, h3, h4, li'))
+                .filter(el => !el.closest('pre') && (el.textContent || '').trim().length > 0);
+            if (preCount === 1 && outsideBlocks.length === 0) return true;
+        } catch (e) {}
+    }
+
+    const lines = trimmed.split('\n');
+    const nonEmptyLines = lines.filter(l => l.trim().length > 0);
+    if (nonEmptyLines.length === 0) return false;
+
+    // Không nhận nhầm công thức toán LaTeX hoặc bảng Markdown/TSV là code
+    if ((trimmed.startsWith('$$') && trimmed.endsWith('$$')) || (trimmed.startsWith('\\[') && trimmed.endsWith('\\]'))) {
+        return false;
+    }
+    if (nonEmptyLines.length >= 2 && nonEmptyLines.every(l => l.trim().startsWith('|') && l.trim().endsWith('|'))) {
+        return false;
+    }
+
+    let score = 0;
+
+    // HTML từ VS Code / IDE thường có font monospace
+    if (rawHtml && /(?:Consolas|Fira Code|JetBrains Mono|Source Code Pro|Menlo|Monaco|Courier New|monospace)/i.test(rawHtml) && nonEmptyLines.length >= 2) {
+        score += 1;
+    }
+
+    // JSON hợp lệ nhiều dòng hoặc object/array
+    if (((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) && trimmed.includes(':')) {
+        try {
+            JSON.parse(trimmed);
+            return true;
+        } catch (e) {}
+    }
+
+    // Các dấu hiệu mạnh của ngôn ngữ lập trình
+    if (/^\s*#\s*(?:include|define|ifdef|ifndef|pragma)\b/m.test(trimmed)) score += 3;
+    if (/^\s*<!DOCTYPE\s+html/im.test(trimmed) || (/<[a-zA-Z][\w-]*(?:\s+[^>]*)?>[\s\S]*<\/[a-zA-Z][\w-]*>/.test(trimmed) && nonEmptyLines.length >= 2)) score += 2;
+    if (/\b(?:def\s+\w+\s*\([^)]*\)\s*:|if\s+__name__\s*==\s*['"]__main__['"]|from\s+\w+\s+import\s+\w+)/.test(trimmed)) score += 3;
+    if (/\b(?:function\s+\w*\s*\([^)]*\)\s*\{|console\.(?:log|error|warn)\s*\(|document\.(?:getElementById|querySelector))/.test(trimmed) || /=>\s*\{/.test(trimmed)) score += 2;
+    if (/\b(?:int|void|char|float|double|struct|typedef|uint(?:8|16|32|64)_t)\s+\w+\s*(?:\([^)]*\)\s*\{?|;|=)/.test(trimmed)) score += 2;
+    if (/\b(?:printf|scanf|malloc|sizeof)\s*\(|\bcout\s*<<|\bcin\s*>>|\bstd::/.test(trimmed)) score += 2;
+    if (/\b(?:public\s+(?:static\s+)?(?:class|void|int|String)|System\.out\.print|Console\.WriteLine)\b/.test(trimmed)) score += 2;
+    if (/\b(?:SELECT\s+[\s\S]+?\s+FROM|INSERT\s+INTO\s+\w+|CREATE\s+TABLE\s+\w+)\b/i.test(trimmed)) score += 2;
+
+    // Dấu hiệu trung bình
+    const codeEndingLines = nonEmptyLines.filter(l => /[;{}]\s*$/.test(l.trim())).length;
+    if (codeEndingLines >= 2) score += 2;
+    else if (codeEndingLines === 1 && nonEmptyLines.length <= 2 && /[;{}]/.test(trimmed)) score += 1;
+
+    if (/\b(?:const|let|var|return|import|export|async|await|switch|elif|lambda)\b/.test(trimmed) && /[=({]/.test(trimmed)) score += 1;
+    if (/\bprint\s*\(/.test(trimmed) && nonEmptyLines.some(l => /=/.test(l))) score += 1;
+    if (/(?:===|!==|->|::|&&|\|\||<<|>>)/.test(trimmed)) score += 1;
+    if (/^\s*(?:\/\/|\/\*|\*\/)/m.test(trimmed)) score += 1;
+
+    // Giảm điểm nếu giống danh sách Markdown hoặc tiêu đề văn bản
+    const mdListLines = nonEmptyLines.filter(l => /^(?:[-*•]|\d+[.)]|#{1,3}\s)/.test(l.trim())).length;
+    if (mdListLines >= Math.ceil(nonEmptyLines.length * 0.6) && codeEndingLines === 0) {
+        score -= 2;
+    }
+
+    return score >= 2;
+}
+
+function unwrapFencedCodeIfSingle(text) {
+    const trimmed = String(text || '').trim();
+    const m = trimmed.match(/^```([a-zA-Z0-9_+#-]*)\s*\n?([\s\S]*?)\n?```$/);
+    if (m && !m[2].includes('\n```')) {
+        return { code: m[2].replace(/\r\n?/g, '\n'), lang: normalizeCodeLang(m[1]) };
+    }
+    return { code: String(text || '').replace(/\r\n?/g, '\n'), lang: 'auto' };
+}
+
+let pasteOptionPillTimer = null;
+let currentPasteContext = null;
+
+function hidePasteOptionPill() {
+    clearTimeout(pasteOptionPillTimer);
+    pasteOptionPillTimer = null;
+    currentPasteContext = null;
+    const pill = document.getElementById('paste-option-pill');
+    if (pill) pill.style.display = 'none';
+}
+
+function showPasteOptionPill(context) {
+    let pill = document.getElementById('paste-option-pill');
+    if (!pill) {
+        pill = document.createElement('div');
+        pill.id = 'paste-option-pill';
+        pill.className = 'paste-option-pill';
+        document.body.appendChild(pill);
+    }
+    currentPasteContext = context;
+    const isCodeMode = context.mode === 'code';
+    const labelText = isCodeMode ? '💻 Đã dán dạng Khối Code' : '📝 Đã dán dạng Văn bản';
+    const btnText = isCodeMode ? '📝 Hiện dạng Text thường' : '💻 Hiện dạng Khối Code';
+
+    pill.innerHTML = `
+        <span class="paste-pill-label">${labelText}</span>
+        <button type="button" class="paste-pill-switch-btn">${btnText}</button>
+        <button type="button" class="paste-pill-close-btn" title="Đóng"><i class="ri-close-line"></i></button>
+    `;
+    pill.style.display = 'flex';
+
+    pill.querySelector('.paste-pill-switch-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleLastPasteFormat();
+    });
+    pill.querySelector('.paste-pill-close-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        hidePasteOptionPill();
+    });
+
+    pill.onmouseenter = () => clearTimeout(pasteOptionPillTimer);
+    pill.onmouseleave = () => {
+        clearTimeout(pasteOptionPillTimer);
+        pasteOptionPillTimer = setTimeout(hidePasteOptionPill, 6000);
+    };
+
+    clearTimeout(pasteOptionPillTimer);
+    pasteOptionPillTimer = setTimeout(hidePasteOptionPill, 10000);
+}
+
+function toggleLastPasteFormat() {
+    if (!currentPasteContext || !elements.blockEditor) return;
+    const ctx = currentPasteContext;
+    const aliveWrappers = (ctx.wrappers || []).filter(w => w && w.isConnected && elements.blockEditor.contains(w));
+    if (!aliveWrappers.length) {
+        hidePasteOptionPill();
+        return;
+    }
+
+    EditorHistory.recordBeforeAction();
+    const baseIndent = ctx.indent || 0;
+
+    if (ctx.mode === 'code') {
+        // Chuyển 1 khối code thành các dòng văn bản thường
+        const codeWrapper = aliveWrappers[0];
+        const contentEl = codeWrapper.querySelector('.block-content');
+        const raw = ctx.rawText !== undefined ? ctx.rawText : (contentEl ? extractCodeFromDom(contentEl) : '');
+        const lines = String(raw || '').replace(/\r\n?/g, '\n').split('\n');
+
+        cleanupCodeBlockUI(codeWrapper, contentEl);
+        setBlockType(contentEl, 'text');
+        contentEl.innerHTML = escapeHtml(lines[0] || '');
+
+        const newWrappers = [codeWrapper];
+        let last = codeWrapper;
+        for (let i = 1; i < lines.length; i++) {
+            const nw = createBlockElement('text', escapeHtml(lines[i]), generateId(), baseIndent);
+            last.parentNode.insertBefore(nw, last.nextSibling);
+            newWrappers.push(nw);
+            last = nw;
+        }
+        updateNumberPrefixes();
+        triggerSave();
+        EditorHistory.updateLastSnapshot();
+        showPasteOptionPill({ mode: 'text', wrappers: newWrappers, rawText: raw, indent: baseIndent, lang: ctx.lang });
+        showToast('📝 Đã chuyển sang dạng Text thường');
+    } else {
+        // Gom các dòng vừa dán thành 1 khối Code chuẩn IDE
+        const firstWrapper = aliveWrappers[0];
+        const firstContent = firstWrapper.querySelector('.block-content');
+        const raw = ctx.rawText !== undefined ? ctx.rawText : aliveWrappers.map(w => extractBlockPlainText(w)).join('\n');
+        aliveWrappers.slice(1).forEach(w => w.remove());
+
+        setBlockType(firstContent, 'code', '', { rawCode: raw, codeLang: ctx.lang || 'auto' });
+        updateNumberPrefixes();
+        triggerSave();
+        EditorHistory.updateLastSnapshot();
+        showPasteOptionPill({ mode: 'code', wrappers: [firstWrapper], rawText: raw, indent: baseIndent, lang: ctx.lang });
+        showToast('💻 Đã chuyển sang dạng Khối Code!');
+    }
+}
+
+function extractBlockPlainText(wrapper) {
+    if (!wrapper) return '';
+    const type = wrapper.getAttribute('data-type') || 'text';
+    const contentEl = wrapper.querySelector('.block-content');
+    if (!contentEl) return '';
+    if (type === 'code') return extractCodeFromDom(contentEl);
+    if (type === 'math') return contentEl.dataset.latex || '';
+    if (type === 'divider') return '---';
+    const raw = extractCodeFromDom(contentEl);
+    return raw.replace(/\n+$/, '');
+}
+
+function mergeWrappersIntoCodeBlock(wrappers) {
+    if (!wrappers || !wrappers.length) return;
+    const valid = wrappers.filter(w => w && w.isConnected && w.getAttribute('data-type') !== 'table');
+    if (!valid.length) return;
+
+    EditorHistory.recordBeforeAction();
+    const first = valid[0];
+    const firstContent = first.querySelector('.block-content');
+    if (!firstContent) return;
+
+    const combinedCode = valid.map(w => extractBlockPlainText(w)).join('\n');
+    valid.slice(1).forEach(w => w.remove());
+    clearBlockSelection();
+
+    setBlockType(firstContent, 'code', '', { rawCode: combinedCode, codeLang: 'auto' });
+    updateBlockTypeBadge('code');
+    updateNumberPrefixes();
+    triggerSave();
+    EditorHistory.updateLastSnapshot();
+
+    const toolbar = document.getElementById('floating-toolbar');
+    if (toolbar) toolbar.style.display = 'none';
+    firstContent.focus();
+    showToast('💻 Đã chuyển thành Khối Code!');
+}
+
 function preprocessClipboardHtml(html) {
     if (!html) return '';
     try {
         const parser = new DOMParser();
         const doc = parser.parseFromString(html, 'text/html');
-        
-        // Chuyển các thẻ code inline thành dạng `code`
-        doc.querySelectorAll('code, pre').forEach(c => {
+
+        // 1. Bảo toàn khối <pre> (ChatGPT, Claude, GitHub, StackOverflow...) thành fenced code block
+        doc.querySelectorAll('pre').forEach(pre => {
+            const codeEl = pre.querySelector('code');
+            const cls = ((pre.className || '') + ' ' + (codeEl ? (codeEl.className || '') : '')).toLowerCase();
+            const langMatch = cls.match(/(?:language-|lang-)([a-z0-9_+#-]+)/);
+            const lang = langMatch ? langMatch[1] : '';
+            const clone = pre.cloneNode(true);
+            clone.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
+            const rawPre = (clone.textContent || '').replace(/\r\n?/g, '\n').replace(/\u00A0/g, ' ').replace(/\n+$/, '');
+            pre.replaceWith(document.createTextNode(`\n\`\`\`${lang}\n${rawPre}\n\`\`\`\n`));
+        });
+
+        // 2. Chuyển các thẻ code inline thành dạng `code`
+        doc.querySelectorAll('code').forEach(c => {
             const codeText = c.textContent || '';
             if (codeText && !codeText.includes('\n')) {
                 c.replaceWith(document.createTextNode(' `' + codeText.trim() + '` '));
             }
         });
 
-        // Bóc tách các công thức KaTeX / MathML / LaTeX từ ChatGPT, Claude, DeepSeek, Wikipedia
-        let foundMath = false;
+        // 3. Bóc tách các công thức KaTeX / MathML / LaTeX từ ChatGPT, Claude, DeepSeek, Wikipedia
         doc.querySelectorAll('.katex-display, .katex, math, .mwe-math-element, [data-latex]').forEach(mathEl => {
             const ann = mathEl.querySelector('annotation[encoding*="tex"]') || mathEl.querySelector('annotation');
             let tex = '';
@@ -3069,7 +4534,6 @@ function preprocessClipboardHtml(html) {
                 tex = mathEl.dataset.tex;
             }
             if (tex) {
-                foundMath = true;
                 tex = tex.trim();
                 const isDisplay = mathEl.classList.contains('katex-display') || 
                                   mathEl.closest('.katex-display') || 
@@ -3080,7 +4544,7 @@ function preprocessClipboardHtml(html) {
             }
         });
 
-        // Thêm dấu ngắt dòng cho các thẻ khối
+        // 4. Thêm dấu ngắt dòng cho các thẻ khối
         doc.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
         doc.querySelectorAll('p, div, tr, h1, h2, h3, h4, h5, h6').forEach(el => el.append('\n'));
         doc.querySelectorAll('li').forEach(li => {
@@ -3171,9 +4635,48 @@ function parsePastedContentToBlocks(rawText, baseIndent = 0, rawHtml = '') {
     function parseTextChunk(chunk) {
         if (!chunk) return;
         const rawLines = chunk.split('\n');
+        let inCodeFence = false;
+        let codeFenceLang = 'auto';
+        let codeLines = [];
+
         for (let i = 0; i < rawLines.length; i++) {
             const rawLine = rawLines[i];
             const trimmed = rawLine.trim();
+
+            if (inCodeFence) {
+                if (trimmed.startsWith('```')) {
+                    blocks.push({
+                        type: 'code',
+                        content: escapeHtml(codeLines.join('\n')),
+                        indent: baseIndent,
+                        codeLang: codeFenceLang
+                    });
+                    inCodeFence = false;
+                    codeFenceLang = 'auto';
+                    codeLines = [];
+                } else {
+                    codeLines.push(rawLine);
+                }
+                continue;
+            }
+
+            if (trimmed.startsWith('```')) {
+                const singleLineMatch = trimmed.match(/^```([a-zA-Z0-9_+#-]*)\s+(.+?)```$/);
+                if (singleLineMatch) {
+                    blocks.push({
+                        type: 'code',
+                        content: escapeHtml(singleLineMatch[2]),
+                        indent: baseIndent,
+                        codeLang: normalizeCodeLang(singleLineMatch[1])
+                    });
+                } else {
+                    inCodeFence = true;
+                    codeFenceLang = normalizeCodeLang(trimmed.slice(3).trim());
+                    codeLines = [];
+                }
+                continue;
+            }
+
             if (!trimmed) continue;
 
             let blockType = 'text';
@@ -3213,9 +4716,6 @@ function parsePastedContentToBlocks(rawText, baseIndent = 0, rawHtml = '') {
             } else if ((m = trimmed.match(/^>\s?(.*)$/))) {
                 blockType = 'quote';
                 blockContent = formatInlineMarkdown(m[1]);
-            } else if (trimmed.startsWith('```')) {
-                blockType = 'code';
-                blockContent = escapeHtml(trimmed.replace(/^```/, ''));
             } else {
                 blockContent = formatInlineMarkdown(trimmed);
             }
@@ -3224,6 +4724,15 @@ function parsePastedContentToBlocks(rawText, baseIndent = 0, rawHtml = '') {
                 type: blockType,
                 content: blockContent,
                 indent: blockIndent
+            });
+        }
+
+        if (inCodeFence && codeLines.length) {
+            blocks.push({
+                type: 'code',
+                content: escapeHtml(codeLines.join('\n')),
+                indent: baseIndent,
+                codeLang: codeFenceLang
             });
         }
     }
@@ -3285,7 +4794,9 @@ function handleBlockPaste(e) {
                 if (firstContent) {
                     target = firstContent;
                     wrapper = firstBlock;
-                    target.innerHTML = '';
+                    if (wrapper.getAttribute('data-type') !== 'code') {
+                        target.innerHTML = '';
+                    }
                 }
             }
         } else {
@@ -3320,13 +4831,88 @@ function handleBlockPaste(e) {
         return;
     }
 
-    let text = e.clipboardData ? e.clipboardData.getData('text/plain') : '';
+    let plainText = e.clipboardData ? e.clipboardData.getData('text/plain') : '';
     const html = e.clipboardData ? e.clipboardData.getData('text/html') : '';
+    plainText = (plainText || '').replace(/\r\n?/g, '\n').replace(/\u00A0/g, ' ');
 
-    // 2. Tiền xử lý clipboard: Khôi phục công thức LaTeX & code pills nếu copy từ ChatGPT, Claude, DeepSeek, Wikipedia
-    const preprocessedFromHtml = preprocessClipboardHtml(html);
-    if (preprocessedFromHtml && (preprocessedFromHtml.includes('$$') || preprocessedFromHtml.includes('`') || preprocessedFromHtml.includes('\n'))) {
-        text = preprocessedFromHtml;
+    // 1.5 Nếu đang đặt con trỏ TRONG khối Code (/code): giữ nguyên văn bản code và xuống dòng trong cùng khối
+    if (wrapper.getAttribute('data-type') === 'code') {
+        let codeInsert = plainText;
+        if (!codeInsert && html) {
+            codeInsert = decodeHtmlEntities(html);
+        }
+        if (!codeInsert) return;
+        e.preventDefault();
+        EditorHistory.recordBeforeAction();
+        const offsets = getCodeSelectionOffsets(target);
+        const curRaw = extractCodeFromDom(target);
+        const start = offsets.inEl ? offsets.start : curRaw.length;
+        const end = offsets.inEl ? offsets.end : curRaw.length;
+        const nextCode = curRaw.slice(0, start) + codeInsert + curRaw.slice(end);
+        applyRawCodeAndHighlight(wrapper, target, nextCode, true, start + codeInsert.length);
+        closeSlashMenu();
+        triggerSave();
+        EditorHistory.updateLastSnapshot();
+        return;
+    }
+
+    const currentIndent = parseInt(wrapper.getAttribute('data-indent') || '0', 10);
+
+    // 2. Kiểm tra nếu nội dung vừa copy là một đoạn Code thuần túy -> Tự động dán dạng Khối Code + hiện thanh tùy chọn Code ⇄ Text
+    if (isLikelyCodeSnippet(plainText, html)) {
+        let rawCodeSource = plainText;
+        if (!rawCodeSource && html) {
+            const tempDoc = new DOMParser().parseFromString(html, 'text/html');
+            const pre = tempDoc.querySelector('pre');
+            rawCodeSource = pre ? (pre.textContent || '') : decodeHtmlEntities(html);
+        }
+        const unwrapped = unwrapFencedCodeIfSingle(rawCodeSource);
+        const cleanCode = unwrapped.code;
+        if (cleanCode.trim()) {
+            e.preventDefault();
+            EditorHistory.recordBeforeAction();
+            const existingRaw = (target.innerText || '').trim();
+            let targetWrapper = wrapper;
+            let targetContent = target;
+
+            if (existingRaw) {
+                targetWrapper = createBlockElement('code', escapeHtml(cleanCode), generateId(), currentIndent, null, null, false, {
+                    rawCode: cleanCode,
+                    codeLang: unwrapped.lang || 'auto'
+                });
+                wrapper.parentNode.insertBefore(targetWrapper, wrapper.nextSibling);
+                targetContent = targetWrapper.querySelector('.block-content');
+            } else {
+                setBlockType(targetContent, 'code', '', { rawCode: cleanCode, codeLang: unwrapped.lang || 'auto' });
+            }
+
+            updateNumberPrefixes();
+            closeSlashMenu();
+            triggerSave();
+            EditorHistory.updateLastSnapshot();
+            if (targetContent) {
+                setCaretOffsetInCode(targetContent, cleanCode.length);
+            }
+            showPasteOptionPill({
+                mode: 'code',
+                wrappers: [targetWrapper],
+                rawText: cleanCode,
+                indent: currentIndent,
+                lang: unwrapped.lang || 'auto'
+            });
+            return;
+        }
+    }
+
+    let text = plainText;
+
+    // 3. Tiền xử lý clipboard: Khôi phục công thức LaTeX, <pre> & code pills nếu copy từ ChatGPT, Claude, DeepSeek, Wikipedia
+    const htmlHasSpecialNodes = /<(?:pre|code|math)\b|katex|mwe-math-element|data-latex/i.test(html);
+    if (html && (htmlHasSpecialNodes || !text.includes('\n'))) {
+        const preprocessedFromHtml = preprocessClipboardHtml(html);
+        if (preprocessedFromHtml && (preprocessedFromHtml.includes('$$') || preprocessedFromHtml.includes('`') || preprocessedFromHtml.includes('\n'))) {
+            text = preprocessedFromHtml;
+        }
     }
 
     text = (text || '').replace(/\r\n?/g, '\n').replace(/\u00A0/g, ' ');
@@ -3334,7 +4920,7 @@ function handleBlockPaste(e) {
 
     const trimmedAll = text.trim();
 
-    // 3. Kiểm tra nếu người dùng dán ĐƠN MỘT CÔNG THỨC TOÁN (Single Math Formula)
+    // 4. Kiểm tra nếu người dùng dán ĐƠN MỘT CÔNG THỨC TOÁN (Single Math Formula)
     const isSingleMathFormula = (
         (trimmedAll.startsWith('$$') && trimmedAll.endsWith('$$') && trimmedAll.length > 4 && !trimmedAll.slice(2, -2).includes('$$')) ||
         (trimmedAll.startsWith('\\[') && trimmedAll.endsWith('\\]') && trimmedAll.length > 4) ||
@@ -3354,8 +4940,7 @@ function handleBlockPaste(e) {
         return;
     }
 
-    // 4. Phân tích nội dung clipboard thành danh sách khối hoàn chỉnh
-    const currentIndent = parseInt(wrapper.getAttribute('data-indent') || '0', 10);
+    // 5. Phân tích nội dung clipboard thành danh sách khối hoàn chỉnh
     const parsedBlocks = parsePastedContentToBlocks(text, currentIndent, html);
 
     if (parsedBlocks.length > 1 || (parsedBlocks.length === 1 && parsedBlocks[0].type !== 'text')) {
@@ -3388,35 +4973,47 @@ function handleBlockPaste(e) {
         }
 
         const firstBlock = parsedBlocks[0];
-
-        // Khối đầu tiên: cập nhật trực tiếp vào khối hiện tại với nội dung đầy đủ
-        if (firstBlock.type !== 'image' && firstBlock.type !== 'math' && firstBlock.type !== 'table' && firstBlock.type !== 'divider' && firstBlock.type !== 'toc') {
-            target.innerHTML = (beforeHtml ? beforeHtml + ' ' : '') + firstBlock.content;
-            setBlockType(target, firstBlock.type, target.innerHTML);
-        } else {
-            // Khối đặc biệt (math, table, image, divider, toc)
-            setBlockType(target, firstBlock.type, firstBlock.content);
-        }
-
-        if (firstBlock.indent !== undefined) {
-            wrapper.setAttribute('data-indent', firstBlock.indent);
-            wrapper.style.marginLeft = `${firstBlock.indent * 24}px`;
-        }
-
-        // Các khối tiếp theo: chèn nối tiếp bên dưới
+        const insertedWrappers = [];
         let lastWrapper = wrapper;
         let lastContentEl = target;
 
+        if (firstBlock.type === 'code' && beforeHtml) {
+            target.innerHTML = beforeHtml;
+            const codeWrapper = createBlockElement(firstBlock.type, firstBlock.content, generateId(), firstBlock.indent !== undefined ? firstBlock.indent : currentIndent, null, null, false, firstBlock);
+            wrapper.parentNode.insertBefore(codeWrapper, wrapper.nextSibling);
+            insertedWrappers.push(codeWrapper);
+            lastWrapper = codeWrapper;
+            lastContentEl = codeWrapper.querySelector('.block-content');
+        } else {
+            // Khối đầu tiên: cập nhật trực tiếp vào khối hiện tại với nội dung đầy đủ
+            if (firstBlock.type === 'code') {
+                setBlockType(target, 'code', firstBlock.content, firstBlock);
+            } else if (firstBlock.type !== 'image' && firstBlock.type !== 'math' && firstBlock.type !== 'table' && firstBlock.type !== 'divider' && firstBlock.type !== 'toc') {
+                target.innerHTML = (beforeHtml ? beforeHtml + ' ' : '') + firstBlock.content;
+                setBlockType(target, firstBlock.type, target.innerHTML);
+            } else {
+                // Khối đặc biệt (math, table, image, divider, toc)
+                setBlockType(target, firstBlock.type, firstBlock.content);
+            }
+            if (firstBlock.indent !== undefined) {
+                wrapper.setAttribute('data-indent', firstBlock.indent);
+                wrapper.style.marginLeft = `${firstBlock.indent * 24}px`;
+            }
+            insertedWrappers.push(wrapper);
+        }
+
+        // Các khối tiếp theo: chèn nối tiếp bên dưới
         for (let i = 1; i < parsedBlocks.length; i++) {
             const b = parsedBlocks[i];
-            const newWrapper = createBlockElement(b.type, b.content, generateId(), b.indent !== undefined ? b.indent : currentIndent);
+            const newWrapper = createBlockElement(b.type, b.content, generateId(), b.indent !== undefined ? b.indent : currentIndent, null, null, false, b);
             lastWrapper.parentNode.insertBefore(newWrapper, lastWrapper.nextSibling);
             lastWrapper = newWrapper;
             lastContentEl = newWrapper.querySelector('.block-content');
+            insertedWrappers.push(newWrapper);
         }
 
         // Nếu có phần nội dung sau con trỏ, ghép vào khối cuối cùng
-        if (afterHtml && lastContentEl && lastContentEl.contentEditable !== 'false') {
+        if (afterHtml && lastContentEl && lastContentEl.contentEditable !== 'false' && lastWrapper.getAttribute('data-type') !== 'code') {
             lastContentEl.innerHTML += (lastContentEl.innerHTML ? ' ' : '') + afterHtml;
         }
 
@@ -3424,16 +5021,33 @@ function handleBlockPaste(e) {
 
         if (lastContentEl && lastContentEl.contentEditable !== 'false') {
             lastContentEl.focus();
-            setCaretAtEnd(lastContentEl);
+            if (lastWrapper.getAttribute('data-type') === 'code') {
+                setCaretOffsetInCode(lastContentEl, extractCodeFromDom(lastContentEl).length);
+            } else {
+                setCaretAtEnd(lastContentEl);
+            }
         }
 
         closeSlashMenu();
         triggerSave();
         EditorHistory.updateLastSnapshot();
+
+        // Hiện thanh chuyển đổi sang Khối Code nếu dán nhiều dòng văn bản không phải bảng/ảnh/math/code đơn
+        const hasOnlyCode = parsedBlocks.length === 1 && parsedBlocks[0].type === 'code';
+        const isSpecialSingle = parsedBlocks.length === 1 && ['table', 'image', 'math'].includes(parsedBlocks[0].type);
+        if (!hasOnlyCode && !isSpecialSingle && plainText.trim()) {
+            showPasteOptionPill({
+                mode: 'text',
+                wrappers: insertedWrappers,
+                rawText: plainText,
+                indent: currentIndent,
+                lang: 'auto'
+            });
+        }
         return;
     }
 
-    // 5. Nếu chỉ là 1 khối text hoặc đoạn văn bản đơn giản: giữ nguyên chèn tự nhiên
+    // 6. Nếu chỉ là 1 khối text hoặc đoạn văn bản đơn giản: giữ nguyên chèn tự nhiên
     const cleanInlineHtml = extractCleanInlineHtml(html);
     if (cleanInlineHtml && (cleanInlineHtml.includes('<') || cleanInlineHtml.includes('style='))) {
         e.preventDefault();
@@ -3442,6 +5056,9 @@ function handleBlockPaste(e) {
         checkMarkdownShortcuts(target);
         triggerSave();
         EditorHistory.updateLastSnapshot();
+        if (plainText.includes('\n') || /[{}();=<>/\\#]/.test(plainText)) {
+            showPasteOptionPill({ mode: 'text', wrappers: [wrapper], rawText: plainText, indent: currentIndent, lang: 'auto' });
+        }
         return;
     }
 
@@ -3451,10 +5068,9 @@ function handleBlockPaste(e) {
     checkMarkdownShortcuts(target);
     triggerSave();
     EditorHistory.updateLastSnapshot();
-    return;
-
-    closeSlashMenu();
-    triggerSave();
+    if (plainText.includes('\n') || /[{}();=<>/\\#]/.test(plainText)) {
+        showPasteOptionPill({ mode: 'text', wrappers: [wrapper], rawText: plainText, indent: currentIndent, lang: 'auto' });
+    }
 }
 
 function openSlashMenu(target, query = '') {
@@ -3567,9 +5183,14 @@ function applySlashCommand(type) {
     closeSlashMenu();
 }
 
-function setBlockType(element, type, initialContent = '') {
+function setBlockType(element, type, initialContent = '', blockMeta = null) {
     const wrapper = element.closest('.block-wrapper');
-    const prefixEl = wrapper.querySelector('.block-prefix');
+    const prefixEl = wrapper ? wrapper.querySelector('.block-prefix') : null;
+
+    // Nếu chuyển từ khối Code sang loại khác, dọn dẹp khung IDE trước
+    if (type !== 'code' && wrapper && wrapper.querySelector('.code-block-shell')) {
+        cleanupCodeBlockUI(wrapper, element);
+    }
     
     // Update prefix based on type
     let prefix = '';
@@ -3659,7 +5280,11 @@ function setBlockType(element, type, initialContent = '') {
     element.className = classes;
     
     element.setAttribute('data-type', type);
-    wrapper.setAttribute('data-type', type);
+    if (wrapper) wrapper.setAttribute('data-type', type);
+
+    if (type === 'code' && wrapper) {
+        setupCodeBlockUI(wrapper, element, initialContent, blockMeta);
+    }
     
     let placeholder = "Type '/' for commands";
     if (type === 'h1' || type === 'toggle-h1') placeholder = "Heading 1";
@@ -4242,6 +5867,10 @@ function initFloatingToolbar() {
         btn.addEventListener('click', (e) => {
             e.preventDefault();
             const action = btn.getAttribute('data-action');
+            if (action === 'codeBlock') {
+                convertSelectionToCodeBlock();
+                return;
+            }
             executeFormatAction(action);
         });
     });
@@ -4321,6 +5950,11 @@ function initFloatingToolbar() {
                 e.preventDefault();
                 const newType = item.getAttribute('data-type');
                 typeDropdown.style.display = 'none';
+
+                if (newType === 'code') {
+                    convertSelectionToCodeBlock();
+                    return;
+                }
                 
                 // Chuyển đổi hàng loạt nếu đang bôi đen nhiều dòng
                 if (selectedBlockWrappers && selectedBlockWrappers.length > 0) {
@@ -4355,6 +5989,16 @@ function initFloatingToolbar() {
             } else {
                 showToast('Vui lòng bôi đen từ cần thêm vào kho từ vựng.');
             }
+        });
+    }
+
+    // 1.5 CONVERT TO CODE BLOCK (💻 Hiển thị dạng Khối Code)
+    const codeBlockBtn = document.getElementById('bubble-code-block-btn');
+    if (codeBlockBtn) {
+        codeBlockBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            convertSelectionToCodeBlock();
         });
     }
 
@@ -4533,6 +6177,51 @@ function initFloatingToolbar() {
     });
 }
 
+function convertSelectionToCodeBlock() {
+    const toolbar = document.getElementById('floating-toolbar');
+    const typeDropdown = document.getElementById('nft-type-dropdown');
+    if (typeDropdown) typeDropdown.style.display = 'none';
+
+    if (selectedBlockWrappers && selectedBlockWrappers.length > 0) {
+        mergeWrappersIntoCodeBlock(selectedBlockWrappers);
+        return;
+    }
+
+    let sel = window.getSelection();
+    if ((!sel || sel.rangeCount === 0 || sel.isCollapsed) && lastActiveRange) {
+        try {
+            sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(lastActiveRange);
+        } catch (e) {}
+    }
+
+    if (sel && sel.rangeCount > 0 && !sel.isCollapsed && elements.blockEditor) {
+        const range = sel.getRangeAt(0);
+        const allWrappers = Array.from(elements.blockEditor.querySelectorAll('.block-wrapper'));
+        const intersecting = allWrappers.filter(w => {
+            const c = w.querySelector('.block-content');
+            if (!c) return false;
+            try { return range.intersectsNode(c); } catch (e) { return false; }
+        });
+        if (intersecting.length > 1) {
+            mergeWrappersIntoCodeBlock(intersecting);
+            return;
+        }
+        if (intersecting.length === 1) {
+            const singleId = intersecting[0].getAttribute('data-id');
+            if (toolbar) toolbar.style.display = 'none';
+            if (singleId) convertBlockType(singleId, 'code');
+            return;
+        }
+    }
+
+    if (toolbar) toolbar.style.display = 'none';
+    if (activeBlockId) {
+        convertBlockType(activeBlockId, 'code');
+    }
+}
+
 function updateBlockTypeBadge(type) {
     const labelEl = document.getElementById('nft-block-label');
     const iconEl = document.getElementById('nft-block-icon');
@@ -4691,6 +6380,13 @@ function blockToMarkdown(wrapper) {
         return `${indentStr}$$\n${latex}\n$$\n`;
     }
 
+    if (type === 'code') {
+        const codeRaw = contentEl ? extractCodeFromDom(contentEl) : '';
+        const lang = wrapper.getAttribute('data-lang') || '';
+        const fenceLang = (lang && lang !== 'auto' && lang !== 'text') ? lang : '';
+        return `${indentStr}\`\`\`${fenceLang}\n${codeRaw}\n${indentStr}\`\`\`\n`;
+    }
+
     const rawText = contentEl ? (contentEl.innerText !== undefined ? contentEl.innerText : (contentEl.textContent || '')) : '';
     const text = rawText.trim();
 
@@ -4704,7 +6400,6 @@ function blockToMarkdown(wrapper) {
         return `${indentStr}${isChecked ? '[x]' : '[ ]'} ${text}\n`;
     }
     if (type === 'quote') return `${indentStr}> ${text}\n`;
-    if (type === 'code') return `${indentStr}\`\`\`\n${rawText}\n\`\`\`\n`;
     if (type === 'divider') return `${indentStr}---\n`;
     return `${indentStr}${rawText}\n`;
 }
@@ -4724,6 +6419,10 @@ function blockToHtml(wrapper) {
         const latex = contentEl ? (contentEl.dataset.latex || '') : '';
         return `<div class="math-block" data-latex="${escapeHtml(latex)}"><p>$$ ${escapeHtml(latex)} $$</p></div>`;
     }
+    if (type === 'code') {
+        const codeRaw = contentEl ? extractCodeFromDom(contentEl) : '';
+        return `<pre><code>${escapeHtml(codeRaw)}</code></pre>`;
+    }
     const html = contentEl ? contentEl.innerHTML : '';
     if (type === 'h1') return `<h1>${html}</h1>`;
     if (type === 'h2') return `<h2>${html}</h2>`;
@@ -4735,7 +6434,6 @@ function blockToHtml(wrapper) {
         return `<p>[${isChecked ? 'x' : ' '}] ${html}</p>`;
     }
     if (type === 'quote') return `<blockquote>${html}</blockquote>`;
-    if (type === 'code') return `<pre><code>${html}</code></pre>`;
     if (type === 'divider') return `<hr>`;
     return `<p>${html}</p>`;
 }
@@ -4747,7 +6445,7 @@ function initMultiBlockSelection() {
     if (!elements.blockEditor) return;
 
     elements.blockEditor.addEventListener('mousedown', (e) => {
-        if (e.target.closest('.block-handle') || e.target.closest('.todo-cb') || e.target.closest('.toggle-icon') || e.target.closest('.image-toolbar') || e.target.closest('.table-block-container') || e.target.closest('.col-resizer') || e.target.closest('.table-corner-resizer') || e.target.closest('.table-floating-toolbar') || e.target.closest('.block-wrapper[data-type="table"]')) {
+        if (e.target.closest('.block-handle') || e.target.closest('.todo-cb') || e.target.closest('.toggle-icon') || e.target.closest('.image-toolbar') || e.target.closest('.code-block-header') || e.target.closest('.code-line-numbers') || e.target.closest('.table-block-container') || e.target.closest('.col-resizer') || e.target.closest('.table-corner-resizer') || e.target.closest('.table-floating-toolbar') || e.target.closest('.block-wrapper[data-type="table"]')) {
             return;
         }
         isMouseDown = true;
@@ -4898,6 +6596,16 @@ function initMultiBlockSelection() {
             const sel = window.getSelection();
             const selText = sel ? sel.toString() : '';
             const contentEl = currentWrapper.querySelector('.block-content');
+            const isCodeBlock = currentWrapper.getAttribute('data-type') === 'code';
+
+            if (isCodeBlock && sel && !sel.isCollapsed && selText) {
+                e.preventDefault();
+                if (e.clipboardData) {
+                    e.clipboardData.setData('text/plain', selText);
+                }
+                return;
+            }
+
             const contentText = contentEl ? (contentEl.innerText || '').trim() : '';
 
             // Nếu người dùng KHÔNG bôi đen từng chữ (con trỏ chỉ nhấp nháy ở dòng đó) 
