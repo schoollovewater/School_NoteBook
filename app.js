@@ -1,5 +1,5 @@
 // --- CONFIG & STATE ---
-const APP_VERSION = 'v4.0.1';
+const APP_VERSION = 'v4.0.2';
 const DELETED_PAGES_KEY = 'schooldb_deleted_pages';
 const appState = {
     theme: localStorage.getItem('theme') || 'dark',
@@ -423,10 +423,16 @@ function initApp() {
             e.preventDefault();
             triggerSave();
         }
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'u') {
+            document.execCommand('underline', false, null);
+            e.preventDefault();
+            triggerSave();
+        }
         if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'e') {
             const activeEl = document.activeElement;
+            const isCell = activeEl && (activeEl.tagName === 'TH' || activeEl.tagName === 'TD');
             const wrapper = activeEl ? activeEl.closest('.block-wrapper') : null;
-            if (wrapper && wrapper.getAttribute('data-type') !== 'code') {
+            if ((wrapper && wrapper.getAttribute('data-type') !== 'code') || isCell) {
                 e.preventDefault();
                 applyTechPillToSelection('amber');
             }
@@ -468,6 +474,40 @@ function initApp() {
     initPopovers();
     initSidebarResizer();
     initMultiBlockSelection();
+
+    // Nhấp vào khoảng trống bên dưới trang / khối để tự động tạo và đưa con trỏ xuống dòng
+    const editorContainer = document.getElementById('editor-container');
+    if (editorContainer) {
+        editorContainer.addEventListener('click', (e) => {
+            if (e.target === editorContainer || e.target.classList.contains('page-content') || e.target === elements.blockEditor) {
+                if (!elements.blockEditor) return;
+                const allWrappers = Array.from(elements.blockEditor.querySelectorAll('.block-wrapper'));
+                const last = allWrappers[allWrappers.length - 1];
+                if (!last) {
+                    focusFirstBlockOrCreate();
+                    return;
+                }
+                const lastType = last.getAttribute('data-type');
+                if (['table', 'code', 'math', 'image', 'divider', 'toc'].includes(lastType)) {
+                    const newBlock = createBlockElement('text', '', generateId(), 0);
+                    elements.blockEditor.appendChild(newBlock);
+                    const c = newBlock.querySelector('.block-content');
+                    if (c) {
+                        c.focus();
+                        setCaretAtEnd(c);
+                    }
+                    triggerSave();
+                    return;
+                }
+                const lastContent = last.querySelector('.block-content');
+                if (lastContent && lastContent.contentEditable !== 'false') {
+                    lastContent.focus();
+                    setCaretAtEnd(lastContent);
+                }
+            }
+        });
+    }
+
     // Initialize Slash menu clicks
     document.querySelectorAll('.slash-menu-item').forEach(item => {
         item.addEventListener('click', (e) => {
@@ -3299,6 +3339,29 @@ function handleBlockKeydown(e) {
                 return;
             }
         }
+        if (e.key === 'ArrowDown') {
+            const offsets = getCodeSelectionOffsets(target);
+            const raw = extractCodeFromDom(target);
+            if (offsets.inEl && offsets.end === raw.length) {
+                e.preventDefault();
+                const nextW = wrapper.nextElementSibling;
+                if (nextW && nextW.querySelector('.block-content')) {
+                    const c = nextW.querySelector('.block-content');
+                    if (c.contentEditable !== 'false') {
+                        c.focus();
+                        setCaretAtStart(c);
+                        return;
+                    }
+                }
+                const indent = parseInt(wrapper.getAttribute('data-indent') || '0', 10);
+                const newWrapper = createBlockElement('text', '', generateId(), indent);
+                wrapper.parentNode.insertBefore(newWrapper, wrapper.nextSibling);
+                const newContent = newWrapper.querySelector('.block-content');
+                if (newContent) setCaretAtStart(newContent);
+                triggerSave();
+                return;
+            }
+        }
         return;
     }
 
@@ -3609,8 +3672,9 @@ function handleBlockInput(e) {
 
 function tryAutoConvertInlineCodeOnInput(target, e) {
     if (!target || !e || e.data !== '`' || target.dataset.composing === '1') return false;
-    const blockType = target.getAttribute('data-type') || 'text';
-    if (['code', 'math', 'table', 'image', 'divider', 'toc'].includes(blockType)) return false;
+    const isCell = target.tagName === 'TH' || target.tagName === 'TD';
+    const blockType = isCell ? 'text' : (target.getAttribute('data-type') || 'text');
+    if (!isCell && ['code', 'math', 'table', 'image', 'divider', 'toc'].includes(blockType)) return false;
 
     const sel = window.getSelection();
     if (!sel || !sel.isCollapsed || sel.rangeCount === 0) return false;
@@ -4219,6 +4283,9 @@ function setupCodeBlockUI(wrapper, contentEl, initialContent = '', blockMeta = n
                     <button type="button" class="code-action-btn" data-action="to-text" title="Chuyển khối code về dạng văn bản thường">
                         <i class="ri-file-text-line"></i> <span class="code-btn-label">Text</span>
                     </button>
+                    <button type="button" class="code-action-btn" data-action="insert-line-below" title="Thêm dòng văn bản bên dưới khối code (Phím tắt: Shift+Enter hoặc Ctrl+Enter)">
+                        <i class="ri-corner-down-left-line"></i> <span class="code-btn-label">+ Dòng dưới</span>
+                    </button>
                     <button type="button" class="code-action-btn" data-action="copy" title="Sao chép toàn bộ code">
                         <i class="ri-file-copy-line"></i> <span class="code-btn-label">Copy code</span>
                     </button>
@@ -4237,6 +4304,19 @@ function setupCodeBlockUI(wrapper, contentEl, initialContent = '', blockMeta = n
         const wrapBtn = shell.querySelector('[data-action="toggle-wrap"]');
         const toTextBtn = shell.querySelector('[data-action="to-text"]');
         const copyBtn = shell.querySelector('[data-action="copy"]');
+        const insertLineBtn = shell.querySelector('[data-action="insert-line-below"]');
+
+        if (insertLineBtn) {
+            insertLineBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const indent = parseInt(wrapper.getAttribute('data-indent') || '0', 10);
+                const newWrapper = createBlockElement('text', '', generateId(), indent);
+                wrapper.parentNode.insertBefore(newWrapper, wrapper.nextSibling);
+                const newContent = newWrapper.querySelector('.block-content');
+                if (newContent) setCaretAtStart(newContent);
+                triggerSave();
+            });
+        }
 
         langSelect.addEventListener('change', (e) => {
             e.stopPropagation();
@@ -4743,7 +4823,7 @@ function parsePastedContentToBlocks(rawText, baseIndent = 0, rawHtml = '') {
                 if (rows.length > 0) {
                     return [{
                         type: 'table',
-                        content: JSON.stringify({ hasHeader: true, rows }),
+                        content: JSON.stringify({ hasHeader: true, isFullWidth: false, tableWidth: 'max-content', rows }),
                         indent: baseIndent
                     }];
                 }
@@ -4759,7 +4839,7 @@ function parsePastedContentToBlocks(rawText, baseIndent = 0, rawHtml = '') {
             if (rows.every(r => r.length === rows[0].length && r.length >= 2)) {
                 return [{
                     type: 'table',
-                    content: JSON.stringify({ hasHeader: true, rows }),
+                    content: JSON.stringify({ hasHeader: true, isFullWidth: false, tableWidth: 'max-content', rows }),
                     indent: baseIndent
                 }];
             }
@@ -4782,7 +4862,7 @@ function parsePastedContentToBlocks(rawText, baseIndent = 0, rawHtml = '') {
         if (parsedRows.length > 0) {
             return [{
                 type: 'table',
-                content: JSON.stringify({ hasHeader: hasSeparator, rows: parsedRows }),
+                content: JSON.stringify({ hasHeader: hasSeparator, isFullWidth: false, tableWidth: 'max-content', rows: parsedRows }),
                 indent: baseIndent
             }];
         }
@@ -4936,6 +5016,35 @@ function handleBlockPaste(e) {
             target.dispatchEvent(inputEvt);
             return;
         }
+        return;
+    }
+
+    // Nếu người dùng đang dán trực tiếp vào một ô trong bảng (th hoặc td)
+    const tableCell = target ? target.closest('th, td') : null;
+    if (tableCell) {
+        e.preventDefault();
+        EditorHistory.recordBeforeAction();
+        let plainText = e.clipboardData ? e.clipboardData.getData('text/plain') : '';
+        const html = e.clipboardData ? e.clipboardData.getData('text/html') : '';
+        plainText = (plainText || '').replace(/\r\n?/g, '\n').replace(/\u00A0/g, ' ');
+
+        let htmlToInsert = '';
+        if (html && (html.includes('<b>') || html.includes('<strong>') || html.includes('<i>') || html.includes('<code>') || html.includes('style='))) {
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = html;
+            tempDiv.querySelectorAll('script, style, iframe, form, table, tr, td, th').forEach(el => el.remove());
+            htmlToInsert = tempDiv.innerHTML.trim();
+        }
+        if (!htmlToInsert && plainText) {
+            htmlToInsert = formatInlineMarkdown(plainText);
+        }
+        if (htmlToInsert) {
+            document.execCommand('insertHTML', false, htmlToInsert);
+        } else if (plainText) {
+            document.execCommand('insertText', false, plainText);
+        }
+        triggerSave();
+        EditorHistory.updateLastSnapshot();
         return;
     }
 
@@ -5178,9 +5287,27 @@ function handleBlockPaste(e) {
             lastContentEl.innerHTML += (lastContentEl.innerHTML ? ' ' : '') + afterHtml;
         }
 
+        // Nếu khối cuối cùng vừa dán là Bảng hoặc Code (hoặc math/image/divider), tự động tạo sẵn một dòng văn bản trống bên dưới
+        // để người dùng có thể nhấp chuột hoặc tiếp tục gõ xuống dòng ngay lập tức mà không bị kẹt con trỏ
+        const lastType = lastWrapper ? lastWrapper.getAttribute('data-type') : '';
+        let trailingCreated = false;
+        if (['table', 'code', 'math', 'image', 'divider'].includes(lastType)) {
+            if (!lastWrapper.nextElementSibling) {
+                const emptyTextBlock = createBlockElement('text', '', generateId(), currentIndent);
+                lastWrapper.parentNode.insertBefore(emptyTextBlock, lastWrapper.nextSibling);
+                insertedWrappers.push(emptyTextBlock);
+                lastWrapper = emptyTextBlock;
+                lastContentEl = emptyTextBlock.querySelector('.block-content');
+                trailingCreated = true;
+            }
+        }
+
         updateNumberPrefixes();
 
-        if (lastContentEl && lastContentEl.contentEditable !== 'false') {
+        if (trailingCreated && lastContentEl) {
+            lastContentEl.focus();
+            setCaretAtEnd(lastContentEl);
+        } else if (lastContentEl && lastContentEl.contentEditable !== 'false') {
             lastContentEl.focus();
             if (lastWrapper.getAttribute('data-type') === 'code') {
                 setCaretOffsetInCode(lastContentEl, extractCodeFromDom(lastContentEl).length);
@@ -5324,6 +5451,23 @@ function applySlashCommand(type) {
         if (type === 'table') {
             closeSlashMenu();
             setBlockType(activeBlockElement, 'table', '');
+            if (wrapper && !wrapper.nextElementSibling) {
+                const indent = parseInt(wrapper.getAttribute('data-indent') || '0', 10);
+                const newWrapper = createBlockElement('text', '', generateId(), indent);
+                wrapper.parentNode.insertBefore(newWrapper, wrapper.nextSibling);
+            }
+            triggerSave();
+            return;
+        }
+
+        if (type === 'code') {
+            closeSlashMenu();
+            setBlockType(activeBlockElement, 'code', '');
+            if (wrapper && !wrapper.nextElementSibling) {
+                const indent = parseInt(wrapper.getAttribute('data-indent') || '0', 10);
+                const newWrapper = createBlockElement('text', '', generateId(), indent);
+                wrapper.parentNode.insertBefore(newWrapper, wrapper.nextSibling);
+            }
             triggerSave();
             return;
         }
@@ -6264,12 +6408,15 @@ function initFloatingToolbar() {
                     return;
                 }
 
-                if (container && container.closest('.table-block-container')) {
+                const inTableCell = !!(container && container.closest('th, td'));
+                const inTableControls = !!(container && container.closest('.table-floating-toolbar, .col-resizer, .table-corner-resizer, .table-quick-add-col-btn, .table-quick-add-row-btn'));
+
+                if (inTableControls) {
                     toolbar.style.display = 'none';
                     return;
                 }
 
-                inEditor = !!(container && container.closest('#editor-container, .page-content, .block-editor, .block-content'));
+                inEditor = inTableCell || !!(container && container.closest('#editor-container, .page-content, .block-editor, .block-content'));
                 rect = range.getBoundingClientRect();
 
                 if (inEditor) {
@@ -6277,8 +6424,12 @@ function initFloatingToolbar() {
                     if (blockEl) {
                         activeBlockId = blockEl.getAttribute('data-id');
                         activeBlockElement = blockEl;
-                        const blockType = blockEl.getAttribute('data-type') || 'text';
-                        updateBlockTypeBadge(blockType);
+                        if (inTableCell) {
+                            updateBlockTypeBadge('table-cell');
+                        } else {
+                            const blockType = blockEl.getAttribute('data-type') || 'text';
+                            updateBlockTypeBadge(blockType);
+                        }
                     }
                 }
             } else if (hasBlocks) {
@@ -6413,7 +6564,8 @@ function updateBlockTypeBadge(type) {
         quote: { label: 'Trích dẫn', icon: 'ri-double-quotes-l' },
         code: { label: 'Code', icon: 'ri-code-box-line' },
         math: { label: 'Toán học', icon: 'ri-functions' },
-        table: { label: 'Bảng (Table)', icon: 'ri-table-line' }
+        table: { label: 'Bảng (Table)', icon: 'ri-table-line' },
+        'table-cell': { label: 'Ô bảng', icon: 'ri-table-line' }
     };
 
     const cfg = typeConfig[type] || typeConfig.text;
@@ -6461,6 +6613,14 @@ function convertBlockType(blockId, newType) {
     }
     if (!wrapper) return;
     
+    // Tránh vô tình đổi loại khối phá hỏng bảng khi người dùng đang thao tác trong ô bảng
+    if (wrapper.getAttribute('data-type') === 'table') {
+        showToast('ℹ️ Để đổi định dạng khối, vui lòng chọn các dòng văn bản ngoài bảng.');
+        const typeDropdown = document.getElementById('nft-type-dropdown');
+        if (typeDropdown) typeDropdown.style.display = 'none';
+        return;
+    }
+
     const contentEl = wrapper.querySelector('.block-content');
     if (!contentEl) return;
     
@@ -6470,6 +6630,13 @@ function convertBlockType(blockId, newType) {
     const isNewToggle = newType.startsWith('toggle');
 
     setBlockType(contentEl, newType);
+
+    // Nếu chuyển sang khối đặc biệt (bảng, code, math...) ở cuối trang, tự động tạo dòng văn bản bên dưới
+    if (['table', 'code', 'math', 'image', 'divider'].includes(newType) && !wrapper.nextElementSibling) {
+        const indent = parseInt(wrapper.getAttribute('data-indent') || '0', 10);
+        const newWrapper = createBlockElement('text', '', generateId(), indent);
+        wrapper.parentNode.insertBefore(newWrapper, wrapper.nextSibling);
+    }
 
     // Nếu chuyển từ Toggle sang khối thường, hiển thị lại các khối con trước đó bị ẩn
     if (wasToggle && !isNewToggle) {
@@ -7038,19 +7205,20 @@ function applyTechPillToSelection(styleName = 'amber') {
     let container = range.commonAncestorContainer;
     if (container && container.nodeType === Node.TEXT_NODE) container = container.parentElement;
 
+    const cell = container ? container.closest('th, td') : null;
     const wrapper = container ? container.closest('.block-wrapper') : null;
     if (!wrapper || wrapper.getAttribute('data-type') === 'code') {
-        showToast('ℹ️ Node lệnh dùng trong các dòng văn bản hoặc danh sách.');
+        showToast('ℹ️ Node lệnh dùng trong các dòng văn bản, danh sách hoặc ô bảng.');
         return;
     }
 
-    const contentEl = wrapper.querySelector('.block-content');
-    if (!contentEl || !contentEl.contains(container)) return;
+    const hostEl = cell || wrapper.querySelector('.block-content');
+    if (!hostEl || !hostEl.contains(container)) return;
 
     EditorHistory.recordBeforeAction();
 
     const existingCode = container.closest ? container.closest('code.inline-code') : null;
-    if (existingCode && contentEl.contains(existingCode)) {
+    if (existingCode && hostEl.contains(existingCode)) {
         const targetClass = `tech-pill-${styleName}`;
         const hasSameStyle = existingCode.classList.contains(targetClass) ||
             (styleName === 'amber' && !TECH_PILL_CLASSES.some(c => existingCode.classList.contains(c)));
@@ -7074,7 +7242,7 @@ function applyTechPillToSelection(styleName = 'amber') {
 
     if (styleName === 'clear') {
         let unwrappedCount = 0;
-        contentEl.querySelectorAll('code.inline-code').forEach(c => {
+        hostEl.querySelectorAll('code.inline-code').forEach(c => {
             try {
                 if (range.intersectsNode(c)) {
                     unwrapInlineCodeElement(c, false);
@@ -7094,12 +7262,21 @@ function applyTechPillToSelection(styleName = 'amber') {
     const plain = sel.toString();
     if (!plain || !plain.trim()) return;
 
-    // Tránh bọc chéo qua nhiều dòng
-    const startBlock = range.startContainer.nodeType === Node.TEXT_NODE ? range.startContainer.parentElement.closest('.block-wrapper') : range.startContainer.closest('.block-wrapper');
-    const endBlock = range.endContainer.nodeType === Node.TEXT_NODE ? range.endContainer.parentElement.closest('.block-wrapper') : range.endContainer.closest('.block-wrapper');
-    if (startBlock !== endBlock) {
-        showToast('⚠️ Node lệnh nội dòng chỉ áp dụng trong cùng một dòng');
-        return;
+    if (cell) {
+        const startCell = range.startContainer.nodeType === Node.TEXT_NODE ? range.startContainer.parentElement.closest('th, td') : range.startContainer.closest('th, td');
+        const endCell = range.endContainer.nodeType === Node.TEXT_NODE ? range.endContainer.parentElement.closest('th, td') : range.endContainer.closest('th, td');
+        if (startCell !== endCell) {
+            showToast('⚠️ Node lệnh nội dòng chỉ áp dụng trong cùng một ô');
+            return;
+        }
+    } else {
+        // Tránh bọc chéo qua nhiều dòng
+        const startBlock = range.startContainer.nodeType === Node.TEXT_NODE ? range.startContainer.parentElement.closest('.block-wrapper') : range.startContainer.closest('.block-wrapper');
+        const endBlock = range.endContainer.nodeType === Node.TEXT_NODE ? range.endContainer.parentElement.closest('.block-wrapper') : range.endContainer.closest('.block-wrapper');
+        if (startBlock !== endBlock) {
+            showToast('⚠️ Node lệnh nội dòng chỉ áp dụng trong cùng một dòng');
+            return;
+        }
     }
 
     const codeEl = document.createElement('code');
@@ -8214,8 +8391,8 @@ function renderTableBlock(contentEl, initialContent = '') {
 
     let tableData = {
         hasHeader: true,
-        isFullWidth: true,
-        tableWidth: '100%',
+        isFullWidth: false,
+        tableWidth: 'max-content',
         colWidths: [],
         rowHeights: [],
         rows: [
@@ -8279,6 +8456,9 @@ function renderTableBlock(contentEl, initialContent = '') {
                 <i class="ri-delete-column"></i> <span>- Cột</span>
             </button>
             <div class="tbl-divider"></div>
+            <button type="button" class="tbl-btn" data-action="insert-line-below" title="Thêm dòng văn bản bên dưới bảng (Phím tắt: Shift+Enter trong ô)">
+                <i class="ri-corner-down-left-line"></i> <span>+ Dòng dưới</span>
+            </button>
             <button type="button" class="tbl-btn" data-action="copy-md" title="Sao chép dưới dạng Markdown table">
                 <i class="ri-file-copy-line"></i>
             </button>
@@ -8458,7 +8638,8 @@ function renderTableBlock(contentEl, initialContent = '') {
                     activeCell = cell;
                 });
 
-                cell.addEventListener('input', () => {
+                cell.addEventListener('input', (e) => {
+                    tryAutoConvertInlineCodeOnInput(cell, e);
                     triggerSave();
                 });
 
@@ -8482,19 +8663,31 @@ function renderTableBlock(contentEl, initialContent = '') {
                                 allCells[curIdx - 1].focus();
                             }
                         }
-                    } else if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        const trEl = cell.parentElement;
-                        const cellIdx = Array.from(trEl.children).indexOf(cell);
-                        const nextTr = trEl.nextElementSibling;
-                        if (nextTr && nextTr.children[cellIdx]) {
-                            nextTr.children[cellIdx].focus();
+                    } else if (e.key === 'Enter') {
+                        if (e.shiftKey || e.ctrlKey || e.metaKey) {
+                            e.preventDefault();
+                            insertLineBelowTable();
                         } else {
-                            addRow();
-                            const newNextTr = trEl.nextElementSibling;
-                            if (newNextTr && newNextTr.children[cellIdx]) {
-                                newNextTr.children[cellIdx].focus();
+                            e.preventDefault();
+                            const trEl = cell.parentElement;
+                            const cellIdx = Array.from(trEl.children).indexOf(cell);
+                            const nextTr = trEl.nextElementSibling;
+                            if (nextTr && nextTr.children[cellIdx]) {
+                                nextTr.children[cellIdx].focus();
+                            } else {
+                                addRow();
+                                const newNextTr = trEl.nextElementSibling;
+                                if (newNextTr && newNextTr.children[cellIdx]) {
+                                    newNextTr.children[cellIdx].focus();
+                                }
                             }
+                        }
+                    } else if (e.key === 'ArrowDown') {
+                        const trEl = cell.parentElement;
+                        const nextTr = trEl.nextElementSibling;
+                        if (!nextTr) {
+                            e.preventDefault();
+                            insertOrFocusLineBelowTable();
                         }
                     }
                 });
@@ -8718,6 +8911,36 @@ function renderTableBlock(contentEl, initialContent = '') {
         }
     }
 
+    function insertLineBelowTable() {
+        const parentWrapper = container.closest('.block-wrapper');
+        if (!parentWrapper) return;
+        const indent = parseInt(parentWrapper.getAttribute('data-indent') || '0', 10);
+        const newBlock = createBlockElement('text', '', generateId(), indent);
+        parentWrapper.parentNode.insertBefore(newBlock, parentWrapper.nextSibling);
+        const c = newBlock.querySelector('.block-content');
+        if (c) {
+            c.focus();
+            setCaretAtEnd(c);
+        }
+        triggerSave();
+        EditorHistory.updateLastSnapshot();
+    }
+
+    function insertOrFocusLineBelowTable() {
+        const parentWrapper = container.closest('.block-wrapper');
+        if (!parentWrapper) return;
+        const nextW = parentWrapper.nextElementSibling;
+        if (nextW && nextW.querySelector('.block-content')) {
+            const c = nextW.querySelector('.block-content');
+            if (c.contentEditable !== 'false') {
+                c.focus();
+                setCaretAtStart(c);
+                return;
+            }
+        }
+        insertLineBelowTable();
+    }
+
     container.querySelector('[data-action="toggle-header"]').addEventListener('click', (e) => {
         e.stopPropagation();
         toggleHeader();
@@ -8742,6 +8965,13 @@ function renderTableBlock(contentEl, initialContent = '') {
         e.stopPropagation();
         delCol();
     });
+    const insertLineBelowBtn = container.querySelector('[data-action="insert-line-below"]');
+    if (insertLineBelowBtn) {
+        insertLineBelowBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            insertLineBelowTable();
+        });
+    }
     container.querySelector('[data-action="copy-md"]').addEventListener('click', (e) => {
         e.stopPropagation();
         copyMarkdown();

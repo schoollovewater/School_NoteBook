@@ -4353,13 +4353,31 @@ body.is-dragging {
 .table-scroll-wrapper {
     width: 100% !important;
     overflow-x: auto;
-    overflow-y: visible;
+    overflow-y: hidden !important;
     padding: 0 !important;
     margin: 0 !important;
     min-height: 0 !important;
     height: auto !important;
     position: relative;
     scrollbar-width: thin;
+}
+
+.table-scroll-wrapper::-webkit-scrollbar {
+    height: 5px;
+    width: 0px;
+}
+
+.table-scroll-wrapper::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.table-scroll-wrapper::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.28);
+    border-radius: 999px;
+}
+
+.table-scroll-wrapper::-webkit-scrollbar-thumb:hover {
+    background: rgba(148, 163, 184, 0.5);
 }
 
 .table-wrap-inner {
@@ -4393,12 +4411,14 @@ body.is-dragging {
 .word-table.is-fullwidth,
 .notion-table.is-fullwidth {
     width: 100%;
+    table-layout: fixed;
 }
 
 .word-table.is-fit,
 .notion-table.is-fit {
     width: max-content;
     max-width: 100%;
+    table-layout: auto;
 }
 
 .word-table tr,
@@ -4507,14 +4527,14 @@ body.is-dragging {
 /* Nút kéo chỉnh kích thước khung bảng ở góc dưới bên phải (Word-style Corner Resize Handle) */
 .table-corner-resizer {
     position: absolute;
-    right: -8px;
-    bottom: -8px;
-    width: 18px;
-    height: 18px;
-    border-radius: 3px;
+    right: 0px;
+    bottom: 0px;
+    width: 16px;
+    height: 16px;
+    border-radius: 3px 0 3px 0;
     background: var(--bg-elevated);
     border: 1px solid var(--border-color);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -4523,7 +4543,7 @@ body.is-dragging {
     z-index: 25;
     opacity: 0;
     color: var(--text-placeholder);
-    font-size: 11px;
+    font-size: 10px;
     transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
