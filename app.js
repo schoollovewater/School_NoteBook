@@ -6503,12 +6503,48 @@ const vocab = {
     speakWord: (text) => {
         const targetText = text || (vocab.flashcardDeck[vocab.flashcardIndex] ? vocab.flashcardDeck[vocab.flashcardIndex].word : '');
         if (!targetText) return;
+        const cleanWord = targetText.replace(/[/\\#,+()$~%.'":*?<>{}]/g, ' ').trim();
+
+        // Ưu tiên 1: Stream âm thanh bản xứ trực tuyến chất lượng cao (hoạt động 100% trên điện thoại & máy tính)
+        if (navigator.onLine) {
+            try {
+                if (window.__currentVocabAudio) {
+                    window.__currentVocabAudio.pause();
+                    window.__currentVocabAudio = null;
+                }
+                const audioUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=en&client=tw-ob&q=${encodeURIComponent(cleanWord)}`;
+                const audio = new Audio(audioUrl);
+                audio.playbackRate = 0.95;
+                window.__currentVocabAudio = audio;
+                audio.onended = () => { window.__currentVocabAudio = null; };
+                const p = audio.play();
+                if (p !== undefined) {
+                    p.catch(() => {
+                        window.__currentVocabAudio = null;
+                        vocab.speakWithWebSpeech(cleanWord);
+                    });
+                }
+                return;
+            } catch (e) {}
+        }
+
+        // Ưu tiên 2: Fallback Web Speech API khi ngoại tuyến
+        vocab.speakWithWebSpeech(cleanWord);
+    },
+
+    speakWithWebSpeech: (text) => {
         if ('speechSynthesis' in window) {
-            window.speechSynthesis.cancel();
-            const utterance = new SpeechSynthesisUtterance(targetText);
-            utterance.lang = 'en-US';
-            utterance.rate = 0.9;
-            window.speechSynthesis.speak(utterance);
+            try {
+                window.speechSynthesis.cancel();
+                window.speechSynthesis.resume();
+                window.__currentUtterance = new SpeechSynthesisUtterance(text);
+                window.__currentUtterance.lang = 'en-US';
+                window.__currentUtterance.rate = 0.9;
+                window.__currentUtterance.onend = () => { window.__currentUtterance = null; };
+                window.speechSynthesis.speak(window.__currentUtterance);
+            } catch (e) {
+                console.warn('SpeechSynthesis err:', e);
+            }
         } else {
             showToast('Trình duyệt không hỗ trợ phát âm.');
         }

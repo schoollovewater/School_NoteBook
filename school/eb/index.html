@@ -1417,20 +1417,115 @@
             showToast('🔀 Đã xáo trộn thứ tự từ vựng');
         }
 
-        // --- AUDIO / TEXT TO SPEECH ---
-        function playWordAudio(text) {
-            if (!text || typeof window.speechSynthesis === 'undefined') return;
-            window.speechSynthesis.cancel();
-            const utter = new SpeechSynthesisUtterance(text);
-            utter.lang = 'en-US';
-            utter.rate = speechSpeed;
+        // --- DUAL-ENGINE AUDIO SYSTEM (MOBILE & DESKTOP ROBUST) ---
+        let currentAudioElement = null;
+        let currentUtterance = null;
+        let audioUnlocked = false;
 
-            // Pick high quality voice if available
-            const voices = window.speechSynthesis.getVoices();
-            const englishVoice = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Samantha')));
-            if (englishVoice) utter.voice = englishVoice;
+        // Mở khóa AudioContext trên thiết bị di động ngay khi người dùng chạm vào màn hình lần đầu
+        function unlockMobileAudio() {
+            if (audioUnlocked) return;
+            try {
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                if (AudioCtx) {
+                    const ctx = new AudioCtx();
+                    if (ctx.state === 'suspended') ctx.resume();
+                }
+                if ('speechSynthesis' in window) {
+                    window.speechSynthesis.cancel();
+                    window.speechSynthesis.resume();
+                }
+                audioUnlocked = true;
+            } catch (e) {}
+        }
+        window.addEventListener('pointerdown', unlockMobileAudio, { once: true });
+        window.addEventListener('touchstart', unlockMobileAudio, { once: true });
+        window.addEventListener('click', unlockMobileAudio, { once: true });
 
-            window.speechSynthesis.speak(utter);
+        // Phát âm từ: Ưu tiên 1 Audio trực tuyến chất lượng cao (hoạt động 100% trên điện thoại kể cả khi gạt im lặng)
+        // Ưu tiên 2: Fallback Web Speech API khi ngoại tuyến (Offline)
+        function playWordAudio(text, onEndCallback = null) {
+            if (!text) {
+                if (onEndCallback) onEndCallback();
+                return;
+            }
+            text = text.trim();
+            unlockMobileAudio();
+
+            // 1. Dừng âm thanh đang chạy trước đó
+            if (currentAudioElement) {
+                try { currentAudioElement.pause(); } catch (e) {}
+                currentAudioElement = null;
+            }
+            if ('speechSynthesis' in window) {
+                try { window.speechSynthesis.cancel(); } catch (e) {}
+            }
+
+            // 2. Nếu có mạng: Dùng stream âm thanh chuẩn qua thẻ Audio (hoạt động cực nhạy trên iOS & Android)
+            if (navigator.onLine) {
+                const cleanWord = text.replace(/[/\\#,+()$~%.'":*?<>{}]/g, ' ').trim();
+                const audioUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=en&client=tw-ob&q=${encodeURIComponent(cleanWord)}`;
+                const audio = new Audio(audioUrl);
+                audio.playbackRate = speechSpeed || 1.0;
+                currentAudioElement = audio;
+
+                let finished = false;
+                audio.onended = () => {
+                    finished = true;
+                    currentAudioElement = null;
+                    if (onEndCallback) onEndCallback();
+                };
+                audio.onerror = () => {
+                    if (finished) return;
+                    currentAudioElement = null;
+                    speakWithWebSpeech(text, onEndCallback);
+                };
+
+                const playPromise = audio.play();
+                if (playPromise !== undefined) {
+                    playPromise.catch(err => {
+                        console.warn('Audio play failed, falling back to Web Speech:', err);
+                        currentAudioElement = null;
+                        speakWithWebSpeech(text, onEndCallback);
+                    });
+                }
+                return;
+            }
+
+            // 3. Khi ngoại tuyến: Sử dụng Web Speech API đã tối ưu chống Garbage Collection trên Mobile
+            speakWithWebSpeech(text, onEndCallback);
+        }
+
+        function speakWithWebSpeech(text, onEndCallback = null) {
+            if (!('speechSynthesis' in window)) {
+                if (onEndCallback) onEndCallback();
+                return;
+            }
+
+            try {
+                window.speechSynthesis.cancel();
+                window.speechSynthesis.resume();
+
+                // Lưu vào biến toàn cục để tránh bị trình duyệt di động thu hồi bộ nhớ (GC bug)
+                currentUtterance = new SpeechSynthesisUtterance(text);
+                currentUtterance.lang = 'en-US';
+                currentUtterance.rate = speechSpeed || 1.0;
+
+                currentUtterance.onend = () => {
+                    currentUtterance = null;
+                    if (onEndCallback) onEndCallback();
+                };
+                currentUtterance.onerror = (e) => {
+                    console.warn('SpeechSynthesis error:', e);
+                    currentUtterance = null;
+                    if (onEndCallback) onEndCallback();
+                };
+
+                window.speechSynthesis.speak(currentUtterance);
+            } catch (err) {
+                console.warn('Web Speech fallback err:', err);
+                if (onEndCallback) onEndCallback();
+            }
         }
 
         function playCurrentAudio() {
@@ -1474,7 +1569,13 @@
                 if (icon) icon.className = 'ri-walk-line';
                 if (text) text.textContent = 'ĐI ĐƯỜNG';
                 clearTimeout(walkTimer);
-                window.speechSynthesis.cancel();
+                if (currentAudioElement) {
+                    try { currentAudioElement.pause(); } catch (e) {}
+                    currentAudioElement = null;
+                }
+                if ('speechSynthesis' in window) {
+                    try { window.speechSynthesis.cancel(); } catch (e) {}
+                }
                 showToast('⏸ Đã tạm dừng Chế độ Đi Đường');
             }
         }
@@ -1487,26 +1588,30 @@
             if (!walkModeActive || activeDeck.length === 0) return;
             const item = activeDeck[currentIndex];
 
-            // 1. Lật thẻ về mặt trước và phát âm từ
+            // 1. Lật thẻ về mặt trước
             isCardFlipped = false;
             cardEl.classList.remove('is-flipped');
-            playWordAudio(item.word);
 
-            // 2. Tạm dừng 2.5s để người học nhớ nghĩa
-            walkTimer = setTimeout(() => {
+            // 2. Phát âm từ tiếng Anh và chờ phát xong
+            playWordAudio(item.word, () => {
                 if (!walkModeActive) return;
-                // Lật thẻ xem nghĩa
-                isCardFlipped = true;
-                cardEl.classList.add('is-flipped');
 
-                // 3. Tạm dừng 2.5s rồi chuyển sang thẻ kế tiếp
+                // 3. Tạm dừng 2.0s để người học nhớ nghĩa
                 walkTimer = setTimeout(() => {
                     if (!walkModeActive) return;
-                    currentIndex = (currentIndex + 1) % activeDeck.length;
-                    renderCurrentCard();
-                    runWalkStep();
-                }, 2500);
-            }, 2500);
+                    // Lật thẻ xem nghĩa
+                    isCardFlipped = true;
+                    cardEl.classList.add('is-flipped');
+
+                    // 4. Tạm dừng 2.5s rồi chuyển sang thẻ tiếp theo
+                    walkTimer = setTimeout(() => {
+                        if (!walkModeActive) return;
+                        currentIndex = (currentIndex + 1) % activeDeck.length;
+                        renderCurrentCard();
+                        runWalkStep();
+                    }, 2500);
+                }, 2000);
+            });
         }
 
         // --- TOUCH / SWIPE GESTURES ---
