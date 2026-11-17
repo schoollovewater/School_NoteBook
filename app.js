@@ -1,5 +1,5 @@
 // --- CONFIG & STATE ---
-const APP_VERSION = 'v4.0.4';
+const APP_VERSION = 'v4.0.5';
 const DELETED_PAGES_KEY = 'schooldb_deleted_pages';
 const appState = {
     theme: localStorage.getItem('theme') || 'dark',
@@ -6201,9 +6201,20 @@ function initFloatingToolbar() {
     const colorDropdown = document.getElementById('bubble-color-dropdown');
     const typeBtn = document.getElementById('nft-block-type-btn');
     const typeDropdown = document.getElementById('nft-type-dropdown');
+    const techBtn = document.getElementById('bubble-tech-btn');
+    const techDropdown = document.getElementById('bubble-tech-dropdown');
+    const moreBtn = document.getElementById('bubble-more-btn');
+    const moreDropdown = document.getElementById('bubble-more-dropdown');
     const addVocabBtn = document.getElementById('bubble-add-vocab-btn');
 
     if (!toolbar) return;
+
+    function closeAllFloatingDropdowns() {
+        if (typeDropdown) typeDropdown.style.display = 'none';
+        if (colorDropdown) colorDropdown.style.display = 'none';
+        if (techDropdown) techDropdown.style.display = 'none';
+        if (moreDropdown) moreDropdown.style.display = 'none';
+    }
 
     // Prevent selection from collapsing when clicking buttons in the toolbar
     toolbar.addEventListener('mousedown', (e) => {
@@ -6218,6 +6229,7 @@ function initFloatingToolbar() {
             e.preventDefault();
             const action = btn.getAttribute('data-action');
             if (action === 'codeBlock') {
+                closeAllFloatingDropdowns();
                 convertSelectionToCodeBlock();
                 return;
             }
@@ -6230,8 +6242,31 @@ function initFloatingToolbar() {
         colorBtn.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            if (typeDropdown) typeDropdown.style.display = 'none';
-            colorDropdown.style.display = colorDropdown.style.display === 'none' ? 'flex' : 'none';
+            const isOpen = colorDropdown.style.display !== 'none';
+            closeAllFloatingDropdowns();
+            colorDropdown.style.display = isOpen ? 'none' : 'flex';
+        });
+    }
+
+    // Tech Tag Dropdown Toggle
+    if (techBtn && techDropdown) {
+        techBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const isOpen = techDropdown.style.display !== 'none';
+            closeAllFloatingDropdowns();
+            techDropdown.style.display = isOpen ? 'none' : 'flex';
+        });
+    }
+
+    // More Utilities Dropdown Toggle
+    if (moreBtn && moreDropdown) {
+        moreBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const isOpen = moreDropdown.style.display !== 'none';
+            closeAllFloatingDropdowns();
+            moreDropdown.style.display = isOpen ? 'none' : 'flex';
         });
     }
 
@@ -6242,7 +6277,7 @@ function initFloatingToolbar() {
             const color = dot.getAttribute('data-color');
             if (color) {
                 applyFormattingToSelection('foreColor', color);
-                colorDropdown.style.display = 'none';
+                closeAllFloatingDropdowns();
             }
         });
     });
@@ -6255,7 +6290,7 @@ function initFloatingToolbar() {
         });
         customTextColorInput.addEventListener('change', (e) => {
             applyFormattingToSelection('foreColor', e.target.value);
-            colorDropdown.style.display = 'none';
+            closeAllFloatingDropdowns();
         });
     }
 
@@ -6266,7 +6301,7 @@ function initFloatingToolbar() {
             const bgcolor = dot.getAttribute('data-bgcolor');
             if (bgcolor) {
                 applyFormattingToSelection('hiliteColor', bgcolor);
-                colorDropdown.style.display = 'none';
+                closeAllFloatingDropdowns();
             }
         });
     });
@@ -6279,7 +6314,7 @@ function initFloatingToolbar() {
         });
         customBgColorInput.addEventListener('change', (e) => {
             applyFormattingToSelection('hiliteColor', e.target.value);
-            colorDropdown.style.display = 'none';
+            closeAllFloatingDropdowns();
         });
     }
 
@@ -6288,8 +6323,9 @@ function initFloatingToolbar() {
         typeBtn.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            if (colorDropdown) colorDropdown.style.display = 'none';
-            typeDropdown.style.display = typeDropdown.style.display === 'none' ? 'block' : 'none';
+            const isOpen = typeDropdown.style.display !== 'none';
+            closeAllFloatingDropdowns();
+            typeDropdown.style.display = isOpen ? 'none' : 'block';
         });
     }
 
@@ -6299,7 +6335,7 @@ function initFloatingToolbar() {
             item.addEventListener('click', (e) => {
                 e.preventDefault();
                 const newType = item.getAttribute('data-type');
-                typeDropdown.style.display = 'none';
+                closeAllFloatingDropdowns();
 
                 if (newType === 'code') {
                     convertSelectionToCodeBlock();
@@ -6333,6 +6369,7 @@ function initFloatingToolbar() {
             e.preventDefault();
             e.stopPropagation();
             const text = currentSelectedText || (window.getSelection() ? window.getSelection().toString().trim() : '');
+            closeAllFloatingDropdowns();
             toolbar.style.display = 'none';
             if (text) {
                 vocab.openAddModal(text);
@@ -6348,6 +6385,8 @@ function initFloatingToolbar() {
         codeBlockBtn.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
+            closeAllFloatingDropdowns();
+            toolbar.style.display = 'none';
             convertSelectionToCodeBlock();
         });
     }
@@ -6359,6 +6398,8 @@ function initFloatingToolbar() {
             e.stopPropagation();
             const pillStyle = btn.getAttribute('data-tech-pill');
             applyTechPillToSelection(pillStyle);
+            closeAllFloatingDropdowns();
+            toolbar.style.display = 'none';
         });
     });
 
@@ -6383,8 +6424,22 @@ function initFloatingToolbar() {
             document.execCommand('insertText', false, converted);
             showToast('Đã đổi kiểu chữ!');
             triggerSave();
+            closeAllFloatingDropdowns();
+            toolbar.style.display = 'none';
         });
     });
+
+    // 2.5 REMOVE FORMAT FROM MORE MENU
+    const removeFormatItem = document.getElementById('bubble-remove-format-item');
+    if (removeFormatItem) {
+        removeFormatItem.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            executeFormatAction('removeFormat');
+            closeAllFloatingDropdowns();
+            toolbar.style.display = 'none';
+        });
+    }
 
     // 3. INSERT LINK
     const linkBtn = document.getElementById('bubble-link-btn');
@@ -6392,6 +6447,7 @@ function initFloatingToolbar() {
         linkBtn.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
+            closeAllFloatingDropdowns();
             const url = window.prompt('Nhập địa chỉ liên kết (URL):', 'https://');
             if (url && url !== 'https://') {
                 document.execCommand('createLink', false, url);
@@ -6409,6 +6465,7 @@ function initFloatingToolbar() {
             e.preventDefault();
             e.stopPropagation();
             const text = currentSelectedText || (window.getSelection() ? window.getSelection().toString().trim() : '');
+            closeAllFloatingDropdowns();
             if (text) {
                 window.open(`https://www.google.com/search?q=${encodeURIComponent(text)}`, '_blank');
             }
@@ -6416,11 +6473,17 @@ function initFloatingToolbar() {
         });
     }
 
+    // Trạng thái chuột đang kéo chọn bôi đen
+    let isSelectingWithMouse = false;
+
     // Check Selection and Position Toolbar
     let selTimeout;
     const checkSelection = () => {
         clearTimeout(selTimeout);
         selTimeout = setTimeout(() => {
+            // Không bao giờ hiện toolbar khi người dùng đang bấm giữ chuột kéo bôi đen
+            if (isSelectingWithMouse) return;
+
             const sel = window.getSelection();
             const hasBlocks = selectedBlockWrappers && selectedBlockWrappers.length > 0;
             const hasText = sel && !sel.isCollapsed && sel.rangeCount > 0 && sel.toString().trim().length > 0;
@@ -6432,8 +6495,7 @@ function initFloatingToolbar() {
 
             if (!hasText && !hasBlocks) {
                 toolbar.style.display = 'none';
-                if (colorDropdown) colorDropdown.style.display = 'none';
-                if (typeDropdown) typeDropdown.style.display = 'none';
+                closeAllFloatingDropdowns();
                 return;
             }
 
@@ -6509,37 +6571,62 @@ function initFloatingToolbar() {
             }
 
             toolbar.style.display = 'flex';
-            const tbWidth = toolbar.offsetWidth || 320;
-            const tbHeight = toolbar.offsetHeight || 260;
+            closeAllFloatingDropdowns();
 
-            let top = rect.top - tbHeight - 10;
-            if (top < 10) {
-                top = rect.bottom + 10;
-            }
-            if (top + tbHeight > window.innerHeight - 10) {
-                top = Math.max(10, window.innerHeight - tbHeight - 10);
-            }
+            const tbWidth = toolbar.offsetWidth || 380;
+            const tbHeight = toolbar.offsetHeight || 38;
 
+            // Vị trí dọc (Y): Đặt BÊN TRÊN dòng chữ đang chọn để KHÔNG BAO GIỜ che mất chuột hoặc chữ
+            let top = rect.top - tbHeight - 8;
+            if (top < 8) {
+                // Nếu sát đỉnh màn hình, lật xuống BÊN DƯỚI dòng chữ đang chọn
+                top = rect.bottom + 8;
+            }
+            if (top + tbHeight > window.innerHeight - 8) {
+                top = window.innerHeight - tbHeight - 8;
+            }
+            if (top < 8) top = 8;
+
+            // Vị trí ngang (X): Căn giữa theo vùng chọn
             let left = rect.left + (rect.width / 2) - (tbWidth / 2);
-            if (left < 10) left = 10;
-            if (left + tbWidth > window.innerWidth - 10) {
-                left = window.innerWidth - tbWidth - 10;
+            if (left < 8) left = 8;
+            if (left + tbWidth > window.innerWidth - 8) {
+                left = window.innerWidth - tbWidth - 8;
             }
 
             toolbar.style.top = `${top}px`;
             toolbar.style.left = `${left}px`;
-        }, 50);
+        }, 30);
     };
 
-    document.addEventListener('selectionchange', checkSelection);
-    document.addEventListener('mouseup', checkSelection);
-    document.addEventListener('keyup', checkSelection);
+    // Theo dõi trạng thái chuột: Ẩn ngay khi bắt đầu bôi đen, chỉ hiện khi đã nhả chuột (mouseup)
+    document.addEventListener('mousedown', (e) => {
+        if (toolbar.contains(e.target)) return;
+        isSelectingWithMouse = true;
+        closeAllFloatingDropdowns();
+        toolbar.style.display = 'none';
+    });
+
+    document.addEventListener('mouseup', (e) => {
+        if (toolbar.contains(e.target)) return;
+        isSelectingWithMouse = false;
+        checkSelection();
+    });
+
+    document.addEventListener('selectionchange', () => {
+        // Tuyệt đối không hiện toolbar trong khi chuột đang bấm kéo
+        if (isSelectingWithMouse) return;
+        checkSelection();
+    });
+
+    document.addEventListener('keyup', (e) => {
+        checkSelection();
+    });
 
     // Close dropdowns on outside click
     document.addEventListener('mousedown', (e) => {
         if (!toolbar.contains(e.target)) {
-            if (colorDropdown) colorDropdown.style.display = 'none';
-            if (typeDropdown) typeDropdown.style.display = 'none';
+            closeAllFloatingDropdowns();
         }
     });
 }

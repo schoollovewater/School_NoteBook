@@ -24,7 +24,7 @@
     <!-- KaTeX CSS for Math Equations (LaTeX) -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
     
-    <link rel="stylesheet" href="styles.css?v=4.0.4">
+    <link rel="stylesheet" href="styles.css?v=4.0.5">
 </head>
 <body>
     <div class="app-background">
@@ -46,7 +46,7 @@
                         <span class="workspace-name">School NoteBook</span>
                         <div class="workspace-meta">
                             <span class="workspace-plan">Personal</span>
-                            <span class="workspace-version-badge" id="app-version-badge" title="Phiên bản School NoteBook hiện tại">v4.0.4</span>
+                            <span class="workspace-version-badge" id="app-version-badge" title="Phiên bản School NoteBook hiện tại">v4.0.5</span>
                         </div>
                     </div>
                     <i class="ri-expand-up-down-line text-muted"></i>
@@ -690,7 +690,7 @@
                 <div class="version-info-box">
                     <div class="version-info-row">
                         <span>Phiên bản đang chạy:</span>
-                        <strong class="version-number-tag" id="setting-app-version">v4.0.4</strong>
+                        <strong class="version-number-tag" id="setting-app-version">v4.0.5</strong>
                     </div>
                     <div class="version-info-row">
                         <span>Trạng thái:</span>
@@ -707,179 +707,202 @@
         </div>
     </div>
 
-    <!-- Floating Text Selection Toolbar (Notion Style) -->
+    <!-- Floating Text Selection Toolbar (Notion Style - Compact Horizontal Bar) -->
     <div class="notion-floating-toolbar" id="floating-toolbar" style="display: none;">
-        <!-- Top Row: Block Type Switcher & Formatting Actions -->
-        <div class="nft-header-row" id="nft-header-row">
-            <div class="nft-block-type-wrapper">
-                <button class="nft-block-type-btn" id="nft-block-type-btn" type="button" title="Chuyển đổi kiểu khối">
-                    <i class="ri-text" id="nft-block-icon"></i>
-                    <span id="nft-block-label">Text</span>
-                    <i class="ri-arrow-down-s-line" style="opacity: 0.6; font-size: 11px;"></i>
-                </button>
-                <div class="nft-type-dropdown" id="nft-type-dropdown" style="display: none;">
-                    <div class="nft-dropdown-item" data-type="text"><i class="ri-text"></i> Text</div>
-                    <div class="nft-dropdown-item" data-type="h1"><i class="ri-h-1"></i> Heading 1</div>
-                    <div class="nft-dropdown-item" data-type="h2"><i class="ri-h-2"></i> Heading 2</div>
-                    <div class="nft-dropdown-item" data-type="h3"><i class="ri-h-3"></i> Heading 3</div>
-                    <div class="nft-dropdown-item" data-type="toggle"><i class="ri-arrow-right-s-line"></i> Toggle list</div>
-                    <div class="nft-dropdown-item" data-type="toggle-h1"><i class="ri-arrow-right-s-line"></i> Toggle Heading 1</div>
-                    <div class="nft-dropdown-item" data-type="toggle-h2"><i class="ri-arrow-right-s-line"></i> Toggle Heading 2</div>
-                    <div class="nft-dropdown-item" data-type="toggle-h3"><i class="ri-arrow-right-s-line"></i> Toggle Heading 3</div>
-                    <div class="nft-dropdown-item" data-type="bullet"><i class="ri-list-unordered"></i> Danh sách chấm</div>
-                    <div class="nft-dropdown-item" data-type="number"><i class="ri-list-ordered"></i> Danh sách số</div>
-                    <div class="nft-dropdown-item" data-type="todo"><i class="ri-checkbox-line"></i> To-do list</div>
-                    <div class="nft-dropdown-item" data-type="quote"><i class="ri-double-quotes-l"></i> Trích dẫn</div>
-                    <div class="nft-dropdown-item" data-type="code"><i class="ri-code-box-line"></i> Khối code</div>
-                    <div class="nft-dropdown-item" data-type="math"><i class="ri-functions"></i> Công thức toán (Math)</div>
-                    <div class="nft-dropdown-item" data-type="table"><i class="ri-table-line"></i> Bảng (Table)</div>
-                </div>
+        <!-- Block Type Switcher -->
+        <div class="nft-block-type-wrapper">
+            <button class="nft-block-type-btn" id="nft-block-type-btn" type="button" title="Chuyển đổi kiểu khối">
+                <i class="ri-text" id="nft-block-icon"></i>
+                <span id="nft-block-label">Text</span>
+                <i class="ri-arrow-down-s-line" style="opacity: 0.6; font-size: 11px;"></i>
+            </button>
+            <div class="nft-type-dropdown" id="nft-type-dropdown" style="display: none;">
+                <div class="nft-dropdown-item" data-type="text"><i class="ri-text"></i> Text</div>
+                <div class="nft-dropdown-item" data-type="h1"><i class="ri-h-1"></i> Heading 1</div>
+                <div class="nft-dropdown-item" data-type="h2"><i class="ri-h-2"></i> Heading 2</div>
+                <div class="nft-dropdown-item" data-type="h3"><i class="ri-h-3"></i> Heading 3</div>
+                <div class="nft-dropdown-item" data-type="toggle"><i class="ri-arrow-right-s-line"></i> Toggle list</div>
+                <div class="nft-dropdown-item" data-type="toggle-h1"><i class="ri-arrow-right-s-line"></i> Toggle Heading 1</div>
+                <div class="nft-dropdown-item" data-type="toggle-h2"><i class="ri-arrow-right-s-line"></i> Toggle Heading 2</div>
+                <div class="nft-dropdown-item" data-type="toggle-h3"><i class="ri-arrow-right-s-line"></i> Toggle Heading 3</div>
+                <div class="nft-dropdown-item" data-type="bullet"><i class="ri-list-unordered"></i> Danh sách chấm</div>
+                <div class="nft-dropdown-item" data-type="number"><i class="ri-list-ordered"></i> Danh sách số</div>
+                <div class="nft-dropdown-item" data-type="todo"><i class="ri-checkbox-line"></i> To-do list</div>
+                <div class="nft-dropdown-item" data-type="quote"><i class="ri-double-quotes-l"></i> Trích dẫn</div>
+                <div class="nft-dropdown-item" data-type="code"><i class="ri-code-box-line"></i> Khối code</div>
+                <div class="nft-dropdown-item" data-type="math"><i class="ri-functions"></i> Công thức toán (Math)</div>
+                <div class="nft-dropdown-item" data-type="table"><i class="ri-table-line"></i> Bảng (Table)</div>
             </div>
+        </div>
 
-            <div class="bubble-divider"></div>
+        <div class="bubble-divider"></div>
 
-            <!-- Formatting Actions Row (Word / Notion) -->
-            <div class="nft-formatting-group">
-                <!-- Color & Highlight Dropdown -->
-                <div class="bubble-dropdown-wrapper">
-                    <button class="bubble-btn" id="bubble-color-btn" type="button" title="Màu chữ & Highlight">
-                        <span class="color-indicator">A</span>
-                        <i class="ri-arrow-down-s-line" style="font-size: 10px;"></i>
-                    </button>
-                    <div class="bubble-color-dropdown" id="bubble-color-dropdown" style="display: none;">
-                        <div class="color-dropdown-title">Màu chữ</div>
-                        <div class="color-options-row color-grid">
-                            <span class="color-dot text-color color-dot-default" data-color="default" title="Mặc định (Theo nền)"></span>
-                            <span class="color-dot text-color" data-color="#000000" style="background: #000000;" title="Đen (Black)"></span>
-                            <span class="color-dot text-color" data-color="#64748b" style="background: #64748b;" title="Xám"></span>
-                            <span class="color-dot text-color" data-color="#78350f" style="background: #78350f;" title="Nâu"></span>
-                            <span class="color-dot text-color" data-color="#ea580c" style="background: #ea580c;" title="Cam"></span>
-                            <span class="color-dot text-color" data-color="#d97706" style="background: #d97706;" title="Vàng"></span>
-                            <span class="color-dot text-color" data-color="#16a34a" style="background: #16a34a;" title="Xanh lá"></span>
-                            <span class="color-dot text-color" data-color="#0d9488" style="background: #0d9488;" title="Xanh ngọc"></span>
-                            <span class="color-dot text-color" data-color="#2563eb" style="background: #2563eb;" title="Xanh dương"></span>
-                            <span class="color-dot text-color" data-color="#9333ea" style="background: #9333ea;" title="Tím"></span>
-                            <span class="color-dot text-color" data-color="#db2777" style="background: #db2777;" title="Hồng"></span>
-                            <span class="color-dot text-color" data-color="#dc2626" style="background: #dc2626;" title="Đỏ"></span>
-                            <label class="color-dot custom-picker-btn text-color" title="Tự chọn màu chữ...">
-                                <i class="ri-palette-line"></i>
-                                <input type="color" id="custom-text-color-picker" style="opacity: 0; width: 0; height: 0; position: absolute;">
-                            </label>
-                        </div>
-                        <div class="color-dropdown-title">Màu nền Highlight</div>
-                        <div class="color-options-row color-grid">
-                            <span class="color-dot bg-color" data-bgcolor="transparent" style="background: transparent; border: 1px dashed var(--text-placeholder);" title="Xóa nền"></span>
-                            <span class="color-dot bg-color" data-bgcolor="rgba(100, 116, 139, 0.25)" style="background: #64748b; opacity: 0.7;" title="Nền xám"></span>
-                            <span class="color-dot bg-color" data-bgcolor="rgba(120, 53, 15, 0.25)" style="background: #78350f; opacity: 0.7;" title="Nền nâu"></span>
-                            <span class="color-dot bg-color" data-bgcolor="rgba(234, 88, 12, 0.25)" style="background: #ea580c; opacity: 0.7;" title="Nền cam"></span>
-                            <span class="color-dot bg-color" data-bgcolor="rgba(217, 119, 6, 0.28)" style="background: #d97706; opacity: 0.7;" title="Nền vàng"></span>
-                            <span class="color-dot bg-color" data-bgcolor="rgba(22, 163, 74, 0.25)" style="background: #16a34a; opacity: 0.7;" title="Nền xanh lá"></span>
-                            <span class="color-dot bg-color" data-bgcolor="rgba(13, 148, 136, 0.25)" style="background: #0d9488; opacity: 0.7;" title="Nền xanh ngọc"></span>
-                            <span class="color-dot bg-color" data-bgcolor="rgba(37, 99, 235, 0.25)" style="background: #2563eb; opacity: 0.7;" title="Nền xanh dương"></span>
-                            <span class="color-dot bg-color" data-bgcolor="rgba(147, 51, 234, 0.25)" style="background: #9333ea; opacity: 0.7;" title="Nền tím"></span>
-                            <span class="color-dot bg-color" data-bgcolor="rgba(219, 39, 119, 0.25)" style="background: #db2777; opacity: 0.7;" title="Nền hồng"></span>
-                            <span class="color-dot bg-color" data-bgcolor="rgba(220, 38, 38, 0.25)" style="background: #dc2626; opacity: 0.7;" title="Nền đỏ"></span>
-                            <label class="color-dot custom-picker-btn bg-color" title="Tự chọn màu nền highlight...">
-                                <i class="ri-paint-brush-line"></i>
-                                <input type="color" id="custom-bg-color-picker" style="opacity: 0; width: 0; height: 0; position: absolute;">
-                            </label>
-                        </div>
+        <!-- Formatting Group -->
+        <div class="nft-formatting-group">
+            <!-- Color & Highlight Dropdown -->
+            <div class="bubble-dropdown-wrapper">
+                <button class="bubble-btn" id="bubble-color-btn" type="button" title="Màu chữ & Highlight">
+                    <span class="color-indicator">A</span>
+                    <i class="ri-arrow-down-s-line" style="font-size: 10px;"></i>
+                </button>
+                <div class="bubble-color-dropdown" id="bubble-color-dropdown" style="display: none;">
+                    <div class="color-dropdown-title">Màu chữ</div>
+                    <div class="color-options-row color-grid">
+                        <span class="color-dot text-color color-dot-default" data-color="default" title="Mặc định (Theo nền)"></span>
+                        <span class="color-dot text-color" data-color="#000000" style="background: #000000;" title="Đen (Black)"></span>
+                        <span class="color-dot text-color" data-color="#64748b" style="background: #64748b;" title="Xám"></span>
+                        <span class="color-dot text-color" data-color="#78350f" style="background: #78350f;" title="Nâu"></span>
+                        <span class="color-dot text-color" data-color="#ea580c" style="background: #ea580c;" title="Cam"></span>
+                        <span class="color-dot text-color" data-color="#d97706" style="background: #d97706;" title="Vàng"></span>
+                        <span class="color-dot text-color" data-color="#16a34a" style="background: #16a34a;" title="Xanh lá"></span>
+                        <span class="color-dot text-color" data-color="#0d9488" style="background: #0d9488;" title="Xanh ngọc"></span>
+                        <span class="color-dot text-color" data-color="#2563eb" style="background: #2563eb;" title="Xanh dương"></span>
+                        <span class="color-dot text-color" data-color="#9333ea" style="background: #9333ea;" title="Tím"></span>
+                        <span class="color-dot text-color" data-color="#db2777" style="background: #db2777;" title="Hồng"></span>
+                        <span class="color-dot text-color" data-color="#dc2626" style="background: #dc2626;" title="Đỏ"></span>
+                        <label class="color-dot custom-picker-btn text-color" title="Tự chọn màu chữ...">
+                            <i class="ri-palette-line"></i>
+                            <input type="color" id="custom-text-color-picker" style="opacity: 0; width: 0; height: 0; position: absolute;">
+                        </label>
+                    </div>
+                    <div class="color-dropdown-title">Màu nền Highlight</div>
+                    <div class="color-options-row color-grid">
+                        <span class="color-dot bg-color" data-bgcolor="transparent" style="background: transparent; border: 1px dashed var(--text-placeholder);" title="Xóa nền"></span>
+                        <span class="color-dot bg-color" data-bgcolor="rgba(100, 116, 139, 0.25)" style="background: #64748b; opacity: 0.7;" title="Nền xám"></span>
+                        <span class="color-dot bg-color" data-bgcolor="rgba(120, 53, 15, 0.25)" style="background: #78350f; opacity: 0.7;" title="Nền nâu"></span>
+                        <span class="color-dot bg-color" data-bgcolor="rgba(234, 88, 12, 0.25)" style="background: #ea580c; opacity: 0.7;" title="Nền cam"></span>
+                        <span class="color-dot bg-color" data-bgcolor="rgba(217, 119, 6, 0.28)" style="background: #d97706; opacity: 0.7;" title="Nền vàng"></span>
+                        <span class="color-dot bg-color" data-bgcolor="rgba(22, 163, 74, 0.25)" style="background: #16a34a; opacity: 0.7;" title="Nền xanh lá"></span>
+                        <span class="color-dot bg-color" data-bgcolor="rgba(13, 148, 136, 0.25)" style="background: #0d9488; opacity: 0.7;" title="Nền xanh ngọc"></span>
+                        <span class="color-dot bg-color" data-bgcolor="rgba(37, 99, 235, 0.25)" style="background: #2563eb; opacity: 0.7;" title="Nền xanh dương"></span>
+                        <span class="color-dot bg-color" data-bgcolor="rgba(147, 51, 234, 0.25)" style="background: #9333ea; opacity: 0.7;" title="Nền tím"></span>
+                        <span class="color-dot bg-color" data-bgcolor="rgba(219, 39, 119, 0.25)" style="background: #db2777; opacity: 0.7;" title="Nền hồng"></span>
+                        <span class="color-dot bg-color" data-bgcolor="rgba(220, 38, 38, 0.25)" style="background: #dc2626; opacity: 0.7;" title="Nền đỏ"></span>
+                        <label class="color-dot custom-picker-btn bg-color" title="Tự chọn màu nền highlight...">
+                            <i class="ri-paint-brush-line"></i>
+                            <input type="color" id="custom-bg-color-picker" style="opacity: 0; width: 0; height: 0; position: absolute;">
+                        </label>
                     </div>
                 </div>
-
-                <button class="bubble-btn" data-action="bold" type="button" title="In đậm (Ctrl+B)"><i class="ri-bold"></i></button>
-                <button class="bubble-btn" data-action="italic" type="button" title="In nghiêng (Ctrl+I)"><i class="ri-italic"></i></button>
-                <button class="bubble-btn" data-action="underline" type="button" title="Gạch chân (Ctrl+U)"><i class="ri-underline"></i></button>
-                <button class="bubble-btn" data-action="removeFormat" type="button" title="Xóa định dạng"><i class="ri-format-clear"></i></button>
-                <button class="bubble-btn" data-action="strikethrough" type="button" title="Gạch ngang"><i class="ri-strikethrough"></i></button>
-                <button class="bubble-btn" data-action="code" type="button" title="Mã nội dòng"><i class="ri-code-line"></i></button>
-                <button class="bubble-btn" data-action="codeBlock" type="button" title="Chuyển thành Khối Code (Code Block)"><i class="ri-terminal-box-line"></i></button>
-                <button class="bubble-btn" data-action="copy" type="button" title="Sao chép"><i class="ri-file-copy-line"></i></button>
-            </div>
-        </div>
-
-        <div class="nft-divider" id="nft-divider-top"></div>
-
-        <!-- Action List (Word & Notion Tools: 1. Add Vocab, 2. Code Block, 3. Text Tools) -->
-        <div class="nft-actions-list">
-            <!-- 1. THÊM TỪ VỰNG (Main Action) -->
-            <div class="nft-action-item nft-action-vocab" id="bubble-add-vocab-btn">
-                <div class="nft-action-icon"><i class="ri-book-mark-line"></i></div>
-                <div class="nft-action-text">
-                    <span class="nft-action-title">+ Thêm vào Kho Từ vựng & Flashcard</span>
-                    <span class="nft-action-desc">Lưu từ vào sổ học và tự động tạo thẻ 3D</span>
-                </div>
-                <span class="nft-badge">Sổ từ</span>
             </div>
 
-            <!-- 2. HIỂN THỊ DẠNG KHỐI CODE -->
-            <div class="nft-action-item nft-action-codeblock" id="bubble-code-block-btn">
-                <div class="nft-action-icon"><i class="ri-terminal-box-line"></i></div>
-                <div class="nft-action-text">
-                    <span class="nft-action-title">💻 Hiển thị dạng Khối Code (Code Block)</span>
-                    <span class="nft-action-desc">Gộp các dòng đang chọn thành khung code có màu cú pháp</span>
-                </div>
-                <span class="nft-badge nft-badge-code">Code</span>
-            </div>
+            <button class="bubble-btn" data-action="bold" type="button" title="In đậm (Ctrl+B)"><i class="ri-bold"></i></button>
+            <button class="bubble-btn" data-action="italic" type="button" title="In nghiêng (Ctrl+I)"><i class="ri-italic"></i></button>
+            <button class="bubble-btn" data-action="underline" type="button" title="Gạch chân (Ctrl+U)"><i class="ri-underline"></i></button>
+            <button class="bubble-btn" data-action="strikethrough" type="button" title="Gạch ngang"><i class="ri-strikethrough"></i></button>
+            <button class="bubble-btn" data-action="code" type="button" title="Mã nội dòng"><i class="ri-code-line"></i></button>
 
-            <div class="nft-section-title">⚡ Node Lệnh / Tech Tag (Nổi bật trong dòng)</div>
-            <div class="nft-tech-pills-row" id="nft-tech-pills-row">
-                <button class="nft-tech-pill-btn pill-amber" data-tech-pill="amber" type="button" title="Node Lệnh vàng cam (Mặc định - Ctrl+E)">
-                    <code>cmd()</code> Vàng
+            <!-- Tech Tag Dropdown Button -->
+            <div class="bubble-dropdown-wrapper">
+                <button class="bubble-btn bubble-btn-tech" id="bubble-tech-btn" type="button" title="Node Lệnh / Tech Tag (Ctrl+E)">
+                    <i class="ri-flashlight-fill" style="color: #f59e0b; font-size: 13px;"></i>
+                    <span style="font-size: 11px; font-weight: 600;">Tag</span>
+                    <i class="ri-arrow-down-s-line" style="font-size: 10px; opacity: 0.7;"></i>
                 </button>
-                <button class="nft-tech-pill-btn pill-cyan" data-tech-pill="cyan" type="button" title="Node Hàm / API xanh dương">
-                    <code>fn</code> Xanh
-                </button>
-                <button class="nft-tech-pill-btn pill-green" data-tech-pill="green" type="button" title="Node Trạng thái RUNNING / OK">
-                    <code>RUN</code> Lá
-                </button>
-                <button class="nft-tech-pill-btn pill-red" data-tech-pill="red" type="button" title="Node Lỗi / STOPPED / Error">
-                    <code>ERR</code> Đỏ
-                </button>
-                <button class="nft-tech-pill-btn pill-purple" data-tech-pill="purple" type="button" title="Node Hằng số / Macro">
-                    <code>DEF</code> Tím
-                </button>
-                <button class="nft-tech-pill-btn pill-slate" data-tech-pill="slate" type="button" title="Node Số / Tham số / Phím">
-                    <code>0..9</code> Phím
-                </button>
-                <button class="nft-tech-pill-btn pill-clear" data-tech-pill="clear" type="button" title="Gỡ khung Node về chữ thường">
-                    <i class="ri-close-line"></i>
-                </button>
-            </div>
-
-            <div class="nft-section-title" id="nft-case-title">Đổi kiểu chữ (Word Case)</div>
-            <div class="nft-case-row" id="nft-case-row">
-                <button class="nft-case-btn" data-case="upper" type="button" title="Chuyển thành chữ IN HOA">
-                    <span>AA</span> IN HOA
-                </button>
-                <button class="nft-case-btn" data-case="lower" type="button" title="Chuyển thành chữ in thường">
-                    <span>aa</span> in thường
-                </button>
-                <button class="nft-case-btn" data-case="title" type="button" title="Viết hoa chữ cái đầu mỗi từ">
-                    <span>Aa</span> Viết Hoa Đầu
-                </button>
-            </div>
-
-            <div class="nft-section-title" id="nft-tools-title">Tiện ích tra cứu & Liên kết</div>
-            <div class="nft-action-item" id="bubble-link-btn">
-                <div class="nft-action-icon"><i class="ri-link"></i></div>
-                <div class="nft-action-text">
-                    <span class="nft-action-title">Chèn liên kết (Link)</span>
+                <div class="bubble-tech-dropdown" id="bubble-tech-dropdown" style="display: none;">
+                    <div class="tech-dropdown-title">⚡ Chọn kiểu Node Lệnh (Ctrl+E)</div>
+                    <div class="nft-tech-pills-row" id="nft-tech-pills-row">
+                        <button class="nft-tech-pill-btn pill-amber" data-tech-pill="amber" type="button" title="Node Lệnh vàng cam (Ctrl+E)">
+                            <code>cmd()</code> Vàng
+                        </button>
+                        <button class="nft-tech-pill-btn pill-cyan" data-tech-pill="cyan" type="button" title="Node Hàm / API xanh dương">
+                            <code>fn</code> Xanh
+                        </button>
+                        <button class="nft-tech-pill-btn pill-green" data-tech-pill="green" type="button" title="Node Trạng thái RUNNING / OK">
+                            <code>RUN</code> Lá
+                        </button>
+                        <button class="nft-tech-pill-btn pill-red" data-tech-pill="red" type="button" title="Node Lỗi / STOPPED / Error">
+                            <code>ERR</code> Đỏ
+                        </button>
+                        <button class="nft-tech-pill-btn pill-purple" data-tech-pill="purple" type="button" title="Node Hằng số / Macro">
+                            <code>DEF</code> Tím
+                        </button>
+                        <button class="nft-tech-pill-btn pill-slate" data-tech-pill="slate" type="button" title="Node Số / Tham số / Phím">
+                            <code>0..9</code> Phím
+                        </button>
+                        <button class="nft-tech-pill-btn pill-clear" data-tech-pill="clear" type="button" title="Gỡ khung Node về chữ thường">
+                            <i class="ri-close-line"></i> Xóa
+                        </button>
+                    </div>
                 </div>
             </div>
 
-            <div class="nft-action-item" id="bubble-search-google-btn">
-                <div class="nft-action-icon"><i class="ri-google-line"></i></div>
-                <div class="nft-action-text">
-                    <span class="nft-action-title">Tra cứu nhanh trên Google</span>
-                </div>
-                <i class="ri-external-link-line" style="font-size: 12px; opacity: 0.5;"></i>
-            </div>
-        </div>
+            <!-- Link Button -->
+            <button class="bubble-btn" id="bubble-link-btn" type="button" title="Chèn liên kết (Link)"><i class="ri-link"></i></button>
 
-        <div class="nft-divider"></div>
-        <div class="nft-stats-footer" id="nft-selection-stats">
-            <i class="ri-character-recognition-line"></i> <span id="nft-word-char-count">0 từ • 0 ký tự</span>
+            <!-- More Utilities Dropdown Button -->
+            <div class="bubble-dropdown-wrapper">
+                <button class="bubble-btn" id="bubble-more-btn" type="button" title="Tiện ích mở rộng (Từ vựng, Khối code, Đổi hoa thường, Tra cứu)">
+                    <i class="ri-more-fill"></i>
+                </button>
+                <div class="bubble-more-dropdown" id="bubble-more-dropdown" style="display: none;">
+                    <!-- 1. THÊM TỪ VỰNG -->
+                    <div class="nft-action-item nft-action-vocab" id="bubble-add-vocab-btn">
+                        <div class="nft-action-icon"><i class="ri-book-mark-line"></i></div>
+                        <div class="nft-action-text">
+                            <span class="nft-action-title">+ Thêm vào Kho Từ vựng & Flashcard</span>
+                            <span class="nft-action-desc">Lưu từ vào sổ học và tự động tạo thẻ 3D</span>
+                        </div>
+                        <span class="nft-badge">Sổ từ</span>
+                    </div>
+
+                    <!-- 2. HIỂN THỊ DẠNG KHỐI CODE -->
+                    <div class="nft-action-item nft-action-codeblock" id="bubble-code-block-btn">
+                        <div class="nft-action-icon"><i class="ri-terminal-box-line"></i></div>
+                        <div class="nft-action-text">
+                            <span class="nft-action-title">💻 Hiển thị dạng Khối Code</span>
+                            <span class="nft-action-desc">Gộp các dòng đang chọn thành khung code</span>
+                        </div>
+                        <span class="nft-badge nft-badge-code">Code</span>
+                    </div>
+
+                    <div class="nft-divider"></div>
+
+                    <!-- 3. WORD CASE -->
+                    <div class="nft-section-title">Đổi kiểu chữ (Word Case)</div>
+                    <div class="nft-case-row" id="nft-case-row">
+                        <button class="nft-case-btn" data-case="upper" type="button" title="Chuyển thành chữ IN HOA">
+                            <span>AA</span> IN HOA
+                        </button>
+                        <button class="nft-case-btn" data-case="lower" type="button" title="Chuyển thành chữ in thường">
+                            <span>aa</span> in thường
+                        </button>
+                        <button class="nft-case-btn" data-case="title" type="button" title="Viết hoa chữ cái đầu">
+                            <span>Aa</span> Viết Hoa Đầu
+                        </button>
+                    </div>
+
+                    <div class="nft-divider"></div>
+
+                    <!-- 4. GOOGLE SEARCH & REMOVE FORMAT -->
+                    <div class="nft-action-item" id="bubble-search-google-btn">
+                        <div class="nft-action-icon"><i class="ri-google-line"></i></div>
+                        <div class="nft-action-text">
+                            <span class="nft-action-title">Tra cứu nhanh trên Google</span>
+                        </div>
+                        <i class="ri-external-link-line" style="font-size: 12px; opacity: 0.5;"></i>
+                    </div>
+
+                    <div class="nft-action-item" id="bubble-remove-format-item">
+                        <div class="nft-action-icon"><i class="ri-format-clear"></i></div>
+                        <div class="nft-action-text">
+                            <span class="nft-action-title">Xóa toàn bộ định dạng</span>
+                        </div>
+                    </div>
+
+                    <div class="nft-divider"></div>
+
+                    <!-- 5. STATS -->
+                    <div class="nft-stats-footer">
+                        <i class="ri-character-recognition-line"></i> <span id="nft-word-char-count">0 từ • 0 ký tự</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hidden actions for programatic triggers -->
+            <button class="bubble-btn" data-action="removeFormat" id="hidden-remove-format-btn" type="button" style="display: none;"></button>
+            <button class="bubble-btn" data-action="codeBlock" id="hidden-code-block-btn" type="button" style="display: none;"></button>
+            <button class="bubble-btn" data-action="copy" id="hidden-copy-btn" type="button" style="display: none;"></button>
         </div>
     </div>
 
@@ -1049,7 +1072,7 @@
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 
     <script src="firebase-config.js"></script>
-    <script src="shared/note-schema.js?v=4.0.4"></script>
-    <script src="app.js?v=4.0.4"></script>
+    <script src="shared/note-schema.js?v=4.0.5"></script>
+    <script src="app.js?v=4.0.5"></script>
 </body>
 </html>
