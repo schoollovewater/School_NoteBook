@@ -1,7 +1,7 @@
 # 📚 School NoteBook — Hướng Dẫn & Tài Liệu Kỹ Thuật Toàn Diện
 
 > **Sổ tay ghi chép học tập, lập trình & Kho từ vựng thông minh theo phong cách Notion kết hợp Thẻ nhớ 3D Flashcards, Mini Note hỏa tốc & Trợ lý AI Gemini thông minh.**  
-> *Phiên bản hiện tại:* **v4.3.0**  
+> *Phiên bản hiện tại:* **v4.3.7**  
 > *Nền tảng:* Web App & PWA (HTML5, Vanilla CSS, Vanilla JavaScript, Firebase Compat, SortableJS, Service Worker).
 
 ---
@@ -249,4 +249,37 @@ node mininote.js --todo -t "Việc hôm nay" "Học từ vựng\nLàm bài tập
 * **Vuốt trái (Cảm ứng)**: Đánh dấu cần ôn lại thẻ.
 
 ---
-*Tài liệu được cập nhật tự động và lưu trữ trực tiếp trong mã nguồn dự án School NoteBook (Phiên bản v4.3.0).*
+
+## 5. Lịch sử phiên bản & Sửa lỗi kỹ thuật quan trọng
+
+### 🚀 Phiên bản v4.3.7 (Hiện tại)
+* **Khắc phục dứt điểm lỗi âm thanh trên iOS Safari**:
+  - Chuyển hoàn toàn sang giọng đọc **Apple Siri/Samantha bản xứ** tích hợp sẵn trong WebKit iOS/macOS.
+  - Loại bỏ lỗi **404 Not Found** từ máy chủ Google Translate TTS do chính sách chặn Referer bên ngoài.
+  - Thực thi phát âm **ĐỒNG BỘ (Synchronously)** trực tiếp trong cú chạm ngón tay của người dùng, vượt qua chính sách kiểm duyệt Autoplay khắt khe của Safari.
+  - Tích hợp `navigator.audioSession.type = 'playback'` mở kênh âm thanh Media trên iOS 15+ và gửi câu mồi rỗng (Audio Primer) ngay khi chạm màn hình lần đầu.
+  - Bổ sung thanh thông báo thông minh nhắc nhở người dùng iPhone tắt nút gạt im lặng (Silent/Mute Switch) để âm thanh phát ra loa ngoài.
+* **Khắc phục lỗi đơ nút đáp án Quiz phản xạ (v4.3.6)**:
+  - Chuyển cơ chế truyền tham số sang **Index số học mảng (`checkQuizAnswerByIdx(idx)`)**, triệt tiêu 100% lỗi vỡ cú pháp JavaScript/HTML khi từ vựng chứa dấu nháy kép `"`, nháy đơn `'`, dấu ngoặc hoặc ngắt dòng.
+  - Khóa thẻ con `.quiz-btn * { pointer-events: none; }` và thêm `touch-action: manipulation` loại bỏ độ trễ 300ms trên điện thoại.
+* **Đồng bộ số hiệu phiên bản v4.3.7 cho toàn hệ thống**:
+  - Universe Portal (`/`): `v4.3.7`
+  - Sổ tay School (`/school`): `v4.3.7`
+  - Sổ tay Water (`/water`): `v4.3.7`
+  - Mini Note hỏa tốc (`/mini`): `v4.3.7`
+  - School Vocab Pocket (`/school/vocab`): `v4.3.7`
+
+### 🚀 Phiên bản v4.3.4 - v4.3.5
+* **Chuẩn hóa nhận diện thương hiệu School Vocab**:
+  - Đổi tên toàn bộ nhánh từ vựng bỏ túi thành **School Vocab Pocket** (`/school/vocab`).
+  - Cập nhật manifest PWA độc lập `manifest-vocab.json` cho phép cài đặt riêng ra màn hình chính điện thoại.
+  - Cải tiến chế độ Đi Đường Rảnh Tay (Hands-free Walk Mode) tự động xoay vòng Flashcard và phát âm.
+
+### 🚀 Phiên bản v4.3.0 - v4.3.3
+* **Cổng điều phối Vũ Trụ (Universe Portal) & Sub-pages Clean URLs**:
+  - Tách biệt hai không gian làm việc độc lập: **USER SCHOOL** (`/school`) và **USER WATER** (`/water`).
+  - Mini Note hỗ trợ chuyển nhánh nạp nhanh vào Inbox tương ứng.
+  - Cách ly dữ liệu Cloud Firestore và tự động di trú an toàn ghi chú cũ sang School.
+
+---
+*Tài liệu được cập nhật tự động và lưu trữ trực tiếp trong mã nguồn dự án School NoteBook (Phiên bản v4.3.7).*
