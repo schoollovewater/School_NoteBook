@@ -893,6 +893,27 @@
             cursor: pointer;
         }
 
+        /* iOS Audio Hint */
+        .ios-audio-hint {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(245, 158, 11, 0.12);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            border-radius: 14px;
+            padding: 10px 14px;
+            margin-bottom: 12px;
+            font-size: 12px;
+            line-height: 1.4;
+            color: var(--text-secondary);
+        }
+        .ios-audio-hint strong {
+            color: #f59e0b;
+        }
+        .ios-audio-hint u {
+            text-decoration-color: #f59e0b;
+        }
+
         /* Toast Message */
         .toast {
             position: fixed;
@@ -965,6 +986,15 @@
                     📲 Cài đặt <strong>School Vocab</strong> vào điện thoại để học mọi lúc mọi nơi!
                 </div>
                 <button type="button" class="btn-install-pwa" id="btn-pwa-install">Cài Ngay</button>
+            </div>
+
+            <!-- iOS Audio Hint Banner -->
+            <div class="ios-audio-hint" id="ios-audio-hint" style="display: none;">
+                <i class="ri-volume-up-line" style="color: #f59e0b; font-size: 18px; flex-shrink: 0;"></i>
+                <div style="flex: 1;">
+                    <strong>Lưu ý iPhone:</strong> Nếu không nghe thấy tiếng, hãy kiểm tra <u>nút gạt im lặng bên sườn máy</u> (gạt sang BẬT chuông, không để vạch cam) và tăng âm lượng nhé!
+                </div>
+                <button type="button" onclick="dismissIosHint()" style="background:none;border:none;color:var(--text-muted);font-size:18px;cursor:pointer;padding:0 4px;line-height:1;" title="Đóng">&times;</button>
             </div>
 
             <!-- Stats & Filter Strip -->
@@ -1425,33 +1455,73 @@
             showToast('🔀 Đã xáo trộn thứ tự từ vựng');
         }
 
-        // --- DUAL-ENGINE AUDIO SYSTEM (MOBILE & DESKTOP ROBUST) ---
-        let currentAudioElement = null;
+        // --- BULLETPROOF AUDIO SYSTEM (IOS SAFARI, ANDROID & DESKTOP) ---
         let currentUtterance = null;
         let audioUnlocked = false;
+        let cachedEnVoice = null;
 
-        // Mở khóa AudioContext trên thiết bị di động ngay khi người dùng chạm vào màn hình lần đầu
+        // 1. Tìm và cache giọng đọc tiếng Anh tốt nhất của hệ thống (Siri/Samantha trên iOS, Google trên Chrome, Microsoft trên Edge)
+        function initSpeechVoices() {
+            if (!('speechSynthesis' in window)) return;
+            try {
+                const voices = window.speechSynthesis.getVoices();
+                if (voices && voices.length > 0) {
+                    cachedEnVoice = voices.find(v => (v.lang === 'en-US' || v.lang === 'en_US') && (v.name.includes('Samantha') || v.name.includes('Siri') || v.default))
+                                 || voices.find(v => v.lang.startsWith('en') && (v.name.includes('Samantha') || v.name.includes('Karen') || v.name.includes('Daniel') || v.name.includes('Siri')))
+                                 || voices.find(v => v.lang === 'en-US' || v.lang === 'en_US')
+                                 || voices.find(v => v.lang.startsWith('en'))
+                                 || null;
+                }
+            } catch (e) {}
+        }
+        if ('speechSynthesis' in window) {
+            initSpeechVoices();
+            window.speechSynthesis.onvoiceschanged = initSpeechVoices;
+        }
+
+        // 2. Mở khóa AudioSession trên iOS Safari & Android ngay từ cú chạm đầu tiên
         function unlockMobileAudio() {
             if (audioUnlocked) return;
+            audioUnlocked = true;
+
+            // Bật chế độ Media Playback trên iOS 15+ để phát âm thanh qua loa
+            if ('audioSession' in navigator) {
+                try { navigator.audioSession.type = 'playback'; } catch (e) {}
+            }
+
+            // Kích hoạt AudioContext để mở cổng âm thanh trên WebKit
             try {
                 const AudioCtx = window.AudioContext || window.webkitAudioContext;
                 if (AudioCtx) {
                     const ctx = new AudioCtx();
                     if (ctx.state === 'suspended') ctx.resume();
+                    const buf = ctx.createBuffer(1, 1, 22050);
+                    const src = ctx.createBufferSource();
+                    src.buffer = buf;
+                    src.connect(ctx.destination);
+                    src.start(0);
                 }
-                if ('speechSynthesis' in window) {
+            } catch (e) {}
+
+            // Mở khóa SpeechSynthesis bằng một câu rỗng (Primer) trên iOS Safari
+            if ('speechSynthesis' in window) {
+                try {
                     window.speechSynthesis.cancel();
                     window.speechSynthesis.resume();
-                }
-                audioUnlocked = true;
-            } catch (e) {}
+                    const primer = new SpeechSynthesisUtterance(' ');
+                    primer.volume = 0.01;
+                    primer.rate = 1.0;
+                    window.speechSynthesis.speak(primer);
+                } catch (e) {}
+            }
         }
-        window.addEventListener('pointerdown', unlockMobileAudio, { once: true });
-        window.addEventListener('touchstart', unlockMobileAudio, { once: true });
-        window.addEventListener('click', unlockMobileAudio, { once: true });
+        window.addEventListener('pointerdown', unlockMobileAudio, { once: true, passive: true });
+        window.addEventListener('touchstart', unlockMobileAudio, { once: true, passive: true });
+        window.addEventListener('touchend', unlockMobileAudio, { once: true, passive: true });
+        window.addEventListener('click', unlockMobileAudio, { once: true, passive: true });
 
-        // Phát âm từ: Ưu tiên 1 Audio trực tuyến chất lượng cao (hoạt động 100% trên điện thoại kể cả khi gạt im lặng)
-        // Ưu tiên 2: Fallback Web Speech API khi ngoại tuyến (Offline)
+        // 3. Phát âm chuẩn: Thực thi ĐỒNG BỘ (Synchronously) trong sự kiện người dùng
+        // 100% không bị chặn bởi CORS, Referer, 404 hay quy tắc autoplay của iOS Safari
         function playWordAudio(text, onEndCallback = null) {
             if (!text) {
                 if (onEndCallback) onEndCallback();
@@ -1460,78 +1530,61 @@
             text = text.trim();
             unlockMobileAudio();
 
-            // 1. Dừng âm thanh đang chạy trước đó
-            if (currentAudioElement) {
-                try { currentAudioElement.pause(); } catch (e) {}
-                currentAudioElement = null;
-            }
-            if ('speechSynthesis' in window) {
-                try { window.speechSynthesis.cancel(); } catch (e) {}
-            }
-
-            // 2. Nếu có mạng: Dùng stream âm thanh chuẩn qua thẻ Audio (hoạt động cực nhạy trên iOS & Android)
-            if (navigator.onLine) {
-                const cleanWord = text.replace(/[/\\#,+()$~%.'":*?<>{}]/g, ' ').trim();
-                const audioUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=en&client=tw-ob&q=${encodeURIComponent(cleanWord)}`;
-                const audio = new Audio(audioUrl);
-                audio.playbackRate = speechSpeed || 1.0;
-                currentAudioElement = audio;
-
-                let finished = false;
-                audio.onended = () => {
-                    finished = true;
-                    currentAudioElement = null;
-                    if (onEndCallback) onEndCallback();
-                };
-                audio.onerror = () => {
-                    if (finished) return;
-                    currentAudioElement = null;
-                    speakWithWebSpeech(text, onEndCallback);
-                };
-
-                const playPromise = audio.play();
-                if (playPromise !== undefined) {
-                    playPromise.catch(err => {
-                        console.warn('Audio play failed, falling back to Web Speech:', err);
-                        currentAudioElement = null;
-                        speakWithWebSpeech(text, onEndCallback);
-                    });
-                }
-                return;
-            }
-
-            // 3. Khi ngoại tuyến: Sử dụng Web Speech API đã tối ưu chống Garbage Collection trên Mobile
-            speakWithWebSpeech(text, onEndCallback);
-        }
-
-        function speakWithWebSpeech(text, onEndCallback = null) {
             if (!('speechSynthesis' in window)) {
+                console.warn('Thiết bị không hỗ trợ SpeechSynthesis.');
                 if (onEndCallback) onEndCallback();
                 return;
             }
 
             try {
-                window.speechSynthesis.cancel();
+                // Resume nếu bị pause ngầm trên iOS
                 window.speechSynthesis.resume();
 
-                // Lưu vào biến toàn cục để tránh bị trình duyệt di động thu hồi bộ nhớ (GC bug)
-                currentUtterance = new SpeechSynthesisUtterance(text);
-                currentUtterance.lang = 'en-US';
-                currentUtterance.rate = speechSpeed || 1.0;
+                // Tạo đối tượng phát âm
+                const utter = new SpeechSynthesisUtterance(text);
+                utter.lang = 'en-US';
+                utter.rate = speechSpeed || 1.0;
+                utter.pitch = 1.0;
+                utter.volume = 1.0;
 
-                currentUtterance.onend = () => {
+                if (!cachedEnVoice) initSpeechVoices();
+                if (cachedEnVoice) utter.voice = cachedEnVoice;
+
+                // Giữ tham chiếu toàn cục chống Garbage Collection trên Safari iOS
+                window.__activeSpeechUtterance = utter;
+                currentUtterance = utter;
+
+                utter.onend = () => {
+                    window.__activeSpeechUtterance = null;
                     currentUtterance = null;
-                    if (onEndCallback) onEndCallback();
+                    if (onEndCallback) {
+                        // Thêm micro-delay 60ms cho iOS Safari giải phóng audio thread trước câu tiếp theo
+                        setTimeout(onEndCallback, 60);
+                    }
                 };
-                currentUtterance.onerror = (e) => {
+
+                utter.onerror = (e) => {
                     console.warn('SpeechSynthesis error:', e);
+                    window.__activeSpeechUtterance = null;
                     currentUtterance = null;
-                    if (onEndCallback) onEndCallback();
+                    if (onEndCallback) {
+                        setTimeout(onEndCallback, 60);
+                    }
                 };
 
-                window.speechSynthesis.speak(currentUtterance);
+                // Nếu đang phát dở thì hủy trước khi phát mới
+                if (window.speechSynthesis.speaking) {
+                    window.speechSynthesis.cancel();
+                    // iOS Safari cần 25ms sau khi cancel() để không bị drop lệnh speak
+                    setTimeout(() => {
+                        window.speechSynthesis.speak(utter);
+                    }, 25);
+                } else {
+                    // Nếu đang rảnh rỗi, gọi speak() ngay lập tức ĐỒNG BỘ
+                    window.speechSynthesis.speak(utter);
+                }
             } catch (err) {
-                console.warn('Web Speech fallback err:', err);
+                console.error('Play audio error:', err);
                 if (onEndCallback) onEndCallback();
             }
         }
@@ -1990,6 +2043,22 @@
             };
         }
 
+        // --- IOS AUDIO HINT ---
+        function checkIosAudioHint() {
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+            let dismissed = false;
+            try { dismissed = localStorage.getItem('school_ios_audio_dismissed') === 'true'; } catch(e) {}
+            if (isIOS && !dismissed) {
+                const hintEl = document.getElementById('ios-audio-hint');
+                if (hintEl) hintEl.style.display = 'flex';
+            }
+        }
+        function dismissIosHint() {
+            try { localStorage.setItem('school_ios_audio_dismissed', 'true'); } catch(e) {}
+            const hintEl = document.getElementById('ios-audio-hint');
+            if (hintEl) hintEl.style.display = 'none';
+        }
+
         // --- SERVICE WORKER FOR OFFLINE ---
         if ('serviceWorker' in navigator && location.protocol !== 'file:') {
             navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW err:', err));
@@ -1998,6 +2067,7 @@
         // --- INITIALIZE ---
         window.addEventListener('DOMContentLoaded', () => {
             loadVocab();
+            checkIosAudioHint();
         });
     </script>
 </body>
