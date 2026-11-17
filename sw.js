@@ -3,7 +3,7 @@
  * Hỗ trợ offline đầy đủ cho cả Sổ tay chính và Mini Note.
  */
 
-const CACHE_NAME = 'schooldb-v4.3.1';
+const CACHE_NAME = 'schooldb-v4.3.2';
 
 const PRECACHE_URLS = [
     './',
@@ -14,10 +14,10 @@ const PRECACHE_URLS = [
     './water/index.html',
     './school/mini/index.html',
     './water/mini/index.html',
-    './styles.css?v=4.3.0',
-    './app.js?v=4.3.0',
-    './shared/note-schema.js?v=4.3.0',
-    './shared/ai-service.js?v=4.3.0',
+    './styles.css?v=4.3.2',
+    './app.js?v=4.3.2',
+    './shared/note-schema.js?v=4.3.2',
+    './shared/ai-service.js?v=4.3.2',
     './firebase-config.js',
     './manifest.json',
     './manifest-mini.json',

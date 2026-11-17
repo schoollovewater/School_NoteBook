@@ -1,5 +1,5 @@
 // --- CONFIG & STATE ---
-const APP_VERSION = 'v4.3.0';
+const APP_VERSION = 'v4.3.2';
 const CURRENT_USER_KEY = 'schooldb_current_user';
 const DELETED_PAGES_KEY = 'schooldb_deleted_pages';
 
@@ -45,14 +45,40 @@ function getWorkspaceStorageKey(user = (appState ? appState.currentUser : getCur
 
 function initUserBranchMigration() {
     try {
-        const legacyPages = localStorage.getItem('schooldb_pages');
-        if (legacyPages && !localStorage.getItem('schooldb_school_pages')) {
-            localStorage.setItem('schooldb_school_pages', legacyPages);
+        const legacyPagesRaw = localStorage.getItem('schooldb_pages');
+        let schoolPagesRaw = localStorage.getItem('schooldb_school_pages');
+        
+        let hasSchoolPages = false;
+        if (schoolPagesRaw) {
+            try {
+                const p = JSON.parse(schoolPagesRaw);
+                if (p && typeof p === 'object' && Object.keys(p).length > 0) hasSchoolPages = true;
+            } catch (e) {}
         }
+        
+        // Nếu school_pages chưa có hoặc rỗng ({}) mà legacyPages có dữ liệu -> khôi phục ngay!
+        if (!hasSchoolPages && legacyPagesRaw) {
+            try {
+                const legacy = JSON.parse(legacyPagesRaw);
+                if (legacy && typeof legacy === 'object' && Object.keys(legacy).length > 0) {
+                    localStorage.setItem('schooldb_school_pages', legacyPagesRaw);
+                }
+            } catch (e) {}
+        }
+
         const legacyVocab = localStorage.getItem('schooldb_vocab_items');
-        if (legacyVocab && !localStorage.getItem('schooldb_school_vocab_items')) {
+        let schoolVocab = localStorage.getItem('schooldb_school_vocab_items');
+        let hasSchoolVocab = false;
+        if (schoolVocab) {
+            try {
+                const v = JSON.parse(schoolVocab);
+                if (Array.isArray(v) && v.length > 0) hasSchoolVocab = true;
+            } catch (e) {}
+        }
+        if (!hasSchoolVocab && legacyVocab) {
             localStorage.setItem('schooldb_school_vocab_items', legacyVocab);
         }
+
         const legacyDel = localStorage.getItem('schooldb_deleted_pages');
         if (legacyDel && !localStorage.getItem('schooldb_school_deleted_pages')) {
             localStorage.setItem('schooldb_school_deleted_pages', legacyDel);
@@ -62,7 +88,7 @@ function initUserBranchMigration() {
             localStorage.setItem('schooldb_school_workspace', legacyWs);
         }
         if (!localStorage.getItem(CURRENT_USER_KEY)) {
-            localStorage.setItem(CURRENT_USER_KEY, 'school');
+            localStorage.setItem(CURRENT_USER_KEY, getCurrentUser());
         }
     } catch (e) {
         console.warn('Branch migration warning:', e);
@@ -344,77 +370,21 @@ window.app = window.app || {};
 
 window.app.switchUser = function(newUser) {
     if (newUser !== 'school' && newUser !== 'water') return;
-    if (appState.currentUser === newUser) {
-        const popover = document.getElementById('workspace-switch-popover');
-        if (popover) popover.style.display = 'none';
-        return;
-    }
-
-    // 1. Lưu lại trang hiện tại của user đang dùng
-    if (appState.activePageId && appState.pages[appState.activePageId]) {
-        saveCurrentPageToState();
-        savePagesToStorage();
-    }
-
-    // Lưu activePageId cho user cũ
+    
+    // 1. Lưu lại trang hiện tại nếu đang chỉnh sửa
     try {
+        if (appState.activePageId && appState.pages[appState.activePageId]) {
+            saveCurrentPageToState();
+            savePagesToStorage();
+        }
         localStorage.setItem(getUserStorageKeys(appState.currentUser).activePage, appState.activePageId || '');
+        localStorage.setItem(CURRENT_USER_KEY, newUser);
     } catch (e) {}
 
-    // 2. Cập nhật current user
-    appState.currentUser = newUser;
-    localStorage.setItem(CURRENT_USER_KEY, newUser);
-
-    // 3. Cập nhật URL sạch trên thanh địa chỉ của trình duyệt
-    try {
-        if (window.history && window.history.pushState) {
-            const isLocal = location.protocol === 'file:' || location.port !== '';
-            const targetUrl = isLocal ? `app.html?user=${newUser}` : `/${newUser}`;
-            window.history.pushState({ user: newUser }, '', targetUrl);
-        }
-    } catch (e) {}
-
-    // 4. Đóng popover
-    const popover = document.getElementById('workspace-switch-popover');
-    if (popover) popover.style.display = 'none';
-
-    // 4. Cập nhật giao diện workspace profile
-    updateWorkspaceProfileUI();
-
-    // 5. Nạp danh sách ghi chú của user mới
-    const key = getPagesStorageKey(newUser);
-    let stored = localStorage.getItem(key);
-    if (!stored && newUser === 'school') {
-        stored = localStorage.getItem('schooldb_pages');
-    }
-
-    let parsed = null;
-    if (stored) {
-        try { parsed = JSON.parse(stored); } catch (e) {}
-    }
-
-    if (!parsed || typeof parsed !== 'object' || Object.keys(parsed).length === 0) {
-        if (newUser === 'water') {
-            createWaterWelcomePage();
-        } else {
-            createDefaultWelcomePage();
-        }
-    } else {
-        appState.pages = parsed;
-        const savedActive = localStorage.getItem(getUserStorageKeys(newUser).activePage);
-        const targetPageId = (savedActive && appState.pages[savedActive]) ? savedActive : Object.keys(appState.pages)[0];
-        renderSidebar();
-        if (targetPageId) openPage(targetPageId);
-        else openFirstPageOrCreate();
-    }
-
-    // 6. Nạp danh sách từ vựng của user mới
-    if (typeof vocab !== 'undefined' && typeof vocab.initVocab === 'function') {
-        vocab.initVocab();
-    }
-
-    const label = newUser === 'water' ? 'USER WATER 💧' : 'USER SCHOOL 🏫';
-    showToast(`🔄 Đã chuyển sang không gian: ${label}`);
+    // 2. Chuyển thẳng trang sang URL của user đó (Sạch sẽ, đầy đủ tải mới)
+    const isLocal = location.protocol === 'file:' || location.port !== '';
+    const targetUrl = isLocal ? `app.html?user=${newUser}` : `/${newUser}`;
+    window.location.href = targetUrl;
 };
 
 // --- INITIALIZATION ---
@@ -944,36 +914,49 @@ function loadPages() {
     const user = appState.currentUser || 'school';
     const key = getPagesStorageKey(user);
     let stored = localStorage.getItem(key);
-    if (!stored && user === 'school') {
-        stored = localStorage.getItem('schooldb_pages');
-    }
-    const deletedMap = getDeletedPagesMap();
-    let hasLocalPages = false;
+    let parsed = null;
     if (stored) {
         try {
-            const parsed = JSON.parse(stored);
-            if (parsed && typeof parsed === 'object') {
-                let pruned = false;
-                Object.keys(deletedMap).forEach(id => {
-                    if (parsed[id]) {
-                        delete parsed[id];
-                        pruned = true;
-                    }
-                });
-                if (pruned) {
-                    savePagesToStorage();
-                }
-                if (Object.keys(parsed).length > 0) {
-                    appState.pages = parsed;
-                    hasLocalPages = true;
-                    renderSidebar();
-                    const savedActive = localStorage.getItem(getUserStorageKeys(user).activePage);
-                    const targetPageId = (savedActive && appState.pages[savedActive]) ? savedActive : Object.keys(appState.pages)[0];
-                    if (targetPageId) openPage(targetPageId);
-                }
-            }
+            parsed = JSON.parse(stored);
         } catch (e) {
             console.warn('Lỗi đọc local pages:', e);
+        }
+    }
+
+    // Nếu user là school mà dữ liệu rỗng hoặc không có trang nào, phục hồi ngay từ schooldb_pages
+    if ((!parsed || typeof parsed !== 'object' || Object.keys(parsed).length === 0) && user === 'school') {
+        const legacy = localStorage.getItem('schooldb_pages');
+        if (legacy) {
+            try {
+                const lp = JSON.parse(legacy);
+                if (lp && typeof lp === 'object' && Object.keys(lp).length > 0) {
+                    parsed = lp;
+                    localStorage.setItem('schooldb_school_pages', legacy);
+                }
+            } catch (e) {}
+        }
+    }
+
+    const deletedMap = getDeletedPagesMap();
+    let hasLocalPages = false;
+    if (parsed && typeof parsed === 'object') {
+        let pruned = false;
+        Object.keys(deletedMap).forEach(id => {
+            if (parsed[id]) {
+                delete parsed[id];
+                pruned = true;
+            }
+        });
+        if (pruned) {
+            savePagesToStorage();
+        }
+        if (Object.keys(parsed).length > 0) {
+            appState.pages = parsed;
+            hasLocalPages = true;
+            renderSidebar();
+            const savedActive = localStorage.getItem(getUserStorageKeys(user).activePage);
+            const targetPageId = (savedActive && appState.pages[savedActive]) ? savedActive : Object.keys(appState.pages)[0];
+            if (targetPageId) openPage(targetPageId);
         }
     }
 
@@ -1063,6 +1046,30 @@ function startCloudSync() {
         let sidebarDirty = false;
         let activeDirty = false;
         let newInbox = 0;
+
+        // 1.0 Quét toàn bộ documents của User hiện tại để đảm bảo nạp đủ mọi ghi chú từ Cloud
+        snapshot.docs.forEach(doc => {
+            if (doc.metadata && doc.metadata.hasPendingWrites) return;
+            const docData = doc.data() || {};
+            const docUser = (docData.user && ['school', 'water'].includes(docData.user)) ? docData.user : 'school';
+            if (docUser !== appState.currentUser) return; // Bỏ qua ghi chú của user khác
+            if (deletedMap[doc.id]) return;
+
+            // Nếu local chưa có trang này, nạp ngay
+            if (!appState.pages[doc.id]) {
+                const result = NoteSchema.normalizeRemoteNote(doc.id, docData);
+                if (result && result.page) {
+                    const page = result.page;
+                    appState.pages[doc.id] = Object.assign({}, page, { syncedToCloud: true });
+                    lastCloudSyncedSignature[doc.id] = getPageContentSignature(appState.pages[doc.id]);
+                    sidebarDirty = true;
+                    if (!appState.activePageId) {
+                        appState.activePageId = doc.id;
+                        activeDirty = true;
+                    }
+                }
+            }
+        });
 
         snapshot.docChanges().forEach(change => {
             const doc = change.doc;
@@ -1198,6 +1205,18 @@ function startCloudSync() {
     // 2. Đồng bộ Kho từ vựng hai chiều (vocab_items) theo User
     db.collection('vocab_items').onSnapshot(snapshot => {
         let vocabDirty = false;
+
+        snapshot.docs.forEach(doc => {
+            if (doc.metadata && doc.metadata.hasPendingWrites) return;
+            const data = doc.data() || {};
+            const itemUser = (data && data.user) ? data.user : 'school';
+            if (itemUser !== appState.currentUser) return;
+            if (data.word && !vocab.items.some(i => i.id === doc.id)) {
+                vocab.items.push(Object.assign({}, data, { id: doc.id }));
+                vocabDirty = true;
+            }
+        });
+
         snapshot.docChanges().forEach(change => {
             if (change.doc.metadata.hasPendingWrites) return;
             const id = change.doc.id;
