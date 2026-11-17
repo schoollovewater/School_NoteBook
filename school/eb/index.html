@@ -1,0 +1,1797 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <script>
+        if (location.protocol.startsWith('http')) {
+            document.write('<base href="/">');
+        }
+    </script>
+    <title>School EB — Tiếng Anh Bỏ Túi 🎧</title>
+    <meta name="description" content="Nhánh học từ vựng tiếng Anh bỏ túi của School: lật thẻ 3D, chế độ đi đường rảnh tay, quiz phản xạ, chạy offline 100%.">
+    
+    <!-- PWA Manifest & Meta -->
+    <link rel="manifest" href="manifest-vocab.json">
+    <meta name="theme-color" content="#0b1120">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="icon" type="image/png" href="icons/icon-192.png">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+
+    <!-- Fonts & Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="shared/note-schema.js?v=4.3.2"></script>
+
+    <style>
+        :root {
+            --bg-base: #0b1120;
+            --bg-surface: #131c31;
+            --bg-elevated: #1e293b;
+            --bg-card: rgba(30, 41, 59, 0.75);
+            --border: rgba(255, 255, 255, 0.1);
+            --border-strong: rgba(255, 255, 255, 0.2);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --accent: #3b82f6;
+            --accent-glow: rgba(59, 130, 246, 0.35);
+            --success: #10b981;
+            --success-glow: rgba(16, 185, 129, 0.3);
+            --warning: #f59e0b;
+            --warning-glow: rgba(245, 158, 11, 0.3);
+            --danger: #ef4444;
+            --danger-glow: rgba(239, 68, 68, 0.3);
+        }
+
+        :root[data-theme="light"] {
+            --bg-base: #f1f5f9;
+            --bg-surface: #ffffff;
+            --bg-elevated: #f8fafc;
+            --bg-card: rgba(255, 255, 255, 0.9);
+            --border: rgba(0, 0, 0, 0.1);
+            --border-strong: rgba(0, 0, 0, 0.2);
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+            --text-muted: #94a3b8;
+            --accent: #2563eb;
+            --accent-glow: rgba(37, 99, 235, 0.2);
+            --success: #059669;
+            --success-glow: rgba(5, 150, 105, 0.2);
+            --warning: #d97706;
+            --warning-glow: rgba(217, 119, 6, 0.2);
+            --danger: #dc2626;
+            --danger-glow: rgba(220, 38, 38, 0.2);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-primary);
+            min-height: 100vh;
+            min-height: 100dvh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+            user-select: none;
+        }
+
+        /* Container & Ambient Background */
+        .app-wrapper {
+            max-width: 520px;
+            width: 100%;
+            margin: 0 auto;
+            min-height: 100vh;
+            min-height: 100dvh;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            background: var(--bg-base);
+            box-shadow: 0 0 50px rgba(0,0,0,0.4);
+        }
+
+        .ambient-glow {
+            position: fixed;
+            top: -100px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: 0;
+            opacity: 0.8;
+            filter: blur(40px);
+        }
+
+        /* Top Bar */
+        .top-bar {
+            height: 56px;
+            padding: 0 16px;
+            padding-top: env(safe-area-inset-top, 0px);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--bg-surface);
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            z-index: 40;
+            backdrop-filter: blur(16px);
+        }
+
+        .top-bar-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .btn-back-hub {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: var(--bg-elevated);
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.15s ease;
+        }
+        .btn-back-hub:hover {
+            color: var(--text-primary);
+            border-color: var(--border-strong);
+        }
+
+        .brand-title {
+            display: flex;
+            flex-direction: column;
+        }
+        .brand-title h1 {
+            font-size: 15px;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            letter-spacing: -0.2px;
+        }
+        .brand-badge {
+            background: linear-gradient(135deg, #f59e0b, #ef4444);
+            color: white;
+            font-size: 10px;
+            font-weight: 800;
+            padding: 1px 6px;
+            border-radius: 6px;
+            letter-spacing: 0.5px;
+        }
+        .brand-sub {
+            font-size: 11px;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .top-bar-actions {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-icon-top {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: var(--bg-elevated);
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 17px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .btn-icon-top:hover {
+            color: var(--text-primary);
+            border-color: var(--border-strong);
+        }
+
+        /* Navigation Mode Tabs */
+        .mode-nav {
+            display: flex;
+            padding: 8px 14px;
+            gap: 6px;
+            background: var(--bg-surface);
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 56px;
+            z-index: 30;
+        }
+        .mode-btn {
+            flex: 1;
+            padding: 8px 0;
+            border-radius: 10px;
+            border: 1px solid transparent;
+            background: transparent;
+            color: var(--text-muted);
+            font-size: 13px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .mode-btn.active {
+            background: var(--accent);
+            color: white;
+            box-shadow: 0 4px 12px var(--accent-glow);
+        }
+
+        /* Content Area */
+        .content-area {
+            flex: 1;
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            z-index: 10;
+        }
+
+        /* Stats & Filter Bar */
+        .stats-strip {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            padding: 0 4px;
+        }
+        .stats-counter {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .tag-pill-select {
+            background: var(--bg-elevated);
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 4px 10px;
+            font-size: 12px;
+            font-weight: 600;
+            outline: none;
+            cursor: pointer;
+        }
+
+        /* ============================================================
+           FLASHCARD 3D COMPONENT (OPTIMIZED FOR 1-HAND MOBILE)
+           ============================================================ */
+        .flashcard-wrapper {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            perspective: 1200px;
+            position: relative;
+            margin-bottom: 16px;
+            min-height: 380px;
+        }
+
+        .flashcard {
+            width: 100%;
+            height: 100%;
+            min-height: 360px;
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            cursor: pointer;
+            touch-action: pan-y;
+        }
+
+        .flashcard.is-flipped {
+            transform: rotateY(180deg);
+        }
+
+        /* Swipe Drag Animation Classes */
+        .flashcard.swiping {
+            transition: none;
+        }
+        .flashcard.swipe-mastered {
+            border-color: var(--success) !important;
+            box-shadow: 0 0 30px var(--success-glow) !important;
+        }
+        .flashcard.swipe-learning {
+            border-color: var(--warning) !important;
+            box-shadow: 0 0 30px var(--warning-glow) !important;
+        }
+
+        .card-face {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+            border-radius: 24px;
+            border: 1px solid var(--border-strong);
+            background: var(--bg-card);
+            backdrop-filter: blur(20px);
+            padding: 24px 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            box-shadow: 0 16px 36px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .card-face-back {
+            transform: rotateY(180deg);
+            background: var(--bg-surface);
+            border-color: var(--accent);
+        }
+
+        .card-face-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .card-category-tag {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 20px;
+            background: var(--bg-elevated);
+            color: var(--accent);
+            border: 1px solid var(--border);
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .card-status-indicator {
+            font-size: 12px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .status-mastered { color: var(--success); }
+        .status-learning { color: var(--warning); }
+
+        /* Front Word Center */
+        .card-word-center {
+            text-align: center;
+            margin: auto 0;
+            padding: 10px 0;
+        }
+        .card-main-word {
+            font-size: 32px;
+            font-weight: 800;
+            color: var(--text-primary);
+            letter-spacing: -0.5px;
+            line-height: 1.2;
+            margin-bottom: 8px;
+            word-break: break-word;
+        }
+        .card-phonetic-ipa {
+            font-family: 'Fira Code', monospace;
+            font-size: 15px;
+            color: var(--accent);
+            background: rgba(59, 130, 246, 0.12);
+            padding: 4px 12px;
+            border-radius: 20px;
+            display: inline-block;
+            margin-bottom: 16px;
+        }
+
+        .btn-audio-hero {
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            background: var(--accent);
+            color: white;
+            border: none;
+            font-size: 24px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 8px 24px var(--accent-glow);
+            transition: transform 0.15s, background 0.15s;
+            margin: 0 auto;
+        }
+        .btn-audio-hero:active {
+            transform: scale(0.92);
+        }
+
+        .card-touch-hint {
+            text-align: center;
+            font-size: 11.5px;
+            color: var(--text-muted);
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+        }
+
+        /* Back Card Body */
+        .card-back-body {
+            margin: auto 0;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            text-align: left;
+        }
+        .back-meaning-title {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .back-meaning-text {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-primary);
+            line-height: 1.4;
+        }
+        .back-example-box {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-left: 3px solid var(--accent);
+            padding: 12px;
+            border-radius: 12px;
+        }
+        .back-example-en {
+            font-size: 14px;
+            font-style: italic;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+            line-height: 1.4;
+        }
+        .back-example-listen {
+            font-size: 12px;
+            color: var(--accent);
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            margin-top: 4px;
+        }
+
+        /* ============================================================
+           THUMB ZONE CONTROLS (NỬA DƯỚI MÀN HÌNH DỄ THAO TÁC 1 TAY)
+           ============================================================ */
+        .thumb-controls {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            align-items: center;
+            gap: 12px;
+            padding-bottom: env(safe-area-inset-bottom, 16px);
+            z-index: 30;
+        }
+
+        .btn-thumb {
+            height: 60px;
+            border-radius: 18px;
+            border: none;
+            font-size: 14px;
+            font-weight: 800;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+            cursor: pointer;
+            transition: transform 0.15s, opacity 0.15s;
+        }
+        .btn-thumb:active {
+            transform: scale(0.96);
+        }
+
+        .btn-thumb-learning {
+            background: rgba(245, 158, 11, 0.15);
+            color: var(--warning);
+            border: 1px solid rgba(245, 158, 11, 0.35);
+        }
+        .btn-thumb-mastered {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--success);
+            border: 1px solid rgba(16, 185, 129, 0.35);
+        }
+
+        /* Hands-Free Walk Button (Center Big Round Button) */
+        .btn-walk-mode {
+            width: 66px;
+            height: 66px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            color: white;
+            border: none;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 10px 24px rgba(99, 102, 241, 0.4);
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+        }
+        .btn-walk-mode:active {
+            transform: scale(0.92);
+        }
+        .btn-walk-mode.active {
+            background: linear-gradient(135deg, #ef4444, #f59e0b);
+            animation: pulseWalk 1.6s infinite;
+        }
+        @keyframes pulseWalk {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6); }
+            70% { box-shadow: 0 0 0 16px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+        .walk-label {
+            font-size: 9.5px;
+            font-weight: 800;
+            letter-spacing: 0.3px;
+            margin-top: 2px;
+        }
+
+        /* Walk Mode Overlay Banner */
+        .walk-mode-status {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 8px 14px;
+            background: rgba(99, 102, 241, 0.15);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-radius: 12px;
+            margin-bottom: 10px;
+            font-size: 12.5px;
+            font-weight: 700;
+            color: #a5b4fc;
+        }
+        .walk-mode-status.active {
+            display: flex;
+        }
+
+        /* Auxiliary Controls Strip */
+        .aux-controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            padding: 4px 0 10px;
+        }
+        .btn-aux {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-size: 13px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            padding: 6px 12px;
+            border-radius: 8px;
+            transition: all 0.15s ease;
+        }
+        .btn-aux:hover {
+            color: var(--text-primary);
+            background: var(--bg-elevated);
+        }
+
+        /* ============================================================
+           QUIZ VIEW (PHẢN XẠ NHANH 4 ĐÁP ÁN)
+           ============================================================ */
+        .quiz-view {
+            display: none;
+            flex-direction: column;
+            gap: 16px;
+            flex: 1;
+        }
+        .quiz-view.active {
+            display: flex;
+        }
+
+        .quiz-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-strong);
+            border-radius: 24px;
+            padding: 24px 20px;
+            text-align: center;
+            box-shadow: 0 12px 32px rgba(0,0,0,0.25);
+        }
+        .quiz-question-word {
+            font-size: 28px;
+            font-weight: 800;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+        }
+        .quiz-question-ipa {
+            font-family: 'Fira Code', monospace;
+            font-size: 14px;
+            color: var(--accent);
+            margin-bottom: 12px;
+        }
+
+        .quiz-options {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .quiz-btn {
+            padding: 14px 16px;
+            border-radius: 14px;
+            border: 1px solid var(--border);
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+            font-size: 14px;
+            font-weight: 600;
+            text-align: left;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .quiz-btn:active {
+            transform: scale(0.98);
+        }
+        .quiz-btn.correct {
+            background: rgba(16, 185, 129, 0.2);
+            border-color: var(--success);
+            color: var(--success);
+        }
+        .quiz-btn.wrong {
+            background: rgba(239, 68, 68, 0.2);
+            border-color: var(--danger);
+            color: var(--danger);
+        }
+
+        .quiz-streak-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-secondary);
+            padding: 0 6px;
+        }
+
+        /* ============================================================
+           LIST VIEW (DANH SÁCH & TÌM KIẾM TỪ)
+           ============================================================ */
+        .list-view {
+            display: none;
+            flex-direction: column;
+            gap: 12px;
+            flex: 1;
+        }
+        .list-view.active {
+            display: flex;
+        }
+
+        .search-box {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+        .search-box i {
+            position: absolute;
+            left: 14px;
+            color: var(--text-muted);
+            font-size: 16px;
+        }
+        .search-input {
+            width: 100%;
+            padding: 12px 14px 12px 40px;
+            border-radius: 14px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            font-size: 14px;
+            font-weight: 500;
+            outline: none;
+        }
+        .search-input:focus {
+            border-color: var(--accent);
+        }
+
+        .vocab-list-items {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            overflow-y: auto;
+            max-height: calc(100vh - 220px);
+            max-height: calc(100dvh - 220px);
+            padding-bottom: 40px;
+        }
+
+        .vocab-list-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 12px 14px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+        .vocab-list-card-left {
+            flex: 1;
+            min-width: 0;
+        }
+        .vocab-list-word {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .vocab-list-ipa {
+            font-family: 'Fira Code', monospace;
+            font-size: 12px;
+            color: var(--accent);
+        }
+        .vocab-list-meaning {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-top: 3px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .vocab-list-actions {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-list-audio {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            background: var(--bg-elevated);
+            color: var(--accent);
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        /* Modal Quick Add Word */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(8px);
+            z-index: 100;
+            display: none;
+            align-items: flex-end;
+            justify-content: center;
+        }
+        .modal-overlay.active {
+            display: flex;
+        }
+        .modal-sheet {
+            width: 100%;
+            max-width: 520px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-strong);
+            border-top-left-radius: 24px;
+            border-top-right-radius: 24px;
+            padding: 24px 20px 32px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            animation: slideUpSheet 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes slideUpSheet {
+            from { transform: translateY(100%); }
+            to { transform: translateY(0); }
+        }
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .modal-header h3 {
+            font-size: 17px;
+            font-weight: 700;
+        }
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .form-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+        .form-input {
+            padding: 10px 14px;
+            border-radius: 10px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            font-size: 14px;
+            outline: none;
+        }
+        .form-input:focus {
+            border-color: var(--accent);
+        }
+        .btn-submit-word {
+            background: var(--accent);
+            color: white;
+            padding: 14px;
+            border-radius: 12px;
+            border: none;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            margin-top: 6px;
+        }
+
+        /* PWA Install Banner */
+        .install-pwa-banner {
+            display: none;
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(16, 185, 129, 0.2));
+            border: 1px solid rgba(59, 130, 246, 0.4);
+            border-radius: 14px;
+            padding: 10px 14px;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+        .install-pwa-banner.active {
+            display: flex;
+        }
+        .install-pwa-text {
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .btn-install-pwa {
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 6px 12px;
+            font-size: 11.5px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        /* Toast Message */
+        .toast {
+            position: fixed;
+            top: 64px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-20px);
+            background: var(--success);
+            color: white;
+            padding: 8px 18px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 700;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.25s ease;
+            z-index: 200;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+    </style>
+</head>
+<body>
+    <div class="ambient-glow"></div>
+
+    <div class="app-wrapper">
+        <!-- Top Bar -->
+        <header class="top-bar">
+            <div class="top-bar-left">
+                <a href="/school" class="btn-back-hub" title="Về Sổ tay School">
+                    <i class="ri-arrow-left-s-line"></i>
+                </a>
+                <div class="brand-title">
+                    <h1>
+                        School EB <span class="brand-badge">POCKET</span>
+                    </h1>
+                    <span class="brand-sub">Tiếng Anh bỏ túi • Đi đường rảnh tay</span>
+                </div>
+            </div>
+            <div class="top-bar-actions">
+                <button type="button" class="btn-icon-top" id="btn-theme-toggle" title="Đổi giao diện">
+                    <i class="ri-moon-line"></i>
+                </button>
+                <button type="button" class="btn-icon-top" id="btn-open-add" title="Thêm từ mới">
+                    <i class="ri-add-line"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- Navigation Tabs -->
+        <nav class="mode-nav" aria-label="Chế độ học">
+            <button type="button" class="mode-btn active" id="tab-flashcard" onclick="setMode('flashcard')">
+                <i class="ri-stack-line"></i> Lật Thẻ
+            </button>
+            <button type="button" class="mode-btn" id="tab-quiz" onclick="setMode('quiz')">
+                <i class="ri-brain-line"></i> Quiz
+            </button>
+            <button type="button" class="mode-btn" id="tab-list" onclick="setMode('list')">
+                <i class="ri-list-check-2"></i> Danh Sách
+            </button>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="content-area">
+            <!-- PWA Install Banner -->
+            <div class="install-pwa-banner" id="pwa-install-banner">
+                <div class="install-pwa-text">
+                    📲 Cài đặt <strong>School EB</strong> vào điện thoại để học mọi lúc mọi nơi!
+                </div>
+                <button type="button" class="btn-install-pwa" id="btn-pwa-install">Cài Ngay</button>
+            </div>
+
+            <!-- Stats & Filter Strip -->
+            <div class="stats-strip">
+                <div class="stats-counter" id="stats-counter-display">
+                    <span>📚 <strong id="stat-total">0</strong> từ</span>
+                    <span>•</span>
+                    <span style="color: var(--success);">✅ <strong id="stat-mastered">0</strong> đã nhớ</span>
+                    <span>•</span>
+                    <span style="color: var(--warning);">🔄 <strong id="stat-learning">0</strong> cần ôn</span>
+                </div>
+                <select class="tag-pill-select" id="tag-filter-select" onchange="onTagFilterChange()">
+                    <option value="all">Tất cả chủ đề</option>
+                    <option value="TechAdvanced">🔧 Kỹ thuật sâu</option>
+                    <option value="TechCommon">💻 Kỹ thuật chung</option>
+                    <option value="TOEIC">🎯 Tiếng Anh TOEIC</option>
+                    <option value="Other">📝 Từ vựng khác</option>
+                </select>
+            </div>
+
+            <!-- Walk Mode Active Banner -->
+            <div class="walk-mode-status" id="walk-mode-banner">
+                <i class="ri-walk-line"></i>
+                <span>Đang bật Chế độ Đi Đường: Tự động đọc và chuyển thẻ...</span>
+                <button type="button" onclick="stopWalkMode()" style="background:transparent;border:none;color:white;cursor:pointer;margin-left:auto;">
+                    <i class="ri-close-line" style="font-size:18px;"></i>
+                </button>
+            </div>
+
+            <!-- VIEW 1: FLASHCARD (CHÍNH) -->
+            <div id="view-flashcard" class="flashcard-view" style="display: flex; flex-direction: column; flex: 1;">
+                <div class="flashcard-wrapper" id="card-touch-area">
+                    <div class="flashcard" id="main-flashcard" onclick="flipCard()">
+                        <!-- Front Face -->
+                        <div class="card-face card-face-front">
+                            <div class="card-face-header">
+                                <span class="card-category-tag" id="fc-front-tag">💻 TechCommon</span>
+                                <span class="card-status-indicator" id="fc-front-status">
+                                    <i class="ri-time-line"></i> Cần ôn
+                                </span>
+                            </div>
+
+                            <div class="card-word-center">
+                                <div class="card-main-word" id="fc-front-word">Microcontroller</div>
+                                <div class="card-phonetic-ipa" id="fc-front-ipa">/ˌmaɪ.kroʊ.kənˈtroʊ.lɚ/</div>
+                                <div>
+                                    <button type="button" class="btn-audio-hero" onclick="event.stopPropagation(); playCurrentAudio()" title="Nghe phát âm">
+                                        <i class="ri-volume-up-fill"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="card-touch-hint">
+                                <i class="ri-hand-coin-line"></i> Chạm để lật xem nghĩa • Vuốt Trái/Phải để đánh giá
+                            </div>
+                        </div>
+
+                        <!-- Back Face -->
+                        <div class="card-face card-face-back">
+                            <div class="card-face-header">
+                                <span class="card-category-tag" id="fc-back-tag">💻 TechCommon</span>
+                                <span class="card-status-indicator" id="fc-back-status">
+                                    <i class="ri-time-line"></i> Cần ôn
+                                </span>
+                            </div>
+
+                            <div class="card-back-body">
+                                <div>
+                                    <div class="back-meaning-title">Nghĩa tiếng Việt</div>
+                                    <div class="back-meaning-text" id="fc-back-meaning">Vi điều khiển: chip tích hợp bộ xử lý và bộ nhớ</div>
+                                </div>
+
+                                <div class="back-example-box" id="fc-back-example-box">
+                                    <div class="back-example-en" id="fc-back-example">Modern automotive ECUs rely on a high-performance 32-bit microcontroller.</div>
+                                    <div class="back-example-listen" onclick="event.stopPropagation(); playExampleAudio()">
+                                        <i class="ri-volume-up-line"></i> Nghe đọc câu ví dụ
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="card-touch-hint">
+                                <i class="ri-repeat-line"></i> Chạm để lật lại mặt trước
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Auxiliary Controls (Shuffle, Speed) -->
+                <div class="aux-controls">
+                    <button type="button" class="btn-aux" onclick="shuffleDeck()" title="Trộn ngẫu nhiên danh sách">
+                        <i class="ri-shuffle-line"></i> Trộn thẻ
+                    </button>
+                    <span id="card-progress-indicator" style="font-size: 13px; font-weight: 700; color: var(--text-muted);">
+                        1 / 10
+                    </span>
+                    <button type="button" class="btn-aux" id="btn-toggle-speed" onclick="cycleSpeechSpeed()" title="Tốc độ đọc">
+                        <i class="ri-speed-line"></i> <span id="speed-label">1.0x</span>
+                    </button>
+                </div>
+
+                <!-- Thumb Zone (Nửa Dưới - Thao Tác 1 Tay) -->
+                <div class="thumb-controls">
+                    <button type="button" class="btn-thumb btn-thumb-learning" onclick="markCard(false)">
+                        <i class="ri-close-circle-line" style="font-size: 20px;"></i>
+                        <span>CẦN ÔN</span>
+                    </button>
+
+                    <button type="button" class="btn-walk-mode" id="btn-walk-trigger" onclick="toggleWalkMode()" title="Bật/Tắt chế độ đi đường rảnh tay">
+                        <i class="ri-walk-line" id="walk-icon" style="font-size: 24px;"></i>
+                        <span class="walk-label" id="walk-text">ĐI ĐƯỜNG</span>
+                    </button>
+
+                    <button type="button" class="btn-thumb btn-thumb-mastered" onclick="markCard(true)">
+                        <i class="ri-checkbox-circle-line" style="font-size: 20px;"></i>
+                        <span>ĐÃ NHỚ</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- VIEW 2: QUIZ TRẮC NGHIỆM -->
+            <div id="view-quiz" class="quiz-view">
+                <div class="quiz-streak-bar">
+                    <span>🔥 Chuỗi đúng: <strong id="quiz-streak" style="color: #f59e0b;">0</strong></span>
+                    <span>Câu: <strong id="quiz-count">1/10</strong></span>
+                </div>
+
+                <div class="quiz-card">
+                    <div class="quiz-question-word" id="quiz-word">Concurrency</div>
+                    <div class="quiz-question-ipa" id="quiz-ipa">/kənˈkɝː.ən.si/</div>
+                    <button type="button" class="btn-audio-hero" style="width: 44px; height: 44px; font-size: 20px; margin-bottom: 6px;" onclick="playWordAudio(currentQuizItem ? currentQuizItem.word : '')">
+                        <i class="ri-volume-up-fill"></i>
+                    </button>
+                    <p style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">Chọn nghĩa tiếng Việt đúng nhất:</p>
+                </div>
+
+                <div class="quiz-options" id="quiz-options-container">
+                    <!-- 4 Option buttons rendered by JS -->
+                </div>
+            </div>
+
+            <!-- VIEW 3: LIST DANH SÁCH & TÌM KIẾM -->
+            <div id="view-list" class="list-view">
+                <div class="search-box">
+                    <i class="ri-search-line"></i>
+                    <input type="text" class="search-input" id="search-vocab-input" placeholder="Tìm theo từ tiếng Anh hoặc nghĩa tiếng Việt..." oninput="onSearchInput(event)">
+                </div>
+
+                <div class="vocab-list-items" id="vocab-list-container">
+                    <!-- Items rendered by JS -->
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Quick Add Word Modal Sheet -->
+    <div class="modal-overlay" id="add-word-modal">
+        <div class="modal-sheet">
+            <div class="modal-header">
+                <h3>Thêm Từ Vựng Tiếng Anh Mới</h3>
+                <button type="button" class="btn-icon-top" onclick="closeAddModal()">
+                    <i class="ri-close-line"></i>
+                </button>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Từ tiếng Anh (*)</label>
+                <input type="text" class="form-input" id="new-word-input" placeholder="Ví dụ: Resilience" autofocus>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Phiên âm IPA</label>
+                <input type="text" class="form-input" id="new-ipa-input" placeholder="Ví dụ: /rɪˈzɪl.jəns/">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Nghĩa tiếng Việt (*)</label>
+                <input type="text" class="form-input" id="new-meaning-input" placeholder="Ví dụ: Khả năng phục hồi, kiên cường">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Câu ví dụ</label>
+                <input type="text" class="form-input" id="new-example-input" placeholder="Ví dụ: The system demonstrates high resilience under stress.">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Chủ đề</label>
+                <select class="form-input" id="new-tag-input">
+                    <option value="TechCommon">💻 Kỹ thuật chung (TechCommon)</option>
+                    <option value="TechAdvanced">🔧 Kỹ thuật chuyên sâu (TechAdvanced)</option>
+                    <option value="TOEIC">🎯 Tiếng Anh TOEIC</option>
+                    <option value="Other">📝 Khác</option>
+                </select>
+            </div>
+            <button type="button" class="btn-submit-word" onclick="submitNewWord()">
+                <i class="ri-check-line"></i> Lưu Vào Kho Từ Vựng School
+            </button>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div class="toast" id="toast-msg"></div>
+
+    <script>
+        // --- DATA & STATE ---
+        const VOCAB_USER = 'school';
+        const STORAGE_KEY = 'schooldb_school_vocab_items';
+        const LEGACY_KEY = 'schooldb_vocab_items';
+
+        let vocabItems = [];
+        let activeDeck = [];
+        let currentIndex = 0;
+        let isCardFlipped = false;
+        let currentMode = 'flashcard'; // flashcard | quiz | list
+        let activeTag = 'all';
+        let searchQuery = '';
+        let speechSpeed = 1.0;
+        let walkModeActive = false;
+        let walkTimer = null;
+        let currentQuizItem = null;
+        let quizStreak = 0;
+        let quizTotal = 0;
+
+        // --- FIREBASE INIT ---
+        let db = null;
+        if (typeof window.USE_FIREBASE !== 'undefined' && window.USE_FIREBASE && window.firebaseConfig) {
+            try {
+                if (!firebase.apps.length) firebase.initializeApp(window.firebaseConfig);
+                db = firebase.firestore();
+                db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
+            } catch (e) { console.warn('Firebase init error:', e); }
+        }
+
+        // --- THEME ---
+        const themeBtn = document.getElementById('btn-theme-toggle');
+        let currentTheme = localStorage.getItem('theme') || 'dark';
+        function applyTheme(th) {
+            currentTheme = th;
+            document.documentElement.setAttribute('data-theme', th);
+            if (themeBtn) themeBtn.innerHTML = th === 'dark' ? '<i class="ri-moon-line"></i>' : '<i class="ri-sun-line"></i>';
+            try { localStorage.setItem('theme', th); } catch (e) {}
+        }
+        applyTheme(currentTheme);
+        themeBtn.onclick = () => applyTheme(currentTheme === 'dark' ? 'light' : 'dark');
+
+        // --- TOAST NOTIFICATION ---
+        const toastEl = document.getElementById('toast-msg');
+        let toastTimeout = null;
+        function showToast(msg) {
+            if (!toastEl) return;
+            toastEl.textContent = msg;
+            toastEl.classList.add('show');
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => toastEl.classList.remove('show'), 2200);
+        }
+
+        // --- LOAD VOCABULARY ---
+        function loadVocab() {
+            let stored = localStorage.getItem(STORAGE_KEY);
+            let parsed = null;
+            if (stored) {
+                try { parsed = JSON.parse(stored); } catch (e) {}
+            }
+            if ((!parsed || !Array.isArray(parsed) || parsed.length === 0)) {
+                let legacy = localStorage.getItem(LEGACY_KEY);
+                if (legacy) {
+                    try {
+                        let lp = JSON.parse(legacy);
+                        if (Array.isArray(lp) && lp.length > 0) {
+                            parsed = lp;
+                            localStorage.setItem(STORAGE_KEY, legacy);
+                        }
+                    } catch (e) {}
+                }
+            }
+
+            if (parsed && Array.isArray(parsed) && parsed.length > 0) {
+                vocabItems = parsed;
+            } else {
+                // Fallback starters
+                vocabItems = [
+                    { id: 'v1', word: 'Microcontroller', phonetic: '/ˌmaɪ.kroʊ.kənˈtroʊ.lɚ/', meaning: 'Vi điều khiển: chip tích hợp bộ vi xử lý và bộ nhớ', example: 'Modern automotive ECUs rely on a high-performance 32-bit microcontroller.', tag: 'TechAdvanced', status: 'learning', user: 'school' },
+                    { id: 'v2', word: 'Concurrency', phonetic: '/kənˈkɝː.ən.si/', meaning: 'Tính đồng thời: khả năng phân chia và xử lý nhiều tác vụ cùng lúc', example: 'Concurrency control is critical for high-throughput distributed systems.', tag: 'TechAdvanced', status: 'mastered', user: 'school' },
+                    { id: 'v3', word: 'Refactoring', phonetic: '/riːˈfæk.tər.ɪŋ/', meaning: 'Tái cấu trúc mã nguồn: cải thiện thiết kế cấu trúc code bên trong', example: 'Regular code refactoring improves software maintainability.', tag: 'TechCommon', status: 'mastered', user: 'school' },
+                    { id: 'v4', word: 'Latency', phonetic: '/ˈleɪ.tən.si/', meaning: 'Độ trễ: khoảng thời gian từ khi gửi yêu cầu đến khi nhận phản hồi', example: 'We optimized our network layer to achieve sub-millisecond API latency.', tag: 'TechCommon', status: 'learning', user: 'school' },
+                    { id: 'v5', word: 'Collaborate', phonetic: '/kəˈlæb.ə.reɪt/', meaning: 'Hợp tác, cộng tác cùng làm việc trong dự án', example: 'Engineers collaborate with the product team to design better features.', tag: 'TOEIC', status: 'mastered', user: 'school' }
+                ];
+                saveVocab();
+            }
+
+            filterDeck();
+            renderStats();
+            listenFirebase();
+        }
+
+        function saveVocab(itemToSync = null) {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(vocabItems));
+                localStorage.setItem(LEGACY_KEY, JSON.stringify(vocabItems));
+            } catch (e) {}
+
+            renderStats();
+
+            // Broadcast to other tabs (School NoteBook on same device)
+            try {
+                if (typeof BroadcastChannel !== 'undefined') {
+                    const bc = new BroadcastChannel('schooldb_channel');
+                    bc.postMessage({ type: 'vocab-updated', count: vocabItems.length, user: VOCAB_USER });
+                    bc.close();
+                }
+            } catch (e) {}
+
+            // Sync to Firestore
+            if (db) {
+                if (itemToSync && itemToSync.id) {
+                    itemToSync.user = VOCAB_USER;
+                    db.collection('vocab_items').doc(itemToSync.id).set(itemToSync, { merge: true }).catch(() => {});
+                }
+            }
+        }
+
+        // --- FIRESTORE REALTIME SYNC ---
+        function listenFirebase() {
+            if (!db) return;
+            db.collection('vocab_items').onSnapshot(snapshot => {
+                let changed = false;
+                snapshot.docs.forEach(doc => {
+                    if (doc.metadata && doc.metadata.hasPendingWrites) return;
+                    const data = doc.data() || {};
+                    const u = (data && data.user) ? data.user : 'school';
+                    if (u !== 'school') return;
+
+                    const idx = vocabItems.findIndex(i => i.id === doc.id);
+                    if (idx === -1) {
+                        vocabItems.unshift(Object.assign({}, data, { id: doc.id }));
+                        changed = true;
+                    } else if (data.updatedAt && data.updatedAt !== vocabItems[idx].updatedAt) {
+                        vocabItems[idx] = Object.assign({}, vocabItems[idx], data);
+                        changed = true;
+                    }
+                });
+                if (changed) {
+                    filterDeck();
+                    renderStats();
+                }
+            }, err => console.warn('Vocab sync error:', err));
+        }
+
+        // --- FILTERING & DECK ---
+        function filterDeck() {
+            let filtered = vocabItems;
+            if (activeTag !== 'all') {
+                filtered = filtered.filter(i => i.tag === activeTag);
+            }
+            if (searchQuery.trim()) {
+                const q = searchQuery.toLowerCase().trim();
+                filtered = filtered.filter(i => (i.word && i.word.toLowerCase().includes(q)) || (i.meaning && i.meaning.toLowerCase().includes(q)));
+            }
+            activeDeck = filtered;
+            if (currentIndex >= activeDeck.length) currentIndex = 0;
+            renderCurrentCard();
+            renderList();
+        }
+
+        function onTagFilterChange() {
+            const select = document.getElementById('tag-filter-select');
+            activeTag = select ? select.value : 'all';
+            currentIndex = 0;
+            filterDeck();
+        }
+
+        function renderStats() {
+            const total = vocabItems.length;
+            const mastered = vocabItems.filter(i => i.status === 'mastered').length;
+            const learning = total - mastered;
+
+            const tEl = document.getElementById('stat-total');
+            const mEl = document.getElementById('stat-mastered');
+            const lEl = document.getElementById('stat-learning');
+            if (tEl) tEl.textContent = total;
+            if (mEl) mEl.textContent = mastered;
+            if (lEl) lEl.textContent = learning;
+        }
+
+        // --- FLASHCARD LOGIC ---
+        const cardEl = document.getElementById('main-flashcard');
+
+        function renderCurrentCard() {
+            if (!cardEl) return;
+            const progressEl = document.getElementById('card-progress-indicator');
+
+            if (activeDeck.length === 0) {
+                document.getElementById('fc-front-word').textContent = 'Chưa có từ vựng';
+                document.getElementById('fc-front-ipa').textContent = '/.../';
+                document.getElementById('fc-front-tag').textContent = 'Trống';
+                document.getElementById('fc-back-meaning').textContent = 'Hãy thêm từ vựng mới bằng nút (+) ở góc trên!';
+                document.getElementById('fc-back-example').textContent = '';
+                if (progressEl) progressEl.textContent = '0 / 0';
+                return;
+            }
+
+            const item = activeDeck[currentIndex];
+            isCardFlipped = false;
+            cardEl.classList.remove('is-flipped');
+
+            // Front
+            document.getElementById('fc-front-word').textContent = item.word || '';
+            document.getElementById('fc-front-ipa').textContent = item.phonetic || '/.../';
+            document.getElementById('fc-front-tag').textContent = item.tag || 'Khác';
+            const statusFront = document.getElementById('fc-front-status');
+            if (statusFront) {
+                statusFront.className = 'card-status-indicator ' + (item.status === 'mastered' ? 'status-mastered' : 'status-learning');
+                statusFront.innerHTML = item.status === 'mastered' ? '<i class="ri-checkbox-circle-fill"></i> Đã nhớ' : '<i class="ri-time-line"></i> Cần ôn';
+            }
+
+            // Back
+            document.getElementById('fc-back-tag').textContent = item.tag || 'Khác';
+            document.getElementById('fc-back-meaning').textContent = item.meaning || '';
+            document.getElementById('fc-back-example').textContent = item.example || '';
+            const statusBack = document.getElementById('fc-back-status');
+            if (statusBack) {
+                statusBack.className = 'card-status-indicator ' + (item.status === 'mastered' ? 'status-mastered' : 'status-learning');
+                statusBack.innerHTML = item.status === 'mastered' ? '<i class="ri-checkbox-circle-fill"></i> Đã nhớ' : '<i class="ri-time-line"></i> Cần ôn';
+            }
+
+            if (progressEl) {
+                progressEl.textContent = `${currentIndex + 1} / ${activeDeck.length}`;
+            }
+        }
+
+        function flipCard() {
+            if (activeDeck.length === 0) return;
+            isCardFlipped = !isCardFlipped;
+            cardEl.classList.toggle('is-flipped', isCardFlipped);
+            if (isCardFlipped) {
+                // Auto read meaning or example if in walk mode
+            }
+        }
+
+        function markCard(isMastered) {
+            if (activeDeck.length === 0) return;
+            const item = activeDeck[currentIndex];
+            item.status = isMastered ? 'mastered' : 'learning';
+            saveVocab(item);
+
+            // Haptic vibration feedback
+            if ('vibrate' in navigator) navigator.vibrate(25);
+
+            showToast(isMastered ? `✅ Đã nhớ: "${item.word}"` : `🔄 Cần ôn lại: "${item.word}"`);
+
+            // Next card with brief animation
+            currentIndex = (currentIndex + 1) % activeDeck.length;
+            renderCurrentCard();
+        }
+
+        function shuffleDeck() {
+            if (activeDeck.length <= 1) return;
+            for (let i = activeDeck.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [activeDeck[i], activeDeck[j]] = [activeDeck[j], activeDeck[i]];
+            }
+            currentIndex = 0;
+            renderCurrentCard();
+            showToast('🔀 Đã xáo trộn thứ tự từ vựng');
+        }
+
+        // --- AUDIO / TEXT TO SPEECH ---
+        function playWordAudio(text) {
+            if (!text || typeof window.speechSynthesis === 'undefined') return;
+            window.speechSynthesis.cancel();
+            const utter = new SpeechSynthesisUtterance(text);
+            utter.lang = 'en-US';
+            utter.rate = speechSpeed;
+
+            // Pick high quality voice if available
+            const voices = window.speechSynthesis.getVoices();
+            const englishVoice = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Samantha')));
+            if (englishVoice) utter.voice = englishVoice;
+
+            window.speechSynthesis.speak(utter);
+        }
+
+        function playCurrentAudio() {
+            if (activeDeck.length === 0) return;
+            playWordAudio(activeDeck[currentIndex].word);
+        }
+
+        function playExampleAudio() {
+            if (activeDeck.length === 0) return;
+            const ex = activeDeck[currentIndex].example;
+            if (ex) playWordAudio(ex);
+        }
+
+        function cycleSpeechSpeed() {
+            if (speechSpeed === 1.0) speechSpeed = 0.8;
+            else if (speechSpeed === 0.8) speechSpeed = 1.2;
+            else speechSpeed = 1.0;
+
+            const label = document.getElementById('speed-label');
+            if (label) label.textContent = speechSpeed + 'x';
+            showToast(`⚡ Tốc độ đọc: ${speechSpeed}x`);
+        }
+
+        // --- HANDS-FREE WALK MODE (ĐI ĐƯỜNG RẢNH TAY) ---
+        function toggleWalkMode() {
+            walkModeActive = !walkModeActive;
+            const btn = document.getElementById('btn-walk-trigger');
+            const icon = document.getElementById('walk-icon');
+            const text = document.getElementById('walk-text');
+            const banner = document.getElementById('walk-mode-banner');
+
+            if (btn) btn.classList.toggle('active', walkModeActive);
+            if (banner) banner.classList.toggle('active', walkModeActive);
+
+            if (walkModeActive) {
+                if (icon) icon.className = 'ri-pause-line';
+                if (text) text.textContent = 'TẠM DỪNG';
+                showToast('🎧 Chế độ Đi Đường ĐANG BẬT');
+                runWalkStep();
+            } else {
+                if (icon) icon.className = 'ri-walk-line';
+                if (text) text.textContent = 'ĐI ĐƯỜNG';
+                clearTimeout(walkTimer);
+                window.speechSynthesis.cancel();
+                showToast('⏸ Đã tạm dừng Chế độ Đi Đường');
+            }
+        }
+
+        function stopWalkMode() {
+            if (walkModeActive) toggleWalkMode();
+        }
+
+        function runWalkStep() {
+            if (!walkModeActive || activeDeck.length === 0) return;
+            const item = activeDeck[currentIndex];
+
+            // 1. Lật thẻ về mặt trước và phát âm từ
+            isCardFlipped = false;
+            cardEl.classList.remove('is-flipped');
+            playWordAudio(item.word);
+
+            // 2. Tạm dừng 2.5s để người học nhớ nghĩa
+            walkTimer = setTimeout(() => {
+                if (!walkModeActive) return;
+                // Lật thẻ xem nghĩa
+                isCardFlipped = true;
+                cardEl.classList.add('is-flipped');
+
+                // 3. Tạm dừng 2.5s rồi chuyển sang thẻ kế tiếp
+                walkTimer = setTimeout(() => {
+                    if (!walkModeActive) return;
+                    currentIndex = (currentIndex + 1) % activeDeck.length;
+                    renderCurrentCard();
+                    runWalkStep();
+                }, 2500);
+            }, 2500);
+        }
+
+        // --- TOUCH / SWIPE GESTURES ---
+        let startX = 0;
+        let startY = 0;
+        let currentX = 0;
+        let isDragging = false;
+        const touchArea = document.getElementById('card-touch-area');
+
+        if (touchArea) {
+            touchArea.addEventListener('pointerdown', (e) => {
+                startX = e.clientX;
+                startY = e.clientY;
+                currentX = startX;
+                isDragging = true;
+                cardEl.classList.add('swiping');
+            });
+
+            window.addEventListener('pointermove', (e) => {
+                if (!isDragging) return;
+                currentX = e.clientX;
+                const deltaX = currentX - startX;
+                const deltaY = e.clientY - startY;
+
+                // Rotate slightly as dragged
+                const rotate = deltaX * 0.05;
+                cardEl.style.transform = `translateX(${deltaX}px) rotate(${rotate}deg) ${isCardFlipped ? 'rotateY(180deg)' : ''}`;
+
+                if (deltaX > 40) {
+                    cardEl.classList.add('swipe-mastered');
+                    cardEl.classList.remove('swipe-learning');
+                } else if (deltaX < -40) {
+                    cardEl.classList.add('swipe-learning');
+                    cardEl.classList.remove('swipe-mastered');
+                } else {
+                    cardEl.classList.remove('swipe-mastered', 'swipe-learning');
+                }
+            });
+
+            window.addEventListener('pointerup', (e) => {
+                if (!isDragging) return;
+                isDragging = false;
+                cardEl.classList.remove('swiping');
+                cardEl.style.transform = '';
+                cardEl.classList.remove('swipe-mastered', 'swipe-learning');
+
+                const deltaX = currentX - startX;
+                if (deltaX > 80) {
+                    // Swiped Right -> Mastered
+                    markCard(true);
+                } else if (deltaX < -80) {
+                    // Swiped Left -> Learning
+                    markCard(false);
+                }
+            });
+        }
+
+        // --- QUIZ VIEW (PHẢN XẠ 4 ĐÁP ÁN) ---
+        function startQuiz() {
+            quizStreak = 0;
+            quizTotal = 0;
+            loadNextQuiz();
+        }
+
+        function loadNextQuiz() {
+            if (vocabItems.length === 0) return;
+            quizTotal++;
+            const countEl = document.getElementById('quiz-count');
+            const streakEl = document.getElementById('quiz-streak');
+            if (countEl) countEl.textContent = `${quizTotal}`;
+            if (streakEl) streakEl.textContent = `${quizStreak}`;
+
+            // Chọn 1 câu hỏi ngẫu nhiên
+            const qIdx = Math.floor(Math.random() * vocabItems.length);
+            currentQuizItem = vocabItems[qIdx];
+
+            document.getElementById('quiz-word').textContent = currentQuizItem.word;
+            document.getElementById('quiz-ipa').textContent = currentQuizItem.phonetic || '/.../';
+
+            // Tạo 3 phương án sai ngẫu nhiên
+            let pool = vocabItems.filter(i => i.id !== currentQuizItem.id);
+            for (let i = pool.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [pool[i], pool[j]] = [pool[j], pool[i]];
+            }
+            let options = [currentQuizItem.meaning, ...(pool.slice(0, 3).map(i => i.meaning))];
+            // Trộn thứ tự 4 đáp án
+            for (let i = options.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [options[i], options[j]] = [options[j], options[i]];
+            }
+
+            const container = document.getElementById('quiz-options-container');
+            container.innerHTML = options.map((opt, idx) => `
+                <button type="button" class="quiz-btn" onclick="checkQuizAnswer(this, '${opt.replace(/'/g, "\\'")}')">
+                    <span>${String.fromCharCode(65 + idx)}. ${opt}</span>
+                    <i class="ri-checkbox-blank-circle-line"></i>
+                </button>
+            `).join('');
+        }
+
+        function checkQuizAnswer(btn, chosenOpt) {
+            if (!currentQuizItem) return;
+            const container = document.getElementById('quiz-options-container');
+            const btns = container.querySelectorAll('.quiz-btn');
+            btns.forEach(b => b.style.pointerEvents = 'none');
+
+            const isCorrect = chosenOpt === currentQuizItem.meaning;
+            if (isCorrect) {
+                btn.classList.add('correct');
+                btn.querySelector('i').className = 'ri-checkbox-circle-fill';
+                quizStreak++;
+                if ('vibrate' in navigator) navigator.vibrate([20, 50, 20]);
+                showToast('🎉 Chính xác! +1 Streak');
+            } else {
+                btn.classList.add('wrong');
+                btn.querySelector('i').className = 'ri-close-circle-fill';
+                quizStreak = 0;
+                if ('vibrate' in navigator) navigator.vibrate(80);
+                // Highlight correct button
+                btns.forEach(b => {
+                    if (b.textContent.includes(currentQuizItem.meaning)) {
+                        b.classList.add('correct');
+                    }
+                });
+                showToast('❌ Chưa đúng rồi!');
+            }
+
+            const streakEl = document.getElementById('quiz-streak');
+            if (streakEl) streakEl.textContent = `${quizStreak}`;
+
+            setTimeout(() => {
+                loadNextQuiz();
+            }, 1400);
+        }
+
+        // --- LIST VIEW ---
+        function renderList() {
+            const container = document.getElementById('vocab-list-container');
+            if (!container) return;
+
+            if (activeDeck.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: var(--text-muted);">
+                        <i class="ri-inbox-line" style="font-size: 36px; opacity: 0.5;"></i>
+                        <p style="margin-top: 10px; font-size: 14px;">Không tìm thấy từ vựng nào.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = activeDeck.map(item => `
+                <div class="vocab-list-card">
+                    <div class="vocab-list-card-left" onclick="openFlashcardWithItem('${item.id}')">
+                        <div class="vocab-list-word">
+                            <span>${item.word}</span>
+                            <span class="vocab-list-ipa">${item.phonetic || ''}</span>
+                        </div>
+                        <div class="vocab-list-meaning">${item.meaning || ''}</div>
+                    </div>
+                    <div class="vocab-list-actions">
+                        <button type="button" class="btn-list-audio" onclick="playWordAudio('${item.word.replace(/'/g, "\\'")}')" title="Phát âm">
+                            <i class="ri-volume-up-line"></i>
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function openFlashcardWithItem(id) {
+            const idx = activeDeck.findIndex(i => i.id === id);
+            if (idx !== -1) {
+                currentIndex = idx;
+                setMode('flashcard');
+            }
+        }
+
+        function onSearchInput(e) {
+            searchQuery = e.target.value;
+            filterDeck();
+        }
+
+        // --- MODE SWITCHER ---
+        function setMode(mode) {
+            currentMode = mode;
+            stopWalkMode();
+
+            document.getElementById('tab-flashcard').classList.toggle('active', mode === 'flashcard');
+            document.getElementById('tab-quiz').classList.toggle('active', mode === 'quiz');
+            document.getElementById('tab-list').classList.toggle('active', mode === 'list');
+
+            document.getElementById('view-flashcard').style.display = (mode === 'flashcard') ? 'flex' : 'none';
+            document.getElementById('view-quiz').classList.toggle('active', mode === 'quiz');
+            document.getElementById('view-list').classList.toggle('active', mode === 'list');
+
+            if (mode === 'flashcard') renderCurrentCard();
+            else if (mode === 'quiz') startQuiz();
+            else if (mode === 'list') renderList();
+        }
+
+        // --- ADD WORD MODAL ---
+        const modalEl = document.getElementById('add-word-modal');
+        document.getElementById('btn-open-add').onclick = () => {
+            modalEl.classList.add('active');
+            document.getElementById('new-word-input').focus();
+        };
+        function closeAddModal() {
+            modalEl.classList.remove('active');
+        }
+        modalEl.onclick = (e) => {
+            if (e.target === modalEl) closeAddModal();
+        };
+
+        function submitNewWord() {
+            const word = document.getElementById('new-word-input').value.trim();
+            const meaning = document.getElementById('new-meaning-input').value.trim();
+            const ipa = document.getElementById('new-ipa-input').value.trim();
+            const example = document.getElementById('new-example-input').value.trim();
+            const tag = document.getElementById('new-tag-input').value;
+
+            if (!word || !meaning) {
+                alert('Vui lòng nhập Từ tiếng Anh và Nghĩa tiếng Việt!');
+                return;
+            }
+
+            const newItem = {
+                id: 'v_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5),
+                word: word,
+                phonetic: ipa || '/.../',
+                meaning: meaning,
+                example: example || '',
+                tag: tag || 'TechCommon',
+                status: 'learning',
+                user: VOCAB_USER,
+                createdAt: Date.now()
+            };
+
+            vocabItems.unshift(newItem);
+            saveVocab(newItem);
+            filterDeck();
+            closeAddModal();
+
+            // Clear form
+            document.getElementById('new-word-input').value = '';
+            document.getElementById('new-meaning-input').value = '';
+            document.getElementById('new-ipa-input').value = '';
+            document.getElementById('new-example-input').value = '';
+
+            showToast(`✅ Đã thêm: "${word}"`);
+        }
+
+        // --- PWA INSTALLATION PROMPT ---
+        let deferredPrompt = null;
+        const pwaBanner = document.getElementById('pwa-install-banner');
+        const pwaInstallBtn = document.getElementById('btn-pwa-install');
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            if (pwaBanner) pwaBanner.classList.add('active');
+        });
+
+        if (pwaInstallBtn) {
+            pwaInstallBtn.onclick = () => {
+                if (!deferredPrompt) return;
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((choice) => {
+                    if (choice.outcome === 'accepted') {
+                        showToast('🎉 Đã thêm School EB vào điện thoại!');
+                    }
+                    deferredPrompt = null;
+                    if (pwaBanner) pwaBanner.classList.remove('active');
+                });
+            };
+        }
+
+        // --- SERVICE WORKER FOR OFFLINE ---
+        if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+            navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW err:', err));
+        }
+
+        // --- INITIALIZE ---
+        window.addEventListener('DOMContentLoaded', () => {
+            loadVocab();
+        });
+    </script>
+</body>
+</html>

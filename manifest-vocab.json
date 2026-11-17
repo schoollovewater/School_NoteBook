@@ -1,0 +1,46 @@
+{
+  "name": "School EB — Tiếng Anh Bỏ Túi",
+  "short_name": "School EB",
+  "description": "Nhánh từ vựng tiếng Anh bỏ túi của School: lật thẻ 3D, chế độ đi đường rảnh tay tự động đọc, quiz phản xạ, chạy offline 100%.",
+  "id": "/school/vocab",
+  "start_url": "/school/vocab",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0b1120",
+  "theme_color": "#0b1120",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Lật Thẻ Flashcard",
+      "short_name": "Flashcard",
+      "description": "Luyện lật thẻ từ vựng 3D",
+      "url": "/school/vocab#flashcard"
+    },
+    {
+      "name": "Chế độ Đi Đường",
+      "short_name": "Đi đường",
+      "description": "Tự động phát âm và đọc từ vựng rảnh tay",
+      "url": "/school/vocab#walk"
+    },
+    {
+      "name": "Quiz Trắc Nghiệm",
+      "short_name": "Quiz",
+      "description": "Luyện phản xạ từ vựng",
+      "url": "/school/vocab#quiz"
+    }
+  ]
+}

@@ -229,6 +229,18 @@ node mininote.js --todo -t "Việc hôm nay" "Học từ vựng\nLàm bài tập
 * **Mini Note Phân luồng chuẩn xác**: Mini Note PWA hỗ trợ nút gạt chuyển nhánh nhanh `🏫 SCHOOL` / `💧 WATER`. Khi bấm "Gửi", ghi chú và từ vựng sẽ nạp chuẩn xác vào Inbox của đúng User đang chọn, kèm theo giao diện đổi màu tương ứng.
 * **Đồng bộ Cloud Firestore phân vùng**: Các tài liệu `notes` và `vocab_items` trên Firestore mang trường `user: 'school'` hoặc `user: 'water'`, các thiết bị khác nhau chỉ lắng nghe và nạp ghi chú thuộc về User đang kích hoạt.
 
+### 🎧 Nhánh Từ Vựng Bỏ Túi School EB (EB Vocab Pocket — v4.3.3)
+* **Đường dẫn**: `/school/vocab` hoặc `/school/eb`
+* **Mục tiêu**: Ứng dụng PWA chuyên biệt cho việc học từ vựng tiếng Anh trên điện thoại di động, tối ưu thao tác 1 tay và dùng tốt khi đang đi ngoài đường.
+* **Các tính năng nổi bật**:
+  - 🎴 **Lật thẻ 3D vuốt chạm (Swipe Flashcards)**: Chạm để lật thẻ 3D mượt mà. Vuốt sang Phải để đánh dấu Đã nhớ (Mastered), Vuốt sang Trái để đánh dấu Cần ôn (Learning).
+  - 🚶 **Chế độ Đi Đường Rảnh Tay (Hands-free Walk Mode)**: Bấm nút tròn trung tâm để kích hoạt chu kỳ tự động: đọc từ vựng tiếng Anh -> tạm dừng 2.5s để não tự nhớ -> tự lật xem nghĩa tiếng Việt -> tự chuyển thẻ kế tiếp. Cực kỳ tiện lợi khi đeo tai nghe đi bộ, đi xe buýt, tập thể dục.
+  - 🔊 **Phát âm bản xứ tự nhiên (Web Speech API)**: Phát âm chuẩn En-US với nút Loa to ngay mặt trước thẻ và khả năng tùy chỉnh tốc độ đọc (0.8x, 1.0x, 1.2x).
+  - 🎯 **Quiz Phản Xạ 4 Đáp Án**: Luyện phản xạ trắc nghiệm nhanh với chuỗi đúng liên tiếp (Streak) và âm báo rung haptic.
+  - 📱 **Tối ưu Vùng ngón cái (Thumb Zone)**: Toàn bộ nút thao tác chính nằm ở nửa dưới màn hình để điều khiển dễ dàng bằng 1 tay khi di chuyển.
+  - 📲 **Cài đặt PWA riêng (`manifest-vocab.json`)**: Có thể thêm trực tiếp ra màn hình chính điện thoại như ứng dụng native độc lập, chạy offline 100%.
+  - 🔄 **Đồng bộ tự động 2 chiều**: Dùng chung kho từ vựng với Sổ tay School (`schooldb_school_vocab_items` & Firestore `vocab_items`).
+
 ### 🃏 Ôn luyện Flashcard 3D
 * **`Space` (Phím cách)**: Lật thẻ xem nghĩa và ví dụ / lật lại.
 * **`→` (Mũi tên sang phải)**: Chuyển sang thẻ tiếp theo.

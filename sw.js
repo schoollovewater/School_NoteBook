@@ -3,17 +3,20 @@
  * Hỗ trợ offline đầy đủ cho cả Sổ tay chính và Mini Note.
  */
 
-const CACHE_NAME = 'schooldb-v4.3.2';
+const CACHE_NAME = 'schooldb-v4.3.3';
 
 const PRECACHE_URLS = [
     './',
     './index.html',
     './app.html',
     './mini.html',
+    './vocab.html',
     './school/index.html',
     './water/index.html',
     './school/mini/index.html',
     './water/mini/index.html',
+    './school/vocab/index.html',
+    './school/eb/index.html',
     './styles.css?v=4.3.2',
     './app.js?v=4.3.2',
     './shared/note-schema.js?v=4.3.2',
@@ -21,6 +24,7 @@ const PRECACHE_URLS = [
     './firebase-config.js',
     './manifest.json',
     './manifest-mini.json',
+    './manifest-vocab.json',
     './icons/icon-192.png',
     './icons/icon-512.png',
     'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css',
@@ -104,6 +108,9 @@ self.addEventListener('fetch', (event) => {
                 // Nếu người dùng đang điều hướng tới trang web và mất mạng
                 if (request.mode === 'navigate') {
                     const reqUrl = request.url.toLowerCase();
+                    if (reqUrl.includes('/school/vocab') || reqUrl.includes('/school/eb') || reqUrl.includes('/vocab')) {
+                        return caches.match('./vocab.html');
+                    }
                     if (reqUrl.includes('/school/mini') || reqUrl.includes('/water/mini') || reqUrl.includes('/mini')) {
                         return caches.match('./mini.html');
                     }

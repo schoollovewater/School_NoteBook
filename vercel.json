@@ -3,6 +3,10 @@
   "cleanUrls": true,
   "trailingSlash": false,
   "rewrites": [
+    { "source": "/school/vocab", "destination": "/school/vocab/index.html" },
+    { "source": "/school/vocab/(.*)", "destination": "/school/vocab/index.html" },
+    { "source": "/school/eb", "destination": "/school/vocab/index.html" },
+    { "source": "/school/eb/(.*)", "destination": "/school/vocab/index.html" },
     { "source": "/school/mini", "destination": "/school/mini/index.html" },
     { "source": "/school/mini/(.*)", "destination": "/school/mini/index.html" },
     { "source": "/water/mini", "destination": "/water/mini/index.html" },
@@ -11,6 +15,7 @@
     { "source": "/school/(.*)", "destination": "/school/index.html" },
     { "source": "/water", "destination": "/water/index.html" },
     { "source": "/water/(.*)", "destination": "/water/index.html" },
+    { "source": "/vocab", "destination": "/vocab.html" },
     { "source": "/mini", "destination": "/mini.html" },
     { "source": "/app", "destination": "/app.html" }
   ]

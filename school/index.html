@@ -97,6 +97,9 @@
                 <button class="sidebar-btn sidebar-btn-mini" id="open-mini-btn" onclick="app.openMiniNote()">
                     <i class="ri-flashlight-line"></i> Ghi nhanh (Mini Note)
                 </button>
+                <button class="sidebar-btn" id="open-vocab-eb-btn" onclick="window.open((location.protocol === 'file:' ? 'vocab.html' : '/school/vocab'), '_blank')" style="color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.25);">
+                    <i class="ri-headphone-line"></i> School EB (Từ vựng) 🎧
+                </button>
             </div>
 
             <div class="sidebar-body" id="sidebar-body">
@@ -250,6 +253,9 @@
                         </div>
 
                         <div class="vocab-header-actions">
+                            <a href="/school/vocab" target="_blank" class="btn btn-secondary" style="display: inline-flex; align-items: center; gap: 6px; font-weight: 700; border-color: rgba(59, 130, 246, 0.4); color: #60a5fa;" title="Mở nhánh ứng dụng bỏ túi School EB cho điện thoại">
+                                <i class="ri-smartphone-line"></i> School EB Mobile 🎧
+                            </a>
                             <button class="btn btn-primary btn-add-vocab" onclick="vocab.openAddModal()">
                                 <i class="ri-add-circle-line"></i> Thêm từ mới
                             </button>
