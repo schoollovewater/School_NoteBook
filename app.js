@@ -1,5 +1,5 @@
 // --- CONFIG & STATE ---
-const APP_VERSION = 'v4.1.0';
+const APP_VERSION = 'v4.1.1';
 const DELETED_PAGES_KEY = 'schooldb_deleted_pages';
 const appState = {
     theme: localStorage.getItem('theme') || 'dark',
@@ -266,7 +266,9 @@ function initApp() {
         const keyInput = document.getElementById('setting-gemini-api-key');
         if (keyInput && typeof aiService !== 'undefined') keyInput.value = aiService.getApiKey();
         const modelSelect = document.getElementById('setting-gemini-model');
-        if (modelSelect && typeof aiService !== 'undefined') modelSelect.value = aiService.getModel();
+        if (modelSelect && typeof aiService !== 'undefined') {
+            aiService.updateModelSelectUI();
+        }
     });
     
     // Settings Save

@@ -173,7 +173,7 @@
     }
 
     return {
-        VERSION: '4.1.0',
+        VERSION: '4.1.1',
         STORAGE_KEYS: {
             pages: 'schooldb_pages',
             vocab: 'schooldb_vocab_items',

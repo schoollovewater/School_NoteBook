@@ -7,17 +7,112 @@ const aiService = {
     STORAGE_KEYS: {
         apiKey: 'schooldb_gemini_api_key',
         model: 'schooldb_gemini_model',
+        discoveredModels: 'schooldb_gemini_discovered_models',
         chatHistory: 'schooldb_ai_chat_history'
     },
     defaultModel: 'gemini-2.0-flash',
-    fallbackModel: 'gemini-1.5-flash',
+    fallbackModels: [
+        'gemini-2.0-flash',
+        'gemini-1.5-flash',
+        'gemini-1.5-flash-latest',
+        'gemini-1.5-flash-002',
+        'gemini-1.5-flash-001',
+        'gemini-2.0-flash-exp',
+        'gemini-1.5-pro',
+        'gemini-1.5-pro-latest',
+        'gemini-pro'
+    ],
+    apiVersions: ['v1beta', 'v1'],
 
     chatMessages: [],
     currentInlineResult: null,
+    lastInlineAction: null,
     activeQuiz: null,
     currentQuizIndex: 0,
     quizScore: 0,
     userAnswers: [],
+
+    cleanModelName(name) {
+        if (!name) return this.defaultModel;
+        return String(name).replace(/^models\//, '').trim();
+    },
+
+    getDiscoveredModels() {
+        try {
+            const raw = localStorage.getItem(this.STORAGE_KEYS.discoveredModels);
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+            }
+        } catch (e) {}
+        return null;
+    },
+
+    setDiscoveredModels(models) {
+        try {
+            if (Array.isArray(models) && models.length > 0) {
+                localStorage.setItem(this.STORAGE_KEYS.discoveredModels, JSON.stringify(models));
+            }
+        } catch (e) {}
+    },
+
+    getModelDisplayName(model) {
+        const clean = this.cleanModelName(model || this.getModel());
+        if (clean.includes('2.0-flash')) return 'Gemini 2.0 Flash';
+        if (clean.includes('1.5-flash')) return 'Gemini 1.5 Flash';
+        if (clean.includes('1.5-pro')) return 'Gemini 1.5 Pro';
+        if (clean.includes('pro')) return 'Gemini Pro';
+        return clean;
+    },
+
+    pickBestModel(modelsList) {
+        if (!modelsList || !modelsList.length) return this.defaultModel;
+        for (const pref of this.fallbackModels) {
+            if (modelsList.includes(pref)) return pref;
+        }
+        const flash = modelsList.find(m => m.includes('flash') && !m.includes('thinking'));
+        if (flash) return flash;
+        const anyFlash = modelsList.find(m => m.includes('flash'));
+        if (anyFlash) return anyFlash;
+        const pro = modelsList.find(m => m.includes('pro'));
+        if (pro) return pro;
+        return modelsList[0];
+    },
+
+    updateModelSelectUI(models = null) {
+        const select = document.getElementById('setting-gemini-model');
+        const current = this.getModel();
+        const list = models || this.getDiscoveredModels() || [
+            'gemini-2.0-flash',
+            'gemini-1.5-flash',
+            'gemini-1.5-pro'
+        ];
+
+        if (select) {
+            select.innerHTML = '';
+            const allOpts = [...list];
+            if (current && !allOpts.includes(current)) {
+                allOpts.unshift(current);
+            }
+            allOpts.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m;
+                let label = m;
+                if (m === 'gemini-2.0-flash') label += ' (Khuyên dùng - Siêu nhanh & Mới nhất)';
+                else if (m === 'gemini-1.5-flash') label += ' (Ổn định)';
+                else if (m === 'gemini-1.5-flash-latest') label += ' (Bản mới nhất)';
+                else if (m === 'gemini-1.5-pro') label += ' (Chuyên sâu)';
+                opt.textContent = label;
+                if (m === current) opt.selected = true;
+                select.appendChild(opt);
+            });
+        }
+
+        const badge = document.getElementById('ai-sidebar-model-badge');
+        if (badge) {
+            badge.textContent = this.getModelDisplayName(current);
+        }
+    },
 
     getApiKey() {
         return (localStorage.getItem(this.STORAGE_KEYS.apiKey) || '').trim();
@@ -28,11 +123,18 @@ const aiService = {
     },
 
     getModel() {
-        return localStorage.getItem(this.STORAGE_KEYS.model) || this.defaultModel;
+        const stored = localStorage.getItem(this.STORAGE_KEYS.model);
+        return this.cleanModelName(stored) || this.defaultModel;
     },
 
     setModel(model) {
-        localStorage.setItem(this.STORAGE_KEYS.model, model);
+        if (!model) return;
+        const clean = this.cleanModelName(model);
+        localStorage.setItem(this.STORAGE_KEYS.model, clean);
+        const badge = document.getElementById('ai-sidebar-model-badge');
+        if (badge) badge.textContent = this.getModelDisplayName(clean);
+        const select = document.getElementById('setting-gemini-model');
+        if (select && select.value !== clean) select.value = clean;
     },
 
     hasKey() {
@@ -122,20 +224,60 @@ const aiService = {
         const settingInput = document.getElementById('setting-gemini-api-key');
         if (settingInput) settingInput.value = key;
 
-        showToast('✅ Đã lưu Gemini API Key thành công!');
+        showToast('✅ Đã lưu Gemini API Key! Đang kiểm tra kết nối...');
         this.testConnection(key);
     },
 
-    // Gọi API trực tiếp tới Google Gemini REST API
-    async generateContent(prompt, systemInstruction = '', options = {}) {
-        const apiKey = this.getApiKey();
-        if (!apiKey) {
-            this.openApiKeyModal();
-            throw new Error('Chưa cấu hình Gemini API Key');
+    // Tự động truy vấn ModelService.ListModels từ Google để xác định các model khả dụng cho API Key
+    async discoverAvailableModels(apiKey = null, force = false) {
+        const key = (apiKey || this.getApiKey()).trim();
+        if (!key) return { success: false, error: 'Chưa cấu hình API Key' };
+
+        if (!force) {
+            const cached = this.getDiscoveredModels();
+            if (cached && cached.length > 0) {
+                return { success: true, models: cached, fromCache: true };
+            }
         }
 
-        const model = options.model || this.getModel();
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+        let lastErr = null;
+        let lastStatus = 0;
+
+        for (const ver of this.apiVersions) {
+            try {
+                const url = `https://generativelanguage.googleapis.com/${ver}/models?key=${encodeURIComponent(key)}`;
+                const res = await fetch(url);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data && Array.isArray(data.models)) {
+                        const valid = data.models
+                            .filter(m => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes('generateContent'))
+                            .map(m => this.cleanModelName(m.name))
+                            .filter(name => name.startsWith('gemini'));
+                        
+                        if (valid.length > 0) {
+                            this.setDiscoveredModels(valid);
+                            this.updateModelSelectUI(valid);
+                            return { success: true, models: valid, apiVersion: ver };
+                        }
+                    }
+                } else {
+                    lastStatus = res.status;
+                    const errData = await res.json().catch(() => ({}));
+                    lastErr = errData?.error?.message || `HTTP ${res.status}`;
+                }
+            } catch (netErr) {
+                lastErr = netErr.message;
+            }
+        }
+
+        return { success: false, error: lastErr, status: lastStatus };
+    },
+
+    // Gọi endpoint đơn lẻ với một API Version và Model cụ thể
+    async _callGeminiSingle(apiVersion, model, apiKey, prompt, systemInstruction, options = {}) {
+        const cleanModel = this.cleanModelName(model);
+        const url = `https://generativelanguage.googleapis.com/${apiVersion}/models/${encodeURIComponent(cleanModel)}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
         const bodyData = {
             contents: [
@@ -151,72 +293,220 @@ const aiService = {
             }
         };
 
+        // System instruction hỗ trợ trên gemini-1.5 và gemini-2.0
         if (systemInstruction) {
-            bodyData.systemInstruction = {
-                parts: [{ text: systemInstruction }]
-            };
+            if (cleanModel.startsWith('gemini-1.0') || cleanModel === 'gemini-pro') {
+                bodyData.contents[0].parts[0].text = `${systemInstruction}\n\n---\n\n${prompt}`;
+            } else {
+                bodyData.systemInstruction = {
+                    parts: [{ text: systemInstruction }]
+                };
+            }
         }
 
-        if (options.jsonMode) {
+        if (options.jsonMode && !cleanModel.startsWith('gemini-1.0') && cleanModel !== 'gemini-pro') {
             bodyData.generationConfig.responseMimeType = 'application/json';
         }
 
-        try {
-            const res = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(bodyData)
-            });
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(bodyData)
+        });
 
-            if (!res.ok) {
-                const errJson = await res.json().catch(() => ({}));
-                const errMsg = errJson?.error?.message || `HTTP ${res.status}: ${res.statusText}`;
-                
-                // Fallback to 1.5-flash if 2.0-flash is not available for this key
-                if (model !== this.fallbackModel && (res.status === 404 || errMsg.toLowerCase().includes('not found') || errMsg.toLowerCase().includes('not supported'))) {
-                    console.warn(`Model ${model} unavailable, falling back to ${this.fallbackModel}...`);
-                    return this.generateContent(prompt, systemInstruction, { ...options, model: this.fallbackModel });
-                }
-                throw new Error(errMsg);
-            }
-
-            const data = await res.json();
-            const candidate = data.candidates?.[0];
-            const text = candidate?.content?.parts?.[0]?.text || '';
-            return text;
-        } catch (err) {
-            console.error('Gemini API Error:', err);
+        if (!res.ok) {
+            const errJson = await res.json().catch(() => ({}));
+            const errMsg = errJson?.error?.message || `HTTP ${res.status}: ${res.statusText}`;
+            const err = new Error(errMsg);
+            err.status = res.status;
+            err.code = errJson?.error?.code || res.status;
+            err.details = errJson?.error;
+            err.model = cleanModel;
+            err.apiVersion = apiVersion;
             throw err;
         }
+
+        const data = await res.json();
+        const candidate = data.candidates?.[0];
+        const text = candidate?.content?.parts?.[0]?.text || '';
+        return text;
     },
 
-    // Kiểm tra kết nối API Key
+    formatErrorMessage(err) {
+        if (!err) return 'Không thể kết nối đến Gemini AI. Vui lòng kiểm tra lại kết nối mạng.';
+        const msg = String(err.message || err);
+        const status = err.status || err.code;
+
+        if (status === 400 && msg.toLowerCase().includes('api_key_invalid')) {
+            return 'API Key không hợp lệ. Vui lòng kiểm tra lại mã API Key từ Google AI Studio.';
+        }
+        if (status === 403 || msg.toLowerCase().includes('permission denied') || msg.toLowerCase().includes('permission_denied') || msg.toLowerCase().includes('service_blocked')) {
+            return 'API Key này chưa được cấp quyền Generative Language API (thường do dùng nhầm Firebase Web Key hoặc Google Cloud Key bị hạn chế). Vui lòng tạo key mới miễn phí tại Google AI Studio (https://aistudio.google.com/app/apikey).';
+        }
+        if (status === 429 || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('resource_exhausted')) {
+            return 'Đã đạt giới hạn tần suất gọi API miễn phí (Rate limit). Vui lòng đợi 30 giây rồi thử lại.';
+        }
+        if (status === 404 || msg.toLowerCase().includes('not found') || msg.toLowerCase().includes('not supported')) {
+            return `Mô hình AI (${err.model || 'Gemini'}) chưa khả dụng với API Key này. Vui lòng vào Cài đặt > "Kiểm tra kết nối" để tự động nhận diện mô hình phù hợp, hoặc lấy key mới tại Google AI Studio.`;
+        }
+        return msg;
+    },
+
+    // Gọi API tới Google Gemini REST API với khả năng tự động fallback đa endpoint (v1beta / v1) và tự dò model phù hợp
+    async generateContent(prompt, systemInstruction = '', options = {}) {
+        const apiKey = this.getApiKey();
+        if (!apiKey) {
+            this.openApiKeyModal();
+            throw new Error('Chưa cấu hình Gemini API Key. Vui lòng nhập API Key để sử dụng.');
+        }
+
+        const requestedModel = options.model || this.getModel();
+        const primaryModel = this.cleanModelName(requestedModel);
+
+        // Chuỗi thử nghiệm 1: Model chính qua v1beta rồi v1
+        const initialAttempts = [
+            { apiVersion: 'v1beta', model: primaryModel },
+            { apiVersion: 'v1', model: primaryModel }
+        ];
+
+        let lastError = null;
+
+        for (const attempt of initialAttempts) {
+            try {
+                return await this._callGeminiSingle(
+                    attempt.apiVersion,
+                    attempt.model,
+                    apiKey,
+                    prompt,
+                    systemInstruction,
+                    options
+                );
+            } catch (err) {
+                lastError = err;
+                // Nếu là lỗi 403 (bị chặn quyền) hoặc 400 (sai key), không thử thêm endpoint khác
+                if (err.status === 403) break;
+            }
+        }
+
+        // Nếu model chính trả về 404 / "not found" / "not supported" trên cả 2 version:
+        const isNotFoundOrUnsupported = lastError && (
+            lastError.status === 404 ||
+            (lastError.message && (
+                lastError.message.toLowerCase().includes('not found') ||
+                lastError.message.toLowerCase().includes('not supported')
+            ))
+        );
+
+        if (isNotFoundOrUnsupported) {
+            console.warn(`Model "${primaryModel}" không khả dụng cho key này (${lastError.message}). Đang tự động quét model hợp lệ...`);
+            
+            // Tự động quét ModelService.ListModels từ Google
+            const discovery = await this.discoverAvailableModels(apiKey, true);
+            let candidateModels = [];
+
+            if (discovery.success && discovery.models && discovery.models.length > 0) {
+                // Lọc bỏ model vừa lỗi và sắp xếp theo độ ưu tiên
+                candidateModels = discovery.models.filter(m => m !== primaryModel);
+                candidateModels.sort((a, b) => {
+                    const idxA = this.fallbackModels.indexOf(a);
+                    const idxB = this.fallbackModels.indexOf(b);
+                    return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB);
+                });
+            }
+
+            // Danh sách fallback dựng sẵn phòng trường hợp ListModels bị chặn
+            if (candidateModels.length === 0) {
+                candidateModels = this.fallbackModels.filter(m => m !== primaryModel);
+            }
+
+            // Thử lần lượt các model ứng viên trên cả v1beta và v1
+            for (const fallbackModel of candidateModels) {
+                for (const ver of this.apiVersions) {
+                    try {
+                        console.info(`Đang thử nghiệm model "${fallbackModel}" trên ${ver}...`);
+                        const result = await this._callGeminiSingle(
+                            ver,
+                            fallbackModel,
+                            apiKey,
+                            prompt,
+                            systemInstruction,
+                            options
+                        );
+                        // Thành công! Tự động lưu model này làm active model để các lần sau chạy tức thì
+                        console.info(`Tự động phục hồi thành công! Đã chuyển sang model "${fallbackModel}".`);
+                        this.setModel(fallbackModel);
+                        this.updateModelSelectUI();
+                        return result;
+                    } catch (fbErr) {
+                        lastError = fbErr;
+                        if (fbErr.status === 403) break;
+                    }
+                }
+            }
+        }
+
+        // Định dạng thông báo lỗi dễ hiểu và có chỉ dẫn cụ thể
+        const friendlyMsg = this.formatErrorMessage(lastError);
+        throw new Error(friendlyMsg);
+    },
+
+    // Kiểm tra kết nối API Key và tự động dò tìm danh sách mô hình
     async testConnection(testKey = null) {
-        const key = testKey || this.getApiKey();
+        const key = (testKey || this.getApiKey()).trim();
         const statusEl = document.getElementById('ai-connection-status');
         if (statusEl) {
-            statusEl.innerHTML = '<span style="color: var(--accent);"><i class="ri-loader-4-line ri-spin"></i> Đang kiểm tra kết nối tới Google Gemini...</span>';
+            statusEl.innerHTML = '<span style="color: var(--accent);"><i class="ri-loader-4-line ri-spin"></i> Đang kết nối và quét danh sách mô hình từ Google...</span>';
         }
 
         if (!key) {
-            if (statusEl) statusEl.innerHTML = '<span style="color: #ef4444;"><i class="ri-error-warning-line"></i> Chưa nhập API Key.</span>';
+            if (statusEl) statusEl.innerHTML = '<span style="color: #ef4444;"><i class="ri-error-warning-line"></i> Vui lòng nhập API Key trước khi kiểm tra.</span>';
             return false;
         }
 
         try {
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.getModel()}?key=${encodeURIComponent(key)}`;
-            const res = await fetch(url);
-            if (res.ok) {
-                if (statusEl) statusEl.innerHTML = `<span style="color: #10b981;"><i class="ri-checkbox-circle-fill"></i> Kết nối thành công! Sẵn sàng phục vụ (${this.getModel()}).</span>`;
+            const res = await this.discoverAvailableModels(key, true);
+
+            if (res.success && res.models && res.models.length > 0) {
+                let activeModel = this.getModel();
+                if (!res.models.includes(activeModel)) {
+                    activeModel = this.pickBestModel(res.models);
+                    this.setModel(activeModel);
+                }
+                this.updateModelSelectUI(res.models);
+
+                // Thử tạo một đoạn test ngắn để xác thực 100%
+                for (const ver of this.apiVersions) {
+                    try {
+                        await this._callGeminiSingle(ver, activeModel, key, 'Hi', '', { temperature: 0.1 });
+                        break;
+                    } catch (e) {
+                        // Tiếp tục thử version tiếp theo
+                    }
+                }
+
+                if (statusEl) {
+                    statusEl.innerHTML = `
+                        <div style="color: #10b981; font-weight: 500; margin-top: 4px; line-height: 1.4;">
+                            <i class="ri-checkbox-circle-fill"></i> Kết nối thành công! Khả dụng <strong>${res.models.length}</strong> mô hình (Đang dùng: <strong>${activeModel}</strong>).
+                        </div>
+                    `;
+                }
                 return true;
             } else {
-                const errJson = await res.json().catch(() => ({}));
-                const msg = errJson?.error?.message || 'Key không hợp lệ hoặc đã hết hạn.';
-                if (statusEl) statusEl.innerHTML = `<span style="color: #ef4444;"><i class="ri-close-circle-fill"></i> Lỗi kết nối: ${escapeHtml(msg)}</span>`;
+                const friendlyErr = this.formatErrorMessage({ status: res.status, message: res.error });
+                if (statusEl) {
+                    statusEl.innerHTML = `
+                        <div style="color: #ef4444; margin-top: 4px; line-height: 1.4;">
+                            <i class="ri-close-circle-fill"></i> <strong>Lỗi kết nối:</strong> ${escapeHtml(friendlyErr)}
+                        </div>
+                    `;
+                }
                 return false;
             }
         } catch (e) {
-            if (statusEl) statusEl.innerHTML = `<span style="color: #ef4444;"><i class="ri-close-circle-fill"></i> Không thể kết nối mạng: ${escapeHtml(e.message)}</span>`;
+            if (statusEl) {
+                statusEl.innerHTML = `<span style="color: #ef4444;"><i class="ri-close-circle-fill"></i> Không thể kết nối mạng: ${escapeHtml(e.message)}</span>`;
+            }
             return false;
         }
     },
@@ -665,6 +955,7 @@ Trả về DUY NHẤT một mảng JSON hợp lệ chứa ${count} câu hỏi th
             return;
         }
 
+        this.lastInlineAction = { actionType, text: selectedText };
         this.openInlineResultModal(actionType, selectedText);
         const resultContainer = document.getElementById('ai-inline-result-text');
         if (resultContainer) {
@@ -711,8 +1002,29 @@ Trả về DUY NHẤT một mảng JSON hợp lệ chứa ${count} câu hỏi th
         } catch (err) {
             console.error('Inline action error:', err);
             if (resultContainer) {
-                resultContainer.innerHTML = `<div style="color: #ef4444; padding: 12px;"><i class="ri-error-warning-line"></i> Lỗi xử lý: ${escapeHtml(err.message)}</div>`;
+                resultContainer.innerHTML = `
+                    <div style="color: #ef4444; padding: 12px; line-height: 1.5;">
+                        <div style="font-weight: 600; margin-bottom: 6px;"><i class="ri-error-warning-line"></i> Lỗi xử lý AI:</div>
+                        <div style="font-size: 13px; margin-bottom: 12px; color: var(--text-primary); background: rgba(239, 68, 68, 0.08); padding: 8px 12px; border-radius: 6px; border-left: 3px solid #ef4444;">
+                            ${escapeHtml(err.message)}
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <button type="button" class="btn btn-secondary" onclick="aiService.retryLastInlineAction()" style="font-size: 12px; padding: 5px 12px;">
+                                <i class="ri-refresh-line"></i> Thử lại
+                            </button>
+                            <button type="button" class="btn btn-secondary" onclick="aiService.openApiKeyModal()" style="font-size: 12px; padding: 5px 12px;">
+                                <i class="ri-key-2-line"></i> Cấu hình lại Key
+                            </button>
+                        </div>
+                    </div>
+                `;
             }
+        }
+    },
+
+    retryLastInlineAction() {
+        if (this.lastInlineAction) {
+            this.runInlineAction(this.lastInlineAction.actionType, this.lastInlineAction.text);
         }
     },
 
@@ -1108,8 +1420,24 @@ Sử dụng Markdown đẹp mắt: in đậm từ khóa, gạch đầu dòng, kh
         html = html.replace(/\n/g, '<br>');
 
         return html;
+    },
+
+    init() {
+        this.updateModelSelectUI();
+        const badge = document.getElementById('ai-sidebar-model-badge');
+        if (badge) {
+            badge.textContent = this.getModelDisplayName(this.getModel());
+        }
     }
 };
+
+if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => aiService.init());
+    } else {
+        setTimeout(() => aiService.init(), 100);
+    }
+}
 
 if (typeof module !== 'undefined') {
     module.exports = { aiService };
