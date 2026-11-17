@@ -641,6 +641,7 @@
             margin-top: 10px;
         }
         .quiz-btn {
+            position: relative;
             padding: 14px 16px;
             border-radius: 14px;
             border: 1px solid var(--border);
@@ -654,19 +655,26 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+        .quiz-btn * {
+            pointer-events: none;
         }
         .quiz-btn:active {
             transform: scale(0.98);
         }
         .quiz-btn.correct {
-            background: rgba(16, 185, 129, 0.2);
-            border-color: var(--success);
-            color: var(--success);
+            background: rgba(16, 185, 129, 0.2) !important;
+            border-color: var(--success) !important;
+            color: var(--success) !important;
         }
         .quiz-btn.wrong {
-            background: rgba(239, 68, 68, 0.2);
-            border-color: var(--danger);
-            color: var(--danger);
+            background: rgba(239, 68, 68, 0.2) !important;
+            border-color: var(--danger) !important;
+            color: var(--danger) !important;
         }
 
         .quiz-streak-bar {
@@ -1086,7 +1094,7 @@
                 <div class="quiz-card">
                     <div class="quiz-question-word" id="quiz-word">Concurrency</div>
                     <div class="quiz-question-ipa" id="quiz-ipa">/kənˈkɝː.ən.si/</div>
-                    <button type="button" class="btn-audio-hero" style="width: 44px; height: 44px; font-size: 20px; margin-bottom: 6px;" onclick="playWordAudio(currentQuizItem ? currentQuizItem.word : '')">
+                    <button type="button" class="btn-audio-hero" style="width: 44px; height: 44px; font-size: 20px; margin-bottom: 6px;" onclick="playQuizWordAudio()">
                         <i class="ri-volume-up-fill"></i>
                     </button>
                     <p style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">Chọn nghĩa tiếng Việt đúng nhất:</p>
@@ -1670,14 +1678,45 @@
         }
 
         // --- QUIZ VIEW (PHẢN XẠ 4 ĐÁP ÁN) ---
+        let currentQuizOptions = [];
+        let quizIsAnswering = false;
+        let quizTimeoutId = null;
+
+        function escapeHtml(text) {
+            if (text === null || text === undefined) return '';
+            return String(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
         function startQuiz() {
             quizStreak = 0;
             quizTotal = 0;
+            if (quizTimeoutId) {
+                clearTimeout(quizTimeoutId);
+                quizTimeoutId = null;
+            }
             loadNextQuiz();
         }
 
+        function playQuizWordAudio() {
+            if (currentQuizItem && currentQuizItem.word) {
+                playWordAudio(currentQuizItem.word);
+            }
+        }
+
         function loadNextQuiz() {
-            if (vocabItems.length === 0) return;
+            quizIsAnswering = false;
+            if (vocabItems.length === 0) {
+                const container = document.getElementById('quiz-options-container');
+                if (container) {
+                    container.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text-muted);font-size:14px;">Chưa có từ vựng nào để làm Quiz.</div>';
+                }
+                return;
+            }
             quizTotal++;
             const countEl = document.getElementById('quiz-count');
             const streakEl = document.getElementById('quiz-streak');
@@ -1688,8 +1727,10 @@
             const qIdx = Math.floor(Math.random() * vocabItems.length);
             currentQuizItem = vocabItems[qIdx];
 
-            document.getElementById('quiz-word').textContent = currentQuizItem.word;
-            document.getElementById('quiz-ipa').textContent = currentQuizItem.phonetic || '/.../';
+            const wordEl = document.getElementById('quiz-word');
+            const ipaEl = document.getElementById('quiz-ipa');
+            if (wordEl) wordEl.textContent = currentQuizItem.word || '';
+            if (ipaEl) ipaEl.textContent = currentQuizItem.phonetic || '/.../';
 
             // Tạo 3 phương án sai ngẫu nhiên
             let pool = vocabItems.filter(i => i.id !== currentQuizItem.id);
@@ -1698,43 +1739,66 @@
                 [pool[i], pool[j]] = [pool[j], pool[i]];
             }
             let options = [currentQuizItem.meaning, ...(pool.slice(0, 3).map(i => i.meaning))];
-            // Trộn thứ tự 4 đáp án
+            // Trộn thứ tự các đáp án
             for (let i = options.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [options[i], options[j]] = [options[j], options[i]];
             }
+            currentQuizOptions = options;
 
             const container = document.getElementById('quiz-options-container');
+            if (!container) return;
             container.innerHTML = options.map((opt, idx) => `
-                <button type="button" class="quiz-btn" onclick="checkQuizAnswer(this, '${opt.replace(/'/g, "\\'")}')">
-                    <span>${String.fromCharCode(65 + idx)}. ${opt}</span>
+                <button type="button" class="quiz-btn" data-opt-idx="${idx}" onclick="checkQuizAnswerByIdx(${idx})">
+                    <span>${String.fromCharCode(65 + idx)}. ${escapeHtml(opt)}</span>
                     <i class="ri-checkbox-blank-circle-line"></i>
                 </button>
             `).join('');
         }
 
-        function checkQuizAnswer(btn, chosenOpt) {
-            if (!currentQuizItem) return;
-            const container = document.getElementById('quiz-options-container');
-            const btns = container.querySelectorAll('.quiz-btn');
-            btns.forEach(b => b.style.pointerEvents = 'none');
+        function checkQuizAnswerByIdx(idx) {
+            if (quizIsAnswering) return;
+            if (!currentQuizItem || !currentQuizOptions || currentQuizOptions[idx] === undefined) return;
+            quizIsAnswering = true;
 
-            const isCorrect = chosenOpt === currentQuizItem.meaning;
+            const container = document.getElementById('quiz-options-container');
+            if (!container) return;
+            const btns = container.querySelectorAll('.quiz-btn');
+            btns.forEach(b => {
+                b.style.pointerEvents = 'none';
+            });
+
+            const chosenBtn = btns[idx];
+            const chosenOpt = currentQuizOptions[idx];
+            const isCorrect = (chosenOpt === currentQuizItem.meaning);
+
             if (isCorrect) {
-                btn.classList.add('correct');
-                btn.querySelector('i').className = 'ri-checkbox-circle-fill';
+                if (chosenBtn) {
+                    chosenBtn.classList.add('correct');
+                    const icon = chosenBtn.querySelector('i');
+                    if (icon) icon.className = 'ri-checkbox-circle-fill';
+                }
                 quizStreak++;
-                if ('vibrate' in navigator) navigator.vibrate([20, 50, 20]);
+                if ('vibrate' in navigator) {
+                    try { navigator.vibrate([20, 50, 20]); } catch(e) {}
+                }
                 showToast('🎉 Chính xác! +1 Streak');
             } else {
-                btn.classList.add('wrong');
-                btn.querySelector('i').className = 'ri-close-circle-fill';
+                if (chosenBtn) {
+                    chosenBtn.classList.add('wrong');
+                    const icon = chosenBtn.querySelector('i');
+                    if (icon) icon.className = 'ri-close-circle-fill';
+                }
                 quizStreak = 0;
-                if ('vibrate' in navigator) navigator.vibrate(80);
+                if ('vibrate' in navigator) {
+                    try { navigator.vibrate(80); } catch(e) {}
+                }
                 // Highlight correct button
-                btns.forEach(b => {
-                    if (b.textContent.includes(currentQuizItem.meaning)) {
+                btns.forEach((b, i) => {
+                    if (currentQuizOptions[i] === currentQuizItem.meaning) {
                         b.classList.add('correct');
+                        const icon = b.querySelector('i');
+                        if (icon) icon.className = 'ri-checkbox-circle-fill';
                     }
                 });
                 showToast('❌ Chưa đúng rồi!');
@@ -1743,9 +1807,29 @@
             const streakEl = document.getElementById('quiz-streak');
             if (streakEl) streakEl.textContent = `${quizStreak}`;
 
-            setTimeout(() => {
-                loadNextQuiz();
-            }, 1400);
+            if (quizTimeoutId) clearTimeout(quizTimeoutId);
+            quizTimeoutId = setTimeout(() => {
+                quizTimeoutId = null;
+                if (currentMode === 'quiz') {
+                    loadNextQuiz();
+                } else {
+                    quizIsAnswering = false;
+                }
+            }, 1200);
+        }
+
+        // Backward compatibility
+        function checkQuizAnswer(btn, chosenOpt) {
+            if (btn && btn.dataset && btn.dataset.optIdx !== undefined) {
+                checkQuizAnswerByIdx(parseInt(btn.dataset.optIdx, 10));
+                return;
+            }
+            if (btn && btn.parentNode) {
+                const idx = Array.from(btn.parentNode.children).indexOf(btn);
+                if (idx >= 0) {
+                    checkQuizAnswerByIdx(idx);
+                }
+            }
         }
 
         // --- LIST VIEW ---
@@ -1763,22 +1847,35 @@
                 return;
             }
 
-            container.innerHTML = activeDeck.map(item => `
+            container.innerHTML = activeDeck.map((item, idx) => `
                 <div class="vocab-list-card">
-                    <div class="vocab-list-card-left" onclick="openFlashcardWithItem('${item.id}')">
+                    <div class="vocab-list-card-left" onclick="openFlashcardWithIdx(${idx})">
                         <div class="vocab-list-word">
-                            <span>${item.word}</span>
-                            <span class="vocab-list-ipa">${item.phonetic || ''}</span>
+                            <span>${escapeHtml(item.word)}</span>
+                            <span class="vocab-list-ipa">${escapeHtml(item.phonetic || '')}</span>
                         </div>
-                        <div class="vocab-list-meaning">${item.meaning || ''}</div>
+                        <div class="vocab-list-meaning">${escapeHtml(item.meaning || '')}</div>
                     </div>
                     <div class="vocab-list-actions">
-                        <button type="button" class="btn-list-audio" onclick="playWordAudio('${item.word.replace(/'/g, "\\'")}')" title="Phát âm">
+                        <button type="button" class="btn-list-audio" onclick="playListAudioWithIdx(${idx})" title="Phát âm">
                             <i class="ri-volume-up-line"></i>
                         </button>
                     </div>
                 </div>
             `).join('');
+        }
+
+        function openFlashcardWithIdx(idx) {
+            if (idx >= 0 && idx < activeDeck.length) {
+                currentIndex = idx;
+                setMode('flashcard');
+            }
+        }
+
+        function playListAudioWithIdx(idx) {
+            if (idx >= 0 && idx < activeDeck.length) {
+                playWordAudio(activeDeck[idx].word);
+            }
         }
 
         function openFlashcardWithItem(id) {
@@ -1798,6 +1895,11 @@
         function setMode(mode) {
             currentMode = mode;
             stopWalkMode();
+            if (quizTimeoutId) {
+                clearTimeout(quizTimeoutId);
+                quizTimeoutId = null;
+            }
+            quizIsAnswering = false;
 
             document.getElementById('tab-flashcard').classList.toggle('active', mode === 'flashcard');
             document.getElementById('tab-quiz').classList.toggle('active', mode === 'quiz');
