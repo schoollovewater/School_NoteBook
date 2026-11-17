@@ -122,6 +122,7 @@
             blocks: data.blocks || textToBlocks(data.content || '', { forceType: data.forceType }),
             tags: normalizeTags(data.tags),
             source: source,
+            user: (data.user && USERS.indexOf(data.user) >= 0) ? data.user : DEFAULT_USER,
             inbox: data.inbox !== undefined ? !!data.inbox : source !== 'app',
             createdAt: data.createdAt || now,
             updatedAt: now
@@ -135,8 +136,9 @@
      */
     function normalizeRemoteNote(docId, data) {
         if (!data) return null;
+        const user = (data.user && USERS.indexOf(data.user) >= 0) ? data.user : DEFAULT_USER;
         if (Array.isArray(data.blocks)) {
-            const page = Object.assign({}, data, { id: data.id || docId });
+            const page = Object.assign({}, data, { id: data.id || docId, user: user });
             if (page.updatedAt && typeof page.updatedAt.toDate === 'function') {
                 page.updatedAt = page.updatedAt.toDate().toISOString();
             }
@@ -149,6 +151,7 @@
                 content: data.content,
                 tags: data.tags,
                 source: data.source || 'mini',
+                user: user,
                 inbox: true,
                 createdAt: data.date || data.createdAt
             });
@@ -159,6 +162,7 @@
 
     /** Tạo item từ vựng chuẩn của Kho từ vựng. */
     function makeVocabItem(data) {
+        data = data || {};
         const allowed = ['TechAdvanced', 'TechCommon', 'TOEIC', 'Other'];
         return {
             id: 'v_' + generateId(),
@@ -168,12 +172,32 @@
             example: String(data.example || '').trim(),
             tag: allowed.indexOf(data.tag) >= 0 ? data.tag : 'Other',
             status: 'learning',
+            user: (data.user && USERS.indexOf(data.user) >= 0) ? data.user : DEFAULT_USER,
             createdAt: Date.now()
         };
     }
 
+    const DEFAULT_USER = 'school';
+    const USERS = ['school', 'water'];
+
+    function getUserStorageKeys(user) {
+        const u = (user && USERS.indexOf(user) >= 0) ? user : DEFAULT_USER;
+        return {
+            pages: `schooldb_${u}_pages`,
+            vocab: `schooldb_${u}_vocab_items`,
+            deleted: `schooldb_${u}_deleted_pages`,
+            activePage: `schooldb_${u}_active_page`,
+            workspace: `schooldb_${u}_workspace`,
+            miniDrafts: `mini_drafts_${u}`,
+            miniOutbox: `mini_outbox_${u}`
+        };
+    }
+
     return {
-        VERSION: '4.2.0',
+        VERSION: '4.3.0',
+        DEFAULT_USER: DEFAULT_USER,
+        USERS: USERS,
+        getUserStorageKeys: getUserStorageKeys,
         STORAGE_KEYS: {
             pages: 'schooldb_pages',
             vocab: 'schooldb_vocab_items',

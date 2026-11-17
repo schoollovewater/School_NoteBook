@@ -15,9 +15,10 @@ const aiService = {
         'gemini-2.0-flash',
         'gemini-2.0-flash-thinking-exp-01-21',
         'gemini-2.0-pro-exp-02-05',
-        'gemini-1.5-flash',
         'gemini-1.5-flash-latest',
         'gemini-1.5-flash-002',
+        'gemini-1.5-flash-001',
+        'gemini-1.5-pro-latest',
         'gemini-1.5-pro',
         'gemini-pro'
     ],
@@ -103,10 +104,10 @@ const aiService = {
         const discovered = this.getDiscoveredModels();
         const fastCandidates = [
             'gemini-2.0-flash',
-            'gemini-1.5-flash',
             'gemini-1.5-flash-latest',
             'gemini-1.5-flash-002',
-            'gemini-1.5-flash-001'
+            'gemini-1.5-flash-001',
+            'gemini-2.0-flash-exp'
         ];
 
         if (discovered && discovered.length > 0) {
@@ -437,7 +438,9 @@ const aiService = {
             return 'Đã đạt giới hạn tần suất gọi API miễn phí (Rate limit). Vui lòng đợi 30 giây rồi thử lại.';
         }
         if (status === 404 || msg.toLowerCase().includes('not found') || msg.toLowerCase().includes('not supported')) {
-            return `Mô hình AI (${err.model || 'Gemini'}) chưa khả dụng với API Key này. Vui lòng vào Cài đặt > "Kiểm tra kết nối" để tự động nhận diện mô hình phù hợp, hoặc lấy key mới tại Google AI Studio.`;
+            // Tự động gỡ bỏ thiết lập lỗi và trả về chế độ Tự động thông minh
+            this.setModel('auto');
+            return `Mô hình AI (${err.model || 'Gemini'}) chưa khả dụng hoặc đã dừng hỗ trợ đối với API Key này. Hệ thống đã tự động chuyển sang mô hình Gemini 2.0 Flash mới nhất. Vui lòng bấm "Thử lại"!`;
         }
         return msg;
     },
@@ -1141,7 +1144,10 @@ Trả về DUY NHẤT một mảng JSON hợp lệ chứa ${count} câu hỏi th
                         <div style="font-size: 13px; margin-bottom: 12px; color: var(--text-primary); background: rgba(239, 68, 68, 0.08); padding: 8px 12px; border-radius: 6px; border-left: 3px solid #ef4444;">
                             ${escapeHtml(err.message)}
                         </div>
-                        <div style="display: flex; gap: 8px;">
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            <button type="button" class="btn btn-primary" onclick="aiService.setModel('auto'); aiService.retryLastInlineAction();" style="font-size: 12px; padding: 5px 12px;">
+                                <i class="ri-sparkling-fill"></i> Tự động dùng Gemini 2.0 Flash & Thử lại
+                            </button>
                             <button type="button" class="btn btn-secondary" onclick="aiService.retryLastInlineAction()" style="font-size: 12px; padding: 5px 12px;">
                                 <i class="ri-refresh-line"></i> Thử lại
                             </button>
@@ -1565,8 +1571,14 @@ Sử dụng Markdown đẹp mắt: in đậm từ khóa, gạch đầu dòng, kh
     init() {
         // Tự động kích hoạt chế độ Tự động thông minh (Smart Auto Router)
         const currentStored = localStorage.getItem(this.STORAGE_KEYS.model);
-        if (!currentStored || currentStored === 'gemini-2.0-flash' || currentStored === 'gemini-1.5-flash') {
+        if (!currentStored || currentStored === 'gemini-2.0-flash' || currentStored === 'gemini-1.5-flash' || currentStored === 'gemini-1.5-pro') {
             this.setModel('auto');
+        }
+
+        // Tự động quét các model khả dụng cho API Key trong nền
+        const apiKey = this.getApiKey();
+        if (apiKey && !this.getDiscoveredModels()) {
+            this.discoverAvailableModels(apiKey, false).catch(() => {});
         }
 
         this.updateModelSelectUI();

@@ -24,7 +24,7 @@
     <!-- KaTeX CSS for Math Equations (LaTeX) -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
     
-    <link rel="stylesheet" href="styles.css?v=4.2.0">
+    <link rel="stylesheet" href="styles.css?v=4.3.0">
 </head>
 <body>
     <div class="app-background">
@@ -37,19 +37,42 @@
         <div class="sidebar-overlay" id="sidebar-overlay"></div>
         <!-- Sidebar -->
         <aside class="sidebar" id="sidebar">
-            <div class="sidebar-header">
-                <div class="workspace-profile">
-                    <div class="workspace-avatar">
-                        <img src="icon.jpg" alt="Workspace">
+            <div class="sidebar-header" style="position: relative;">
+                <div class="workspace-profile" id="workspace-profile-btn" title="Chuyển đổi Không gian (SCHOOL / WATER)" style="cursor: pointer;">
+                    <div class="workspace-avatar" id="current-workspace-avatar">
+                        <img src="icon.jpg" alt="Workspace" id="current-workspace-avatar-img">
                     </div>
                     <div class="workspace-info">
-                        <span class="workspace-name">School NoteBook</span>
+                        <span class="workspace-name" id="current-workspace-name">School NoteBook</span>
                         <div class="workspace-meta">
-                            <span class="workspace-plan">Personal</span>
-                            <span class="workspace-version-badge" id="app-version-badge" title="Phiên bản School NoteBook hiện tại">v4.2.0</span>
+                            <span class="workspace-plan" id="current-workspace-badge">🏫 SCHOOL</span>
+                            <span class="workspace-version-badge" id="app-version-badge" title="Phiên bản School NoteBook hiện tại">v4.3.0</span>
                         </div>
                     </div>
                     <i class="ri-expand-up-down-line text-muted"></i>
+                </div>
+
+                <!-- Workspace Switcher Popover -->
+                <div class="popover-menu workspace-switch-popover" id="workspace-switch-popover" style="display: none; position: absolute; top: calc(100% + 4px); left: 12px; right: 12px;">
+                    <div class="ws-switch-header">
+                        <i class="ri-user-shared-line"></i> Chọn Không gian làm việc
+                    </div>
+                    <div class="workspace-switch-item active" id="ws-item-school" onclick="app.switchUser('school')">
+                        <div class="ws-item-avatar ws-avatar-school">🏫</div>
+                        <div class="ws-item-info">
+                            <div class="ws-item-name">USER SCHOOL <span style="font-size: 10.5px; opacity: 0.7;">(Chính)</span></div>
+                            <div class="ws-item-meta" id="ws-school-meta">Ghi chú & Từ vựng School</div>
+                        </div>
+                        <i class="ri-check-line ws-item-check" id="ws-check-school"></i>
+                    </div>
+                    <div class="workspace-switch-item" id="ws-item-water" onclick="app.switchUser('water')">
+                        <div class="ws-item-avatar ws-avatar-water">💧</div>
+                        <div class="ws-item-info">
+                            <div class="ws-item-name">USER WATER <span style="font-size: 10.5px; opacity: 0.7;">(Nhánh 2)</span></div>
+                            <div class="ws-item-meta" id="ws-water-meta">Ghi chú & Từ vựng Water</div>
+                        </div>
+                        <i class="ri-check-line ws-item-check" id="ws-check-water" style="display: none;"></i>
+                    </div>
                 </div>
             </div>
 
@@ -1171,8 +1194,8 @@
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 
     <script src="firebase-config.js"></script>
-    <script src="shared/note-schema.js?v=4.2.0"></script>
-    <script src="shared/ai-service.js?v=4.2.0"></script>
-    <script src="app.js?v=4.2.0"></script>
+    <script src="shared/note-schema.js?v=4.3.0"></script>
+    <script src="shared/ai-service.js?v=4.3.0"></script>
+    <script src="app.js?v=4.3.0"></script>
 </body>
 </html>

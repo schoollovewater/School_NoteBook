@@ -21,7 +21,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
     <script src="firebase-config.js"></script>
-    <script src="shared/note-schema.js?v=3.9.3"></script>
+    <script src="shared/note-schema.js?v=4.3.0"></script>
 
     <style>
         :root[data-theme="dark"] {
@@ -39,6 +39,10 @@
             --danger: #ef4444;
             --success: #10b981;
         }
+        :root[data-branch="water"] {
+            --accent: #0ea5e9;
+            --accent-hover: #0284c7;
+        }
         :root[data-theme="light"] {
             --bg-base: #f1f5f9;
             --bg-surface: #ffffff;
@@ -53,6 +57,44 @@
             --primary: #2563eb;
             --danger: #dc2626;
             --success: #059669;
+        }
+        :root[data-theme="light"][data-branch="water"] {
+            --accent: #0284c7;
+            --accent-hover: #0369a1;
+        }
+
+        .branch-switcher {
+            display: inline-flex;
+            background: var(--bg-elevated);
+            padding: 2px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            gap: 2px;
+            align-items: center;
+            margin-left: 6px;
+        }
+        .branch-pill {
+            background: transparent;
+            border: none;
+            border-radius: 14px;
+            padding: 2px 8px;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            text-decoration: none;
+        }
+        .branch-pill:hover {
+            color: var(--text-primary);
+        }
+        .branch-pill.active {
+            background: var(--accent);
+            color: white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.25);
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
@@ -559,7 +601,15 @@
                 <i class="ri-flashlight-fill"></i>
                 <span>Mini Note</span>
             </a>
-            <span class="mini-version-badge" title="Phiên bản Mini Note">v3.9</span>
+            <div class="branch-switcher" id="branch-switcher" title="Chuyển không gian lưu (SCHOOL / WATER)">
+                <button type="button" class="branch-pill active" id="branch-pill-school" onclick="switchBranch('school')">
+                    🏫 SCHOOL
+                </button>
+                <button type="button" class="branch-pill" id="branch-pill-water" onclick="switchBranch('water')">
+                    💧 WATER
+                </button>
+            </div>
+            <span class="mini-version-badge" title="Phiên bản Mini Note">v4.3</span>
             <span class="network-status" id="net-status">
                 <i class="ri-wifi-line"></i> <span id="net-text">Online</span>
             </span>
@@ -696,20 +746,74 @@
         window.addEventListener('offline', updateNet);
         updateNet();
 
+        // --- BRANCH & USER PARTITIONING (SCHOOL vs WATER) ---
+        let currentBranch = 'school';
+        try {
+            const urlParams = new URLSearchParams(window.location.search);
+            const branchParam = urlParams.get('user') || urlParams.get('branch');
+            if (branchParam === 'water' || branchParam === 'school') {
+                currentBranch = branchParam;
+            } else {
+                currentBranch = localStorage.getItem('schooldb_current_user') || 'school';
+            }
+        } catch (e) { currentBranch = 'school'; }
+
+        function getDraftKey(branch = currentBranch) {
+            return `mini_drafts_${branch || 'school'}`;
+        }
+
+        function applyBranch(branch) {
+            currentBranch = (branch === 'water') ? 'water' : 'school';
+            try {
+                localStorage.setItem('schooldb_current_user', currentBranch);
+            } catch (e) {}
+            document.documentElement.setAttribute('data-branch', currentBranch);
+
+            const pillSchool = document.getElementById('branch-pill-school');
+            const pillWater = document.getElementById('branch-pill-water');
+            if (pillSchool) pillSchool.classList.toggle('active', currentBranch === 'school');
+            if (pillWater) pillWater.classList.toggle('active', currentBranch === 'water');
+        }
+
+        function switchBranch(newBranch) {
+            if (newBranch === currentBranch) return;
+            // 1. Lưu lại tab nháp của branch hiện tại
+            syncCurrentToState();
+            try {
+                localStorage.setItem(getDraftKey(currentBranch), JSON.stringify(tabs));
+            } catch (e) {}
+
+            // 2. Chuyển branch
+            applyBranch(newBranch);
+
+            // 3. Tải tab nháp của branch mới
+            loadDrafts();
+            renderTabs();
+            syncStateToUI();
+
+            showToast(`🔄 Đã chuyển sang: USER ${newBranch.toUpperCase()}`);
+        }
+
         // --- STATE & DRAFTS ---
-        const DRAFT_KEY = NoteSchema.STORAGE_KEYS.miniDrafts;
         let tabs = [];
         let activeTabId = null;
 
         function loadDrafts() {
             try {
-                const stored = JSON.parse(localStorage.getItem(DRAFT_KEY) || '[]');
+                const key = getDraftKey(currentBranch);
+                let storedRaw = localStorage.getItem(key);
+                // Fallback nếu user school chưa có key mới nhưng có key miniDrafts cũ
+                if (!storedRaw && currentBranch === 'school') {
+                    storedRaw = localStorage.getItem(NoteSchema.STORAGE_KEYS.miniDrafts);
+                }
+                const stored = JSON.parse(storedRaw || '[]');
                 if (Array.isArray(stored) && stored.length > 0) {
                     tabs = stored;
+                } else {
+                    tabs = [createDefaultTab(1)];
                 }
-            } catch (e) { console.warn('Load drafts error:', e); }
-
-            if (!tabs.length) {
+            } catch (e) {
+                console.warn('Load drafts error:', e);
                 tabs = [createDefaultTab(1)];
             }
             activeTabId = tabs[0].id;
@@ -729,11 +833,13 @@
 
         function saveDrafts() {
             syncCurrentToState();
-            localStorage.setItem(DRAFT_KEY, JSON.stringify(tabs));
+            try {
+                localStorage.setItem(getDraftKey(currentBranch), JSON.stringify(tabs));
+            } catch (e) {}
             const statusEl = document.getElementById('draft-status');
             if (statusEl) {
                 const time = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-                statusEl.textContent = `• Đã lưu nháp (${time})`;
+                statusEl.textContent = `• Đã lưu nháp [${currentBranch.toUpperCase()}] (${time})`;
             }
             renderTabs();
         }
@@ -1076,14 +1182,19 @@
             let sentVocab = 0;
             const cloudPromises = [];
 
-            // 1. Lưu trực tiếp vào LocalStorage của School NoteBook
+            // 1. Lưu trực tiếp vào LocalStorage của School NoteBook theo User/Branch
             try {
-                const existingPages = JSON.parse(localStorage.getItem(NoteSchema.STORAGE_KEYS.pages) || '{}');
-                const existingVocab = JSON.parse(localStorage.getItem(NoteSchema.STORAGE_KEYS.vocab) || '[]');
+                const keys = NoteSchema.getUserStorageKeys ? NoteSchema.getUserStorageKeys(currentBranch) : {
+                    pages: `schooldb_${currentBranch}_pages`,
+                    vocab: `schooldb_${currentBranch}_vocab_items`
+                };
+
+                const existingPages = JSON.parse(localStorage.getItem(keys.pages) || '{}');
+                const existingVocab = JSON.parse(localStorage.getItem(keys.vocab) || '[]');
 
                 validTabs.forEach((tab, i) => {
                     if (tab.type === 'vocab') {
-                        const item = NoteSchema.makeVocabItem(tab.vocab);
+                        const item = NoteSchema.makeVocabItem(Object.assign({}, tab.vocab, { user: currentBranch }));
                         existingVocab.unshift(item);
                         sentVocab++;
 
@@ -1099,6 +1210,7 @@
                             tags: tab.tags.trim(),
                             forceType: tab.type === 'todo' ? 'todo' : undefined,
                             source: 'mini',
+                            user: currentBranch,
                             inbox: true
                         });
                         existingPages[page.id] = page;
@@ -1114,6 +1226,7 @@
                                 blocks: page.blocks,
                                 tags: page.tags,
                                 source: 'mini',
+                                user: currentBranch,
                                 inbox: true,
                                 createdAt: page.createdAt,
                                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -1122,14 +1235,20 @@
                     }
                 });
 
-                localStorage.setItem(NoteSchema.STORAGE_KEYS.pages, JSON.stringify(existingPages));
-                localStorage.setItem(NoteSchema.STORAGE_KEYS.vocab, JSON.stringify(existingVocab));
+                localStorage.setItem(keys.pages, JSON.stringify(existingPages));
+                localStorage.setItem(keys.vocab, JSON.stringify(existingVocab));
+
+                // Đồng bộ ngược cho key legacy của School để tương thích hoàn toàn
+                if (currentBranch === 'school') {
+                    localStorage.setItem(NoteSchema.STORAGE_KEYS.pages, JSON.stringify(existingPages));
+                    localStorage.setItem(NoteSchema.STORAGE_KEYS.vocab, JSON.stringify(existingVocab));
+                }
 
                 // 2. Phát BroadcastChannel để tab Sổ tay đang mở nhận ngay
                 if ('BroadcastChannel' in window) {
                     const ch = new BroadcastChannel(NoteSchema.CHANNEL);
-                    if (sentPages) ch.postMessage({ type: 'pages-updated', count: sentPages });
-                    if (sentVocab) ch.postMessage({ type: 'vocab-updated', count: sentVocab });
+                    if (sentPages) ch.postMessage({ type: 'pages-updated', count: sentPages, user: currentBranch });
+                    if (sentVocab) ch.postMessage({ type: 'vocab-updated', count: sentVocab, user: currentBranch });
                 }
 
                 // 3. Đợi cloud lưu nếu online
@@ -1137,17 +1256,20 @@
                     await Promise.all(cloudPromises).catch(err => console.warn('Cloud sync error (saved locally):', err));
                 }
 
-                // 4. Xóa nháp, reset về 1 tab trống
+                // 4. Xóa nháp của branch hiện tại, reset về 1 tab trống
                 tabs = [createDefaultTab(1)];
                 activeTabId = tabs[0].id;
-                localStorage.removeItem(DRAFT_KEY);
+                localStorage.removeItem(getDraftKey(currentBranch));
+                if (currentBranch === 'school') {
+                    localStorage.removeItem(NoteSchema.STORAGE_KEYS.miniDrafts);
+                }
                 renderTabs();
                 syncStateToUI();
 
                 const msg = [];
                 if (sentPages) msg.push(`${sentPages} ghi chú`);
                 if (sentVocab) msg.push(`${sentVocab} từ vựng`);
-                showToast(`✅ Đã gửi ${msg.join(', ')} vào Inbox!`);
+                showToast(`✅ Đã gửi ${msg.join(', ')} vào Inbox [${currentBranch.toUpperCase()}]!`);
 
             } catch (err) {
                 alert('Lỗi: ' + err.message);
@@ -1239,6 +1361,7 @@
         // --- SHARE TARGET PARAMS ---
         // Khi nhận share từ Android/Chrome (title, text, url)
         window.addEventListener('DOMContentLoaded', () => {
+            applyBranch(currentBranch);
             loadDrafts();
             renderTabs();
             syncStateToUI();

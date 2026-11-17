@@ -1,7 +1,7 @@
 # 📚 School NoteBook — Hướng Dẫn & Tài Liệu Kỹ Thuật Toàn Diện
 
-> **Sổ tay ghi chép học tập, lập trình & Kho từ vựng thông minh theo phong cách Notion kết hợp Thẻ nhớ 3D Flashcards & Mini Note hỏa tốc.**  
-> *Phiên bản hiện tại:* **v3.9.3**  
+> **Sổ tay ghi chép học tập, lập trình & Kho từ vựng thông minh theo phong cách Notion kết hợp Thẻ nhớ 3D Flashcards, Mini Note hỏa tốc & Trợ lý AI Gemini thông minh.**  
+> *Phiên bản hiện tại:* **v4.3.0**  
 > *Nền tảng:* Web App & PWA (HTML5, Vanilla CSS, Vanilla JavaScript, Firebase Compat, SortableJS, Service Worker).
 
 ---
@@ -213,6 +213,15 @@ node mininote.js --todo -t "Việc hôm nay" "Học từ vựng\nLàm bài tập
   - Người dùng có thể để chế độ **`🤖 Tự động thông minh`** (mặc định) hoặc ghim cố định một mô hình yêu thích trong Cài đặt.
 * **Tự phục hồi & Tự phát hiện Model**: Tự động gọi `ModelService.ListModels` để nhận diện các mô hình khả dụng theo API Key của từng người dùng, hỗ trợ cơ chế fallback đa tầng (`v1beta` & `v1`) bảo đảm không bao giờ đứt đoạn.
 
+### 👥 Đa Không Gian Làm Việc Độc Lập (Dual Workspaces: USER SCHOOL & USER WATER - v4.3.0)
+* **Tách biệt dữ liệu 100%**: Ghi chú, Kho từ vựng, Thẻ nhớ Flashcard và Mini Note nháp/inbox được phân vùng độc lập giữa 2 người dùng (`school` và `water`).
+* **1-Click Workspace Switcher**: Bấm trực tiếp vào avatar / tên Workspace ở góc trên bên trái thanh Sidebar để bật popover chuyển đổi tức thì giữa:
+  - 🏫 **USER SCHOOL** (Chính): Toàn bộ ghi chú và từ vựng hiện hữu, chủ đề màu Hổ phách (Amber).
+  - 💧 **USER WATER** (Nhánh 2): Không gian ghi chú và từ vựng độc lập thứ 2, chủ đề màu Xanh Biển (Cyan/Sky Blue), tự động khởi tạo trang chào mừng riêng.
+* **Tương thích ngược tuyệt đối (Zero Data Loss)**: Toàn bộ ghi chú và từ vựng cũ tự động quy thuộc về USER SCHOOL, không mất mát dù chỉ 1 ký tự.
+* **Mini Note Phân luồng chuẩn xác**: Mini Note PWA hỗ trợ nút gạt chuyển nhánh nhanh `🏫 SCHOOL` / `💧 WATER`. Khi bấm "Gửi", ghi chú và từ vựng sẽ nạp chuẩn xác vào Inbox của đúng User đang chọn, kèm theo giao diện đổi màu tương ứng.
+* **Đồng bộ Cloud Firestore phân vùng**: Các tài liệu `notes` và `vocab_items` trên Firestore mang trường `user: 'school'` hoặc `user: 'water'`, các thiết bị khác nhau chỉ lắng nghe và nạp ghi chú thuộc về User đang kích hoạt.
+
 ### 🃏 Ôn luyện Flashcard 3D
 * **`Space` (Phím cách)**: Lật thẻ xem nghĩa và ví dụ / lật lại.
 * **`→` (Mũi tên sang phải)**: Chuyển sang thẻ tiếp theo.
@@ -221,4 +230,4 @@ node mininote.js --todo -t "Việc hôm nay" "Học từ vựng\nLàm bài tập
 * **Vuốt trái (Cảm ứng)**: Đánh dấu cần ôn lại thẻ.
 
 ---
-*Tài liệu được cập nhật tự động và lưu trữ trực tiếp trong mã nguồn dự án School NoteBook (Phiên bản v4.2.0).*
+*Tài liệu được cập nhật tự động và lưu trữ trực tiếp trong mã nguồn dự án School NoteBook (Phiên bản v4.3.0).*
