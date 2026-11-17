@@ -3,13 +3,17 @@
  * Hỗ trợ offline đầy đủ cho cả Sổ tay chính và Mini Note.
  */
 
-const CACHE_NAME = 'schooldb-v4.3.0';
+const CACHE_NAME = 'schooldb-v4.3.1';
 
 const PRECACHE_URLS = [
     './',
     './index.html',
     './app.html',
     './mini.html',
+    './school/index.html',
+    './water/index.html',
+    './school/mini/index.html',
+    './water/mini/index.html',
     './styles.css?v=4.3.0',
     './app.js?v=4.3.0',
     './shared/note-schema.js?v=4.3.0',
@@ -99,6 +103,13 @@ self.addEventListener('fetch', (event) => {
                 if (cachedResponse) return cachedResponse;
                 // Nếu người dùng đang điều hướng tới trang web và mất mạng
                 if (request.mode === 'navigate') {
+                    const reqUrl = request.url.toLowerCase();
+                    if (reqUrl.includes('/school/mini') || reqUrl.includes('/water/mini') || reqUrl.includes('/mini')) {
+                        return caches.match('./mini.html');
+                    }
+                    if (reqUrl.includes('/school') || reqUrl.includes('/water')) {
+                        return caches.match('./app.html');
+                    }
                     return caches.match('./index.html');
                 }
             });

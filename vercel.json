@@ -1,15 +1,17 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "cleanUrls": true,
   "trailingSlash": false,
   "rewrites": [
-    { "source": "/school/mini", "destination": "/mini.html?user=school" },
-    { "source": "/school/mini/(.*)", "destination": "/mini.html?user=school" },
-    { "source": "/water/mini", "destination": "/mini.html?user=water" },
-    { "source": "/water/mini/(.*)", "destination": "/mini.html?user=water" },
-    { "source": "/school", "destination": "/app.html?user=school" },
-    { "source": "/school/(.*)", "destination": "/app.html?user=school" },
-    { "source": "/water", "destination": "/app.html?user=water" },
-    { "source": "/water/(.*)", "destination": "/app.html?user=water" },
-    { "source": "/mini", "destination": "/mini.html" }
+    { "source": "/school/mini", "destination": "/school/mini/index.html" },
+    { "source": "/school/mini/(.*)", "destination": "/school/mini/index.html" },
+    { "source": "/water/mini", "destination": "/water/mini/index.html" },
+    { "source": "/water/mini/(.*)", "destination": "/water/mini/index.html" },
+    { "source": "/school", "destination": "/school/index.html" },
+    { "source": "/school/(.*)", "destination": "/school/index.html" },
+    { "source": "/water", "destination": "/water/index.html" },
+    { "source": "/water/(.*)", "destination": "/water/index.html" },
+    { "source": "/mini", "destination": "/mini.html" },
+    { "source": "/app", "destination": "/app.html" }
   ]
 }

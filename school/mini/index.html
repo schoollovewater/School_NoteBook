@@ -1,0 +1,1423 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <script>
+        if (location.protocol.startsWith('http')) {
+            document.write('<base href="/">');
+        }
+    </script>
+    <title>Mini Note — Ghi chép hỏa tốc</title>
+    <meta name="description" content="Trình ghi chú nhanh đồng bộ tức thì với School NoteBook.">
+    <link rel="manifest" href="manifest-mini.json">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="icon" type="image/png" href="icons/icon-192.png">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+
+    <!-- Fonts & Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="shared/note-schema.js?v=4.3.0"></script>
+
+    <style>
+        :root[data-theme="dark"] {
+            --bg-base: #0f172a;
+            --bg-surface: #1e293b;
+            --bg-elevated: #334155;
+            --border: rgba(255, 255, 255, 0.12);
+            --border-strong: rgba(255, 255, 255, 0.22);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --accent: #f59e0b;
+            --accent-hover: #d97706;
+            --primary: #3b82f6;
+            --danger: #ef4444;
+            --success: #10b981;
+        }
+        :root[data-branch="water"] {
+            --accent: #0ea5e9;
+            --accent-hover: #0284c7;
+        }
+        :root[data-theme="light"] {
+            --bg-base: #f1f5f9;
+            --bg-surface: #ffffff;
+            --bg-elevated: #e2e8f0;
+            --border: rgba(0, 0, 0, 0.1);
+            --border-strong: rgba(0, 0, 0, 0.2);
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+            --text-muted: #94a3b8;
+            --accent: #d97706;
+            --accent-hover: #b45309;
+            --primary: #2563eb;
+            --danger: #dc2626;
+            --success: #059669;
+        }
+        :root[data-theme="light"][data-branch="water"] {
+            --accent: #0284c7;
+            --accent-hover: #0369a1;
+        }
+
+        .branch-switcher {
+            display: inline-flex;
+            background: var(--bg-elevated);
+            padding: 2px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            gap: 2px;
+            align-items: center;
+            margin-left: 6px;
+        }
+        .branch-pill {
+            background: transparent;
+            border: none;
+            border-radius: 14px;
+            padding: 2px 8px;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            text-decoration: none;
+        }
+        .branch-pill:hover {
+            color: var(--text-primary);
+        }
+        .branch-pill.active {
+            background: var(--accent);
+            color: white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+        body {
+            background: var(--bg-base);
+            color: var(--text-primary);
+            height: 100vh;
+            height: 100dvh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        /* Top Header */
+        .header {
+            height: 52px;
+            padding: 0 16px;
+            padding-top: env(safe-area-inset-top, 0px);
+            background: var(--bg-surface);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+            z-index: 20;
+        }
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .brand-badge {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--accent);
+            text-decoration: none;
+        }
+        .network-status {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 12px;
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--success);
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .network-status.offline {
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--accent);
+        }
+        .mini-version-badge {
+            font-size: 11px;
+            padding: 2px 7px;
+            border-radius: 12px;
+            background: rgba(245, 158, 11, 0.15);
+            color: var(--accent);
+            font-weight: 600;
+            letter-spacing: 0.3px;
+            display: inline-flex;
+            align-items: center;
+            border: 1px solid rgba(245, 158, 11, 0.25);
+        }
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 18px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s;
+        }
+        .btn-icon:hover {
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+        }
+        .btn-link {
+            font-size: 12px;
+            padding: 6px 12px;
+            border-radius: 8px;
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            border: 1px solid var(--border);
+            font-weight: 500;
+            transition: background 0.15s;
+        }
+        .btn-link:hover {
+            background: var(--border-strong);
+        }
+
+        /* App Container */
+        .app-body {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Sidebar Tabs (Desktop) / Top Tabs (Mobile) */
+        .tabs-sidebar {
+            width: 64px;
+            background: var(--bg-surface);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 12px 0;
+            gap: 8px;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+        .tab-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid transparent;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            flex-shrink: 0;
+        }
+        .tab-btn:hover {
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+        }
+        .tab-btn.active {
+            background: rgba(245, 158, 11, 0.15);
+            color: var(--accent);
+            border-color: var(--accent);
+        }
+        .tab-close-btn {
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--bg-elevated);
+            color: var(--text-muted);
+            border: 1px solid var(--border);
+            font-size: 10px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        .tab-btn:hover .tab-close-btn,
+        .tab-btn.active .tab-close-btn {
+            display: flex;
+        }
+        .tab-close-btn:hover {
+            background: var(--danger);
+            color: #fff;
+            border-color: var(--danger);
+        }
+        .tab-dirty-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--accent);
+            position: absolute;
+            bottom: 4px;
+        }
+        .tab-add-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            background: transparent;
+            color: var(--success);
+            border: 2px dashed rgba(16, 185, 129, 0.4);
+            font-size: 20px;
+            cursor: pointer;
+            transition: all 0.15s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .tab-add-btn:hover {
+            background: rgba(16, 185, 129, 0.1);
+            border-color: var(--success);
+        }
+
+        /* Main Workspace */
+        .workspace {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background: var(--bg-base);
+            padding: 14px 18px;
+            gap: 10px;
+            position: relative;
+        }
+
+        /* Note Type Selector */
+        .type-selector {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--bg-surface);
+            padding: 4px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            flex-shrink: 0;
+            width: fit-content;
+        }
+        .type-btn {
+            padding: 6px 12px;
+            border-radius: 7px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: all 0.15s;
+        }
+        .type-btn.active {
+            background: var(--accent);
+            color: #0f172a;
+            font-weight: 600;
+        }
+
+        /* Card Container */
+        .editor-card {
+            flex: 1;
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 16px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            overflow-y: auto;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        }
+
+        input, textarea, select {
+            width: 100%;
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            font-size: 15px;
+            outline: none;
+            font-family: inherit;
+        }
+        input::placeholder, textarea::placeholder {
+            color: var(--text-muted);
+        }
+
+        .title-input {
+            font-size: 20px;
+            font-weight: 700;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 10px;
+        }
+        .content-input {
+            flex: 1;
+            min-height: 140px;
+            line-height: 1.6;
+            resize: none;
+            user-select: text;
+            white-space: pre-wrap;
+            word-break: break-word;
+            overflow-wrap: break-word;
+        }
+        .tags-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border-top: 1px dashed var(--border);
+            padding-top: 10px;
+        }
+        .tags-wrapper i {
+            color: var(--accent);
+            font-size: 16px;
+        }
+        .tags-input {
+            font-size: 13px;
+            color: var(--accent);
+        }
+
+        /* Vocab Form fields */
+        .vocab-form {
+            display: none;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .vocab-field {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .vocab-field label {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .vocab-input {
+            padding: 8px 10px;
+            border-radius: 8px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            font-size: 14px;
+        }
+        .vocab-select {
+            padding: 8px 10px;
+            border-radius: 8px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        /* Bottom Bar */
+        .bottom-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-top: 4px;
+            padding-bottom: env(safe-area-inset-bottom, 0px);
+            flex-shrink: 0;
+            gap: 10px;
+        }
+        .status-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+        .actions-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn-voice {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 1px solid var(--border);
+            background: var(--bg-surface);
+            color: var(--text-secondary);
+            font-size: 18px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        .btn-voice.recording {
+            background: var(--danger);
+            color: #fff;
+            border-color: var(--danger);
+            animation: pulseRecord 1s infinite;
+        }
+        @keyframes pulseRecord {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        .btn-send {
+            padding: 10px 20px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, var(--accent), #ef4444);
+            color: #fff;
+            border: none;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 14px rgba(245, 158, 11, 0.4);
+            transition: transform 0.15s, opacity 0.15s;
+        }
+        .btn-send:hover { transform: translateY(-1px); }
+        .btn-send:active { transform: translateY(1px); }
+        .btn-send.loading { opacity: 0.6; pointer-events: none; }
+
+        /* Toast notification */
+        .toast {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-20px);
+            background: var(--success);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 24px;
+            font-size: 14px;
+            font-weight: 600;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            z-index: 100;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        /* --- MOBILE RESPONSIVE (≤ 640px) --- */
+        @media (max-width: 640px) {
+            .app-body {
+                flex-direction: column;
+            }
+            .tabs-sidebar {
+                width: 100%;
+                height: 48px;
+                border-right: none;
+                border-bottom: 1px solid var(--border);
+                flex-direction: row;
+                padding: 4px 12px;
+                gap: 6px;
+                overflow-x: auto;
+                overflow-y: hidden;
+            }
+            .tab-btn {
+                width: auto;
+                min-width: 44px;
+                height: 36px;
+                padding: 0 12px;
+                flex-direction: row;
+                gap: 6px;
+                font-size: 13px;
+            }
+            .tab-close-btn {
+                position: static;
+                display: flex;
+                width: 16px;
+                height: 16px;
+            }
+            .tab-add-btn {
+                width: 36px;
+                height: 36px;
+            }
+            .workspace {
+                padding: 10px;
+                gap: 8px;
+            }
+            .editor-card {
+                padding: 12px 14px;
+            }
+            .title-input {
+                font-size: 17px;
+            }
+            .content-input {
+                font-size: 14px;
+            }
+            .type-btn {
+                padding: 5px 8px;
+                font-size: 12px;
+            }
+            .btn-send {
+                padding: 8px 14px;
+                font-size: 13px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Top Header -->
+    <header class="header">
+        <div class="header-left">
+            <a href="/" onclick="if (location.protocol === 'file:') { location.href='index.html'; return false; }" class="brand-badge" title="Về Trang tổng Universe">
+                <i class="ri-flashlight-fill"></i>
+                <span id="mini-brand-name">School Mini Note</span>
+            </a>
+            <div class="branch-switcher" id="branch-switcher" title="Chuyển không gian lưu (SCHOOL / WATER)">
+                <button type="button" class="branch-pill active" id="branch-pill-school" onclick="switchBranch('school')">
+                    🏫 SCHOOL
+                </button>
+                <button type="button" class="branch-pill" id="branch-pill-water" onclick="switchBranch('water')">
+                    💧 WATER
+                </button>
+            </div>
+            <span class="mini-version-badge" title="Phiên bản Mini Note">v4.3</span>
+            <span class="network-status" id="net-status">
+                <i class="ri-wifi-line"></i> <span id="net-text">Online</span>
+            </span>
+        </div>
+        <div class="header-actions">
+            <button class="btn-icon" id="theme-toggle" title="Đổi giao diện">
+                <i class="ri-moon-line"></i>
+            </button>
+            <a href="javascript:void(0)" onclick="openNotebookBranch()" class="btn-link" title="Mở Sổ tay tương ứng với nhánh đang chọn">
+                <i class="ri-book-2-line"></i> <span>Sổ tay</span>
+            </a>
+        </div>
+    </header>
+
+    <!-- App Body -->
+    <div class="app-body">
+        <!-- Tabs Bar -->
+        <nav class="tabs-sidebar" id="tabs-bar" aria-label="Danh sách tab"></nav>
+
+        <!-- Main Workspace -->
+        <main class="workspace">
+            <!-- Note Type Selector -->
+            <div class="type-selector" id="type-selector">
+                <button class="type-btn active" data-type="note">
+                    <i class="ri-file-text-line"></i> Ghi chú
+                </button>
+                <button class="type-btn" data-type="todo">
+                    <i class="ri-checkbox-line"></i> Việc cần làm
+                </button>
+                <button class="type-btn" data-type="vocab">
+                    <i class="ri-translate-2"></i> Từ vựng
+                </button>
+            </div>
+
+            <!-- Standard Note / Todo Card -->
+            <div class="editor-card" id="note-card">
+                <input type="text" id="note-title" class="title-input" placeholder="Tiêu đề (tùy chọn)..." autocomplete="off">
+                <textarea id="note-content" class="content-input" wrap="soft" placeholder="Nhập nội dung ghi chú... (Hỗ trợ markdown: # tiêu đề, - danh sách, [] việc cần làm)"></textarea>
+                <div class="tags-wrapper">
+                    <i class="ri-price-tag-3-line"></i>
+                    <input type="text" id="note-tags" class="tags-input" placeholder="Thẻ phân loại: work, idea, toan...">
+                </div>
+            </div>
+
+            <!-- Vocab Card -->
+            <div class="editor-card vocab-form" id="vocab-card">
+                <div class="vocab-field">
+                    <label>Từ vựng tiếng Anh *</label>
+                    <input type="text" id="vocab-word" class="vocab-input" placeholder="vd: Microcontroller, Refactor...">
+                </div>
+                <div class="vocab-field">
+                    <label>Phiên âm</label>
+                    <input type="text" id="vocab-phonetic" class="vocab-input" placeholder="vd: /ˌmaɪ.kroʊ.kənˈtroʊ.lɚ/">
+                </div>
+                <div class="vocab-field">
+                    <label>Nghĩa tiếng Việt *</label>
+                    <input type="text" id="vocab-meaning" class="vocab-input" placeholder="vd: Vi điều khiển, Tái cấu trúc mã...">
+                </div>
+                <div class="vocab-field">
+                    <label>Nhóm phân loại</label>
+                    <select id="vocab-tag" class="vocab-select">
+                        <option value="TechAdvanced">🔧 Kỹ thuật chuyên sâu</option>
+                        <option value="TechCommon" selected>💻 Kỹ thuật quen thuộc</option>
+                        <option value="TOEIC">🎯 Tiếng Anh TOEIC</option>
+                        <option value="Other">📝 Khác</option>
+                    </select>
+                </div>
+                <div class="vocab-field">
+                    <label>Câu ví dụ</label>
+                    <input type="text" id="vocab-example" class="vocab-input" placeholder="vd: Clean architecture makes refactoring safe.">
+                </div>
+            </div>
+
+            <!-- Bottom Action Bar -->
+            <div class="bottom-bar">
+                <div class="status-info">
+                    <span id="char-count">0 ký tự</span>
+                    <span id="draft-status">• Tự lưu nháp</span>
+                </div>
+                <div class="actions-right">
+                    <button class="btn-voice" id="img-mini-btn" title="Chèn ảnh / Chụp ảnh" type="button">
+                        <i class="ri-image-add-line"></i>
+                    </button>
+                    <input type="file" id="img-mini-input" accept="image/*" style="display: none;">
+                    <button class="btn-voice" id="voice-btn" title="Nhập liệu bằng giọng nói">
+                        <i class="ri-mic-line"></i>
+                    </button>
+                    <button class="btn-send" id="send-btn" title="Gửi lên Sổ tay chính (Ctrl+Enter)">
+                        <i class="ri-send-plane-fill"></i>
+                        <span>Gửi</span>
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="toast">
+        <i class="ri-checkbox-circle-fill"></i> <span id="toast-msg">Đã gửi vào Sổ tay!</span>
+    </div>
+
+    <script>
+        // --- FIREBASE INIT ---
+        let db = null;
+        if (typeof window.USE_FIREBASE !== 'undefined' && window.USE_FIREBASE && window.firebaseConfig) {
+            try {
+                if (!firebase.apps.length) firebase.initializeApp(window.firebaseConfig);
+                db = firebase.firestore();
+                db.enablePersistence({ synchronizeTabs: true }).catch(err => console.warn('Offline persistence:', err));
+            } catch (e) { console.warn('Firebase init error:', e); }
+        }
+
+        // --- THEME ---
+        const themeToggle = document.getElementById('theme-toggle');
+        let currentTheme = localStorage.getItem('theme') || 'dark';
+        function applyTheme(th) {
+            currentTheme = th;
+            document.documentElement.setAttribute('data-theme', th);
+            themeToggle.innerHTML = th === 'dark' ? '<i class="ri-moon-line"></i>' : '<i class="ri-sun-line"></i>';
+            localStorage.setItem('theme', th);
+        }
+        applyTheme(currentTheme);
+        themeToggle.onclick = () => applyTheme(currentTheme === 'dark' ? 'light' : 'dark');
+
+        // --- NETWORK STATUS ---
+        const netStatus = document.getElementById('net-status');
+        const netText = document.getElementById('net-text');
+        function updateNet() {
+            const on = navigator.onLine;
+            netStatus.className = 'network-status' + (on ? '' : ' offline');
+            netStatus.innerHTML = on ? '<i class="ri-wifi-line"></i> <span>Online</span>' : '<i class="ri-wifi-off-line"></i> <span>Offline (Lưu tạm)</span>';
+        }
+        window.addEventListener('online', updateNet);
+        window.addEventListener('offline', updateNet);
+        updateNet();
+
+        // --- BRANCH & USER PARTITIONING (SCHOOL vs WATER) ---
+        let currentBranch = 'school';
+        try {
+            const path = (typeof window !== 'undefined' && window.location) ? window.location.pathname.toLowerCase() : '';
+            if (path.includes('/water/mini') || path.includes('/water')) {
+                currentBranch = 'water';
+            } else if (path.includes('/school/mini') || path.includes('/school')) {
+                currentBranch = 'school';
+            } else {
+                const urlParams = new URLSearchParams(window.location.search);
+                const branchParam = urlParams.get('user') || urlParams.get('branch');
+                if (branchParam === 'water') {
+                    currentBranch = 'water';
+                } else if (branchParam === 'school') {
+                    currentBranch = 'school';
+                } else {
+                    currentBranch = localStorage.getItem('schooldb_current_user') || 'school';
+                }
+            }
+        } catch (e) { currentBranch = 'school'; }
+
+        function getDraftKey(branch = currentBranch) {
+            return `mini_drafts_${branch || 'school'}`;
+        }
+
+        function applyBranch(branch) {
+            currentBranch = (branch === 'water') ? 'water' : 'school';
+            try {
+                localStorage.setItem('schooldb_current_user', currentBranch);
+            } catch (e) {}
+            document.documentElement.setAttribute('data-branch', currentBranch);
+
+            const pillSchool = document.getElementById('branch-pill-school');
+            const pillWater = document.getElementById('branch-pill-water');
+            if (pillSchool) pillSchool.classList.toggle('active', currentBranch === 'school');
+            if (pillWater) pillWater.classList.toggle('active', currentBranch === 'water');
+
+            const brandName = document.getElementById('mini-brand-name');
+            if (brandName) {
+                brandName.textContent = currentBranch === 'water' ? 'Water Mini Note' : 'School Mini Note';
+            }
+            document.title = currentBranch === 'water' ? 'Water Mini Note 💧 — Ghi Chú Hỏa Tốc' : 'School Mini Note 🏫 — Ghi Chú Hỏa Tốc';
+        }
+
+        function switchBranch(newBranch) {
+            if (newBranch === currentBranch) return;
+            // 1. Lưu lại tab nháp của branch hiện tại
+            syncCurrentToState();
+            try {
+                localStorage.setItem(getDraftKey(currentBranch), JSON.stringify(tabs));
+            } catch (e) {}
+
+            // 2. Chuyển branch và cập nhật URL sạch
+            applyBranch(newBranch);
+            try {
+                if (window.history && window.history.pushState) {
+                    const isLocal = location.protocol === 'file:' || location.port !== '';
+                    const targetUrl = isLocal ? `mini.html?user=${newBranch}` : `/${newBranch}/mini`;
+                    window.history.pushState({ branch: newBranch }, '', targetUrl);
+                }
+            } catch (e) {}
+
+            // 3. Tải tab nháp của branch mới
+            loadDrafts();
+            renderTabs();
+            syncStateToUI();
+
+            showToast(`🔄 Đã chuyển sang: USER ${newBranch.toUpperCase()}`);
+        }
+
+        function openNotebookBranch() {
+            const isLocal = location.protocol === 'file:' || location.port !== '';
+            const branch = currentBranch || 'school';
+            const target = isLocal ? `app.html?user=${branch}` : `/${branch}`;
+            window.location.href = target;
+        }
+
+        // --- STATE & DRAFTS ---
+        let tabs = [];
+        let activeTabId = null;
+
+        function loadDrafts() {
+            try {
+                const key = getDraftKey(currentBranch);
+                let storedRaw = localStorage.getItem(key);
+                // Fallback nếu user school chưa có key mới nhưng có key miniDrafts cũ
+                if (!storedRaw && currentBranch === 'school') {
+                    storedRaw = localStorage.getItem(NoteSchema.STORAGE_KEYS.miniDrafts);
+                }
+                const stored = JSON.parse(storedRaw || '[]');
+                if (Array.isArray(stored) && stored.length > 0) {
+                    tabs = stored;
+                } else {
+                    tabs = [createDefaultTab(1)];
+                }
+            } catch (e) {
+                console.warn('Load drafts error:', e);
+                tabs = [createDefaultTab(1)];
+            }
+            activeTabId = tabs[0].id;
+        }
+
+        function createDefaultTab(num) {
+            return {
+                id: NoteSchema.generateId(),
+                label: 'Tab ' + num,
+                type: 'note', // 'note' | 'todo' | 'vocab'
+                title: '',
+                content: '',
+                tags: '',
+                vocab: { word: '', phonetic: '', meaning: '', tag: 'TechCommon', example: '' }
+            };
+        }
+
+        function saveDrafts() {
+            syncCurrentToState();
+            try {
+                localStorage.setItem(getDraftKey(currentBranch), JSON.stringify(tabs));
+            } catch (e) {}
+            const statusEl = document.getElementById('draft-status');
+            if (statusEl) {
+                const time = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+                statusEl.textContent = `• Đã lưu nháp [${currentBranch.toUpperCase()}] (${time})`;
+            }
+            renderTabs();
+        }
+
+        // --- DOM ELEMENTS ---
+        const tabsBar = document.getElementById('tabs-bar');
+        const typeSelector = document.getElementById('type-selector');
+        const noteCard = document.getElementById('note-card');
+        const vocabCard = document.getElementById('vocab-card');
+        const titleIn = document.getElementById('note-title');
+        const contentIn = document.getElementById('note-content');
+        const tagsIn = document.getElementById('note-tags');
+        const charCount = document.getElementById('char-count');
+        const sendBtn = document.getElementById('send-btn');
+        const voiceBtn = document.getElementById('voice-btn');
+        const toastEl = document.getElementById('toast');
+        const toastMsg = document.getElementById('toast-msg');
+
+        // Vocab inputs
+        const vWord = document.getElementById('vocab-word');
+        const vPhonetic = document.getElementById('vocab-phonetic');
+        const vMeaning = document.getElementById('vocab-meaning');
+        const vTag = document.getElementById('vocab-tag');
+        const vExample = document.getElementById('vocab-example');
+
+        function getActiveTab() {
+            return tabs.find(t => t.id === activeTabId) || tabs[0];
+        }
+
+        function syncCurrentToState() {
+            const tab = getActiveTab();
+            if (!tab) return;
+            if (tab.type === 'vocab') {
+                tab.vocab = {
+                    word: vWord.value,
+                    phonetic: vPhonetic.value,
+                    meaning: vMeaning.value,
+                    tag: vTag.value,
+                    example: vExample.value
+                };
+            } else {
+                tab.title = titleIn.value;
+                tab.content = contentIn.value;
+                tab.tags = tagsIn.value;
+            }
+        }
+
+        function syncStateToUI() {
+            const tab = getActiveTab();
+            if (!tab) return;
+
+            // Set type button
+            typeSelector.querySelectorAll('.type-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.type === tab.type);
+            });
+
+            if (tab.type === 'vocab') {
+                noteCard.style.display = 'none';
+                vocabCard.style.display = 'flex';
+                vWord.value = tab.vocab?.word || '';
+                vPhonetic.value = tab.vocab?.phonetic || '';
+                vMeaning.value = tab.vocab?.meaning || '';
+                vTag.value = tab.vocab?.tag || 'TechCommon';
+                vExample.value = tab.vocab?.example || '';
+                updateCharCount(tab.vocab?.word || '');
+            } else {
+                noteCard.style.display = 'flex';
+                vocabCard.style.display = 'none';
+                titleIn.value = tab.title || '';
+                contentIn.value = tab.content || '';
+                tagsIn.value = tab.tags || '';
+                contentIn.placeholder = tab.type === 'todo'
+                    ? 'Nhập các đầu việc cần làm (mỗi dòng 1 việc)...'
+                    : 'Nhập nội dung ghi chú... (Hỗ trợ markdown: # tiêu đề, - danh sách, [] việc)';
+                updateCharCount(tab.content || '');
+            }
+        }
+
+        function updateCharCount(text) {
+            const chars = (text || '').length;
+            const words = (text || '').trim().split(/\s+/).filter(Boolean).length;
+            charCount.textContent = `${words} từ · ${chars} ký tự`;
+        }
+
+        function renderTabs() {
+            tabsBar.innerHTML = '';
+            tabs.forEach((tab, index) => {
+                const btn = document.createElement('button');
+                btn.className = 'tab-btn' + (tab.id === activeTabId ? ' active' : '');
+                const hasData = (tab.title || tab.content || tab.vocab?.word);
+                btn.innerHTML = `
+                    <span>${index + 1}</span>
+                    ${hasData ? '<span class="tab-dirty-dot"></span>' : ''}
+                    <span class="tab-close-btn" title="Đóng tab" onclick="event.stopPropagation(); closeTab('${tab.id}')">✕</span>
+                `;
+                btn.onclick = () => switchTab(tab.id);
+                tabsBar.appendChild(btn);
+            });
+
+            // Add tab button
+            const addBtn = document.createElement('button');
+            addBtn.className = 'tab-add-btn';
+            addBtn.innerHTML = '<i class="ri-add-line"></i>';
+            addBtn.title = 'Thêm tab mới (Alt+N)';
+            addBtn.onclick = addTab;
+            tabsBar.appendChild(addBtn);
+        }
+
+        function switchTab(id) {
+            syncCurrentToState();
+            activeTabId = id;
+            renderTabs();
+            syncStateToUI();
+            const tab = getActiveTab();
+            if (tab.type === 'vocab') vWord.focus();
+            else contentIn.focus();
+        }
+
+        function addTab() {
+            syncCurrentToState();
+            const newTab = createDefaultTab(tabs.length + 1);
+            tabs.push(newTab);
+            switchTab(newTab.id);
+            saveDrafts();
+        }
+
+        function closeTab(id) {
+            if (tabs.length === 1) {
+                // Reset tab duy nhất
+                tabs = [createDefaultTab(1)];
+                switchTab(tabs[0].id);
+                saveDrafts();
+                return;
+            }
+            const target = tabs.find(t => t.id === id);
+            const hasData = target && (target.title || target.content || target.vocab?.word);
+            if (hasData && !confirm('Tab này đang có nội dung chưa gửi. Bạn có chắc muốn đóng?')) {
+                return;
+            }
+            const idx = tabs.findIndex(t => t.id === id);
+            tabs = tabs.filter(t => t.id !== id);
+            if (activeTabId === id) {
+                const next = tabs[Math.max(0, idx - 1)];
+                activeTabId = next.id;
+            }
+            renderTabs();
+            syncStateToUI();
+            saveDrafts();
+        }
+
+        // --- TYPE SWITCHING ---
+        typeSelector.addEventListener('click', (e) => {
+            const btn = e.target.closest('.type-btn');
+            if (!btn) return;
+            syncCurrentToState();
+            const tab = getActiveTab();
+            tab.type = btn.dataset.type;
+            syncStateToUI();
+            saveDrafts();
+        });
+
+        // --- INPUT LISTENERS (AUTO-SAVE) ---
+        let draftTimer;
+        function onInput() {
+            syncCurrentToState();
+            const tab = getActiveTab();
+            updateCharCount(tab.type === 'vocab' ? tab.vocab?.word : tab.content);
+            clearTimeout(draftTimer);
+            draftTimer = setTimeout(saveDrafts, 400);
+        }
+        [titleIn, contentIn, tagsIn, vWord, vPhonetic, vMeaning, vTag, vExample].forEach(el => {
+            el.addEventListener('input', onInput);
+        });
+
+        // Hàm nén ảnh siêu nhẹ cho Mini Note (Canvas WebP/JPEG)
+        function compressMiniImageFile(file, maxW = 1200, maxH = 1200, q = 0.82) {
+            return new Promise((resolve, reject) => {
+                if (!file || !file.type.startsWith('image/')) return reject(new Error('Tệp không phải là ảnh'));
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        try {
+                            let width = img.width;
+                            let height = img.height;
+                            if (width > maxW || height > maxH) {
+                                const ratio = Math.min(maxW / width, maxH / height);
+                                width = Math.round(width * ratio);
+                                height = Math.round(height * ratio);
+                            }
+                            const canvas = document.createElement('canvas');
+                            canvas.width = width;
+                            canvas.height = height;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(img, 0, 0, width, height);
+                            let dataUrl = canvas.toDataURL('image/webp', q);
+                            if (!dataUrl.startsWith('data:image/webp')) dataUrl = canvas.toDataURL('image/jpeg', q);
+                            resolve(dataUrl);
+                        } catch (err) {
+                            resolve(e.target.result);
+                        }
+                    };
+                    img.onerror = () => reject(new Error('Đọc ảnh thất bại'));
+                    img.src = e.target.result;
+                };
+                reader.onerror = () => reject(new Error('Đọc tệp thất bại'));
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // Hỗ trợ copy/paste tài liệu nhiều dòng & DÁN ẢNH TRỰC TIẾP TỪ CLIPBOARD
+        contentIn.addEventListener('paste', (e) => {
+            // 1. Kiểm tra nếu paste ảnh trực tiếp (như Messenger, Win+Shift+S, Zalo)
+            const items = e.clipboardData ? e.clipboardData.items : null;
+            let imageFile = null;
+            if (items) {
+                for (let i = 0; i < items.length; i++) {
+                    if (items[i].type && items[i].type.startsWith('image/')) {
+                        imageFile = items[i].getAsFile();
+                        break;
+                    }
+                }
+            }
+            if (!imageFile && e.clipboardData && e.clipboardData.files && e.clipboardData.files.length > 0) {
+                for (let i = 0; i < e.clipboardData.files.length; i++) {
+                    if (e.clipboardData.files[i].type && e.clipboardData.files[i].type.startsWith('image/')) {
+                        imageFile = e.clipboardData.files[i];
+                        break;
+                    }
+                }
+            }
+
+            if (imageFile) {
+                e.preventDefault();
+                showToast('⏳ Đang tối ưu hóa ảnh...');
+                compressMiniImageFile(imageFile).then(dataUrl => {
+                    const mdImage = (contentIn.value && !contentIn.value.endsWith('\n') ? '\n' : '') + `![Hình ảnh](${dataUrl})\n`;
+                    const start = contentIn.selectionStart;
+                    const end = contentIn.selectionEnd;
+                    contentIn.value = contentIn.value.substring(0, start) + mdImage + contentIn.value.substring(end);
+                    contentIn.selectionStart = contentIn.selectionEnd = start + mdImage.length;
+                    onInput();
+                    showToast('🖼️ Đã dán ảnh vào ghi chú!');
+                }).catch(err => {
+                    showToast('⚠️ Không thể dán ảnh: ' + err.message);
+                });
+                return;
+            }
+
+            let text = e.clipboardData ? e.clipboardData.getData('text/plain') : '';
+            const html = e.clipboardData ? e.clipboardData.getData('text/html') : '';
+
+            // Nếu plain text bị dính liền nhưng HTML có thẻ đoạn/xuống dòng (khi copy từ web, word)
+            if (!text.includes('\n') && html && (/<(p|br|div|li|tr|h[1-6])\b/i.test(html))) {
+                const temp = document.createElement('div');
+                temp.innerHTML = html;
+                temp.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
+                temp.querySelectorAll('p, div, tr, h1, h2, h3, h4, h5, h6').forEach(el => el.append('\n'));
+                temp.querySelectorAll('li').forEach(li => {
+                    const prefix = document.createTextNode('\n• ');
+                    li.parentNode.insertBefore(prefix, li);
+                });
+                const extracted = temp.innerText || temp.textContent || '';
+                if (extracted.includes('\n')) {
+                    text = extracted;
+                }
+            }
+
+            // Chuẩn hóa ngắt dòng và dấu cách không ngắt (non-breaking space \u00A0 thành space thường)
+            text = (text || '').replace(/\r\n?/g, '\n').replace(/\u00A0/g, ' ');
+
+            if (text) {
+                e.preventDefault();
+                const start = contentIn.selectionStart;
+                const end = contentIn.selectionEnd;
+                const currentVal = contentIn.value;
+                contentIn.value = currentVal.substring(0, start) + text + currentVal.substring(end);
+                contentIn.selectionStart = contentIn.selectionEnd = start + text.length;
+                onInput();
+            }
+        });
+
+        titleIn.addEventListener('paste', (e) => {
+            let text = e.clipboardData ? e.clipboardData.getData('text/plain') : '';
+            text = (text || '').replace(/\r\n?/g, '\n').replace(/\u00A0/g, ' ');
+            if (text.includes('\n')) {
+                e.preventDefault();
+                const lines = text.split('\n');
+                const firstLine = lines[0].trim();
+                const rest = lines.slice(1).join('\n').trim();
+                titleIn.value = firstLine;
+                if (rest) {
+                    contentIn.value = contentIn.value ? contentIn.value + '\n\n' + rest : rest;
+                }
+                onInput();
+            }
+        });
+
+        // Nút chọn / chụp ảnh ở Bottom bar của Mini Note
+        const imgMiniBtn = document.getElementById('img-mini-btn');
+        const imgMiniInput = document.getElementById('img-mini-input');
+        if (imgMiniBtn && imgMiniInput) {
+            imgMiniBtn.onclick = () => imgMiniInput.click();
+            imgMiniInput.onchange = (e) => {
+                const file = e.target.files && e.target.files[0];
+                if (file) {
+                    showToast('⏳ Đang xử lý ảnh...');
+                    compressMiniImageFile(file).then(dataUrl => {
+                        const mdImage = (contentIn.value && !contentIn.value.endsWith('\n') ? '\n' : '') + `![Hình ảnh](${dataUrl})\n`;
+                        contentIn.value += mdImage;
+                        onInput();
+                        showToast('🖼️ Đã thêm ảnh vào ghi chú!');
+                    }).catch(err => {
+                        showToast('⚠️ Lỗi: ' + err.message);
+                    });
+                }
+                e.target.value = '';
+            };
+        }
+
+        // --- SEND LOGIC ---
+        async function sendAllTabs() {
+            syncCurrentToState();
+
+            // Lọc các tab có nội dung
+            const validTabs = tabs.filter(t => {
+                if (t.type === 'vocab') return !!(t.vocab && t.vocab.word.trim() && t.vocab.meaning.trim());
+                return !!(t.content && t.content.trim());
+            });
+
+            if (!validTabs.length) {
+                alert('Chưa có tab nào có nội dung hợp lệ để gửi!');
+                return;
+            }
+
+            sendBtn.classList.add('loading');
+            sendBtn.innerHTML = '<i class="ri-loader-4-line ri-spin"></i> <span>Đang gửi...</span>';
+
+            let sentPages = 0;
+            let sentVocab = 0;
+            const cloudPromises = [];
+
+            // 1. Lưu trực tiếp vào LocalStorage của School NoteBook theo User/Branch
+            try {
+                const keys = NoteSchema.getUserStorageKeys ? NoteSchema.getUserStorageKeys(currentBranch) : {
+                    pages: `schooldb_${currentBranch}_pages`,
+                    vocab: `schooldb_${currentBranch}_vocab_items`
+                };
+
+                const existingPages = JSON.parse(localStorage.getItem(keys.pages) || '{}');
+                const existingVocab = JSON.parse(localStorage.getItem(keys.vocab) || '[]');
+
+                validTabs.forEach((tab, i) => {
+                    if (tab.type === 'vocab') {
+                        const item = NoteSchema.makeVocabItem(Object.assign({}, tab.vocab, { user: currentBranch }));
+                        existingVocab.unshift(item);
+                        sentVocab++;
+
+                        // Gửi lên Firestore nếu có
+                        if (db) {
+                            cloudPromises.push(db.collection('vocab_inbox').doc(item.id).set(item));
+                            cloudPromises.push(db.collection('vocab_items').doc(item.id).set(item));
+                        }
+                    } else {
+                        const page = NoteSchema.makePage({
+                            title: tab.title.trim() || `📱 Ghi chú nhanh (Tab ${i + 1})`,
+                            content: tab.content.trim(),
+                            tags: tab.tags.trim(),
+                            forceType: tab.type === 'todo' ? 'todo' : undefined,
+                            source: 'mini',
+                            user: currentBranch,
+                            inbox: true
+                        });
+                        existingPages[page.id] = page;
+                        sentPages++;
+
+                        // Gửi lên Firestore nếu có
+                        if (db) {
+                            cloudPromises.push(db.collection('notes').doc(page.id).set({
+                                id: page.id,
+                                title: page.title,
+                                icon: page.icon,
+                                cover: null,
+                                blocks: page.blocks,
+                                tags: page.tags,
+                                source: 'mini',
+                                user: currentBranch,
+                                inbox: true,
+                                createdAt: page.createdAt,
+                                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                            }));
+                        }
+                    }
+                });
+
+                localStorage.setItem(keys.pages, JSON.stringify(existingPages));
+                localStorage.setItem(keys.vocab, JSON.stringify(existingVocab));
+
+                // Đồng bộ ngược cho key legacy của School để tương thích hoàn toàn
+                if (currentBranch === 'school') {
+                    localStorage.setItem(NoteSchema.STORAGE_KEYS.pages, JSON.stringify(existingPages));
+                    localStorage.setItem(NoteSchema.STORAGE_KEYS.vocab, JSON.stringify(existingVocab));
+                }
+
+                // 2. Phát BroadcastChannel để tab Sổ tay đang mở nhận ngay
+                if ('BroadcastChannel' in window) {
+                    const ch = new BroadcastChannel(NoteSchema.CHANNEL);
+                    if (sentPages) ch.postMessage({ type: 'pages-updated', count: sentPages, user: currentBranch });
+                    if (sentVocab) ch.postMessage({ type: 'vocab-updated', count: sentVocab, user: currentBranch });
+                }
+
+                // 3. Đợi cloud lưu nếu online
+                if (cloudPromises.length) {
+                    await Promise.all(cloudPromises).catch(err => console.warn('Cloud sync error (saved locally):', err));
+                }
+
+                // 4. Xóa nháp của branch hiện tại, reset về 1 tab trống
+                tabs = [createDefaultTab(1)];
+                activeTabId = tabs[0].id;
+                localStorage.removeItem(getDraftKey(currentBranch));
+                if (currentBranch === 'school') {
+                    localStorage.removeItem(NoteSchema.STORAGE_KEYS.miniDrafts);
+                }
+                renderTabs();
+                syncStateToUI();
+
+                const msg = [];
+                if (sentPages) msg.push(`${sentPages} ghi chú`);
+                if (sentVocab) msg.push(`${sentVocab} từ vựng`);
+                showToast(`✅ Đã gửi ${msg.join(', ')} vào Inbox [${currentBranch.toUpperCase()}]!`);
+
+            } catch (err) {
+                alert('Lỗi: ' + err.message);
+            } finally {
+                sendBtn.classList.remove('loading');
+                sendBtn.innerHTML = '<i class="ri-send-plane-fill"></i> <span>Gửi</span>';
+            }
+        }
+
+        sendBtn.addEventListener('click', sendAllTabs);
+
+        function showToast(msg) {
+            toastMsg.textContent = msg;
+            toastEl.classList.add('show');
+            setTimeout(() => toastEl.classList.remove('show'), 2600);
+        }
+
+        // --- KEYBOARD SHORTCUTS ---
+        document.addEventListener('keydown', (e) => {
+            // Ctrl + Enter: Gửi ngay
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault();
+                sendAllTabs();
+            }
+            // Alt + N: Thêm tab mới
+            if (e.altKey && e.key.toLowerCase() === 'n') {
+                e.preventDefault();
+                addTab();
+            }
+            // Alt + W: Đóng tab hiện tại
+            if (e.altKey && e.key.toLowerCase() === 'w') {
+                e.preventDefault();
+                closeTab(activeTabId);
+            }
+            // Alt + 1..9: Nhảy đến tab
+            if (e.altKey && !isNaN(e.key) && Number(e.key) >= 1 && Number(e.key) <= tabs.length) {
+                e.preventDefault();
+                switchTab(tabs[Number(e.key) - 1].id);
+            }
+        });
+
+        // --- VOICE RECOGNITION (WEB SPEECH API) ---
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (SpeechRecognition) {
+            const recognition = new SpeechRecognition();
+            recognition.lang = 'vi-VN';
+            recognition.continuous = false;
+            recognition.interimResults = false;
+
+            let isRecording = false;
+
+            voiceBtn.onclick = () => {
+                if (isRecording) {
+                    recognition.stop();
+                    return;
+                }
+                try {
+                    recognition.start();
+                    voiceBtn.classList.add('recording');
+                    isRecording = true;
+                } catch (e) { console.warn(e); }
+            };
+
+            recognition.onresult = (e) => {
+                const transcript = e.results[0][0].transcript;
+                const tab = getActiveTab();
+                if (tab.type === 'vocab') {
+                    if (!vWord.value) vWord.value = transcript;
+                    else vMeaning.value = (vMeaning.value ? vMeaning.value + ' ' : '') + transcript;
+                } else {
+                    contentIn.value = (contentIn.value ? contentIn.value + '\n' : '') + transcript;
+                }
+                onInput();
+            };
+
+            recognition.onend = () => {
+                voiceBtn.classList.remove('recording');
+                isRecording = false;
+            };
+
+            recognition.onerror = () => {
+                voiceBtn.classList.remove('recording');
+                isRecording = false;
+            };
+        } else {
+            voiceBtn.style.display = 'none';
+        }
+
+        // --- SHARE TARGET PARAMS ---
+        // Khi nhận share từ Android/Chrome (title, text, url)
+        window.addEventListener('DOMContentLoaded', () => {
+            applyBranch(currentBranch);
+            loadDrafts();
+            renderTabs();
+            syncStateToUI();
+
+            const params = new URLSearchParams(location.search);
+            const shareTitle = params.get('title') || '';
+            const shareText = params.get('text') || '';
+            const shareUrl = params.get('url') || '';
+            if (shareTitle || shareText || shareUrl) {
+                const cur = getActiveTab();
+                cur.title = shareTitle;
+                cur.content = [shareText, shareUrl].filter(Boolean).join('\n\n');
+                syncStateToUI();
+                saveDrafts();
+                showToast('📥 Đã nhận nội dung chia sẻ');
+            }
+        });
+
+        // --- PWA: SERVICE WORKER REGISTRATION ---
+        if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+            navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW error:', err));
+        }
+    </script>
+</body>
+</html>
