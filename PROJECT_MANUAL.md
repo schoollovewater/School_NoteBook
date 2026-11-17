@@ -213,11 +213,18 @@ node mininote.js --todo -t "Việc hôm nay" "Học từ vựng\nLàm bài tập
   - Người dùng có thể để chế độ **`🤖 Tự động thông minh`** (mặc định) hoặc ghim cố định một mô hình yêu thích trong Cài đặt.
 * **Tự phục hồi & Tự phát hiện Model**: Tự động gọi `ModelService.ListModels` để nhận diện các mô hình khả dụng theo API Key của từng người dùng, hỗ trợ cơ chế fallback đa tầng (`v1beta` & `v1`) bảo đảm không bao giờ đứt đoạn.
 
-### 👥 Đa Không Gian Làm Việc Độc Lập (Dual Workspaces: USER SCHOOL & USER WATER - v4.3.0)
+### 👥 Đa Không Gian Làm Việc Độc Lập & Cổng Vũ Trụ (Universe Portal & Sub-pages - v4.3.0)
+* **Kiến trúc Trang Tổng & Trang Con**:
+  - 🌌 **Trang Tổng Universe** (`/`): Cổng điều phối trung tâm tuyệt đẹp, hiển thị thẻ trực quan của 2 không gian, thống kê ghi chú & từ vựng thời gian thực, kèm tùy chọn "Tự động mở không gian gần nhất".
+  - 🏫 **Trang Con USER SCHOOL** (`/school`): Không gian Sổ tay & Kho từ vựng chính, chứa 100% dữ liệu hiện hữu.
+  - 💧 **Trang Con USER WATER** (`/water`): Không gian Sổ tay & Ý tưởng độc lập thứ hai.
+  - ⚡ **Mini Note hỏa tốc** (`/mini`): Hỗ trợ nút gạt nhanh cho cả 2 nhánh.
 * **Tách biệt dữ liệu 100%**: Ghi chú, Kho từ vựng, Thẻ nhớ Flashcard và Mini Note nháp/inbox được phân vùng độc lập giữa 2 người dùng (`school` và `water`).
 * **1-Click Workspace Switcher**: Bấm trực tiếp vào avatar / tên Workspace ở góc trên bên trái thanh Sidebar để bật popover chuyển đổi tức thì giữa:
   - 🏫 **USER SCHOOL** (Chính): Toàn bộ ghi chú và từ vựng hiện hữu, chủ đề màu Hổ phách (Amber).
   - 💧 **USER WATER** (Nhánh 2): Không gian ghi chú và từ vựng độc lập thứ 2, chủ đề màu Xanh Biển (Cyan/Sky Blue), tự động khởi tạo trang chào mừng riêng.
+  - 🌌 **Về Trang Tổng**: Nút quay về Cổng điều phối Universe Portal bất cứ lúc nào.
+* **Định tuyến Vercel siêu sạch (`vercel.json`)**: Hỗ trợ Clean URLs rewrite để truy cập trực tiếp `https://schooluniversenotebook.vercel.app/school` và `https://schooluniversenotebook.vercel.app/water` mượt mà không bị chuyển hướng rườm rà.
 * **Tương thích ngược tuyệt đối (Zero Data Loss)**: Toàn bộ ghi chú và từ vựng cũ tự động quy thuộc về USER SCHOOL, không mất mát dù chỉ 1 ký tự.
 * **Mini Note Phân luồng chuẩn xác**: Mini Note PWA hỗ trợ nút gạt chuyển nhánh nhanh `🏫 SCHOOL` / `💧 WATER`. Khi bấm "Gửi", ghi chú và từ vựng sẽ nạp chuẩn xác vào Inbox của đúng User đang chọn, kèm theo giao diện đổi màu tương ứng.
 * **Đồng bộ Cloud Firestore phân vùng**: Các tài liệu `notes` và `vocab_items` trên Firestore mang trường `user: 'school'` hoặc `user: 'water'`, các thiết bị khác nhau chỉ lắng nghe và nạp ghi chú thuộc về User đang kích hoạt.

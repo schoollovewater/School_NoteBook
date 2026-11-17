@@ -5,6 +5,15 @@ const DELETED_PAGES_KEY = 'schooldb_deleted_pages';
 
 function getCurrentUser() {
     try {
+        const path = (typeof window !== 'undefined' && window.location) ? window.location.pathname.toLowerCase() : '';
+        if (path.includes('/water')) return 'water';
+        if (path.includes('/school')) return 'school';
+        if (typeof window !== 'undefined' && window.location && window.location.search) {
+            const urlParams = new URLSearchParams(window.location.search);
+            const branchParam = urlParams.get('user') || urlParams.get('branch');
+            if (branchParam === 'water') return 'water';
+            if (branchParam === 'school') return 'school';
+        }
         const val = localStorage.getItem(CURRENT_USER_KEY);
         return (val === 'water') ? 'water' : 'school';
     } catch (e) { return 'school'; }
@@ -276,6 +285,9 @@ function updateWorkspaceProfileUI() {
         badgeEl.textContent = isWater ? '💧 WATER' : '🏫 SCHOOL';
         badgeEl.style.background = isWater ? 'rgba(14, 165, 233, 0.2)' : 'rgba(245, 158, 11, 0.2)';
         badgeEl.style.color = isWater ? '#38bdf8' : '#f59e0b';
+        badgeEl.style.display = 'inline-flex';
+        badgeEl.style.alignItems = 'center';
+        badgeEl.style.whiteSpace = 'nowrap';
     }
 
     if (avatarEl) {
@@ -295,6 +307,10 @@ function updateWorkspaceProfileUI() {
     if (nameEl) {
         const wsKey = getWorkspaceStorageKey(user);
         nameEl.textContent = localStorage.getItem(wsKey) || (isWater ? 'Water NoteBook' : 'School NoteBook');
+    }
+
+    if (typeof document !== 'undefined') {
+        document.title = isWater ? 'Water NoteBook 💧 — Sổ tay & Từ vựng' : 'School NoteBook 🏫 — Sổ tay & Từ vựng';
     }
 
     if (checkSchool) checkSchool.style.display = isWater ? 'none' : 'inline-block';
@@ -349,7 +365,16 @@ window.app.switchUser = function(newUser) {
     appState.currentUser = newUser;
     localStorage.setItem(CURRENT_USER_KEY, newUser);
 
-    // 3. Đóng popover
+    // 3. Cập nhật URL sạch trên thanh địa chỉ của trình duyệt
+    try {
+        if (window.history && window.history.pushState) {
+            const isLocal = location.protocol === 'file:' || location.port !== '';
+            const targetUrl = isLocal ? `app.html?user=${newUser}` : `/${newUser}`;
+            window.history.pushState({ user: newUser }, '', targetUrl);
+        }
+    } catch (e) {}
+
+    // 4. Đóng popover
     const popover = document.getElementById('workspace-switch-popover');
     if (popover) popover.style.display = 'none';
 
@@ -2874,11 +2899,14 @@ const app = {
         showToast('✅ Đã chuyển vào sổ tay');
     },
     openMiniNote: () => {
+        const u = appState ? (appState.currentUser || 'school') : 'school';
+        const isLocal = location.protocol === 'file:' || location.port !== '';
+        const targetUrl = isLocal ? `mini.html?user=${u}` : `/${u}/mini`;
         const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
         if (isStandalone || window.innerWidth < 768) {
-            window.location.href = 'mini.html';
+            window.location.href = targetUrl;
         } else {
-            window.open('mini.html', 'mininote', 'width=460,height=720');
+            window.open(targetUrl, `mininote_${u}`, 'width=460,height=720');
         }
     },
     openSidebar: () => openMobileSidebar(),

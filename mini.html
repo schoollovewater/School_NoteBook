@@ -597,9 +597,9 @@
     <!-- Top Header -->
     <header class="header">
         <div class="header-left">
-            <a href="index.html" class="brand-badge" title="Về Sổ tay chính">
+            <a href="/" onclick="if (location.protocol === 'file:') { location.href='index.html'; return false; }" class="brand-badge" title="Về Trang tổng Universe">
                 <i class="ri-flashlight-fill"></i>
-                <span>Mini Note</span>
+                <span id="mini-brand-name">School Mini Note</span>
             </a>
             <div class="branch-switcher" id="branch-switcher" title="Chuyển không gian lưu (SCHOOL / WATER)">
                 <button type="button" class="branch-pill active" id="branch-pill-school" onclick="switchBranch('school')">
@@ -618,7 +618,7 @@
             <button class="btn-icon" id="theme-toggle" title="Đổi giao diện">
                 <i class="ri-moon-line"></i>
             </button>
-            <a href="index.html" class="btn-link" title="Mở School NoteBook">
+            <a href="javascript:void(0)" onclick="openNotebookBranch()" class="btn-link" title="Mở Sổ tay tương ứng với nhánh đang chọn">
                 <i class="ri-book-2-line"></i> <span>Sổ tay</span>
             </a>
         </div>
@@ -749,12 +749,21 @@
         // --- BRANCH & USER PARTITIONING (SCHOOL vs WATER) ---
         let currentBranch = 'school';
         try {
-            const urlParams = new URLSearchParams(window.location.search);
-            const branchParam = urlParams.get('user') || urlParams.get('branch');
-            if (branchParam === 'water' || branchParam === 'school') {
-                currentBranch = branchParam;
+            const path = (typeof window !== 'undefined' && window.location) ? window.location.pathname.toLowerCase() : '';
+            if (path.includes('/water/mini') || path.includes('/water')) {
+                currentBranch = 'water';
+            } else if (path.includes('/school/mini') || path.includes('/school')) {
+                currentBranch = 'school';
             } else {
-                currentBranch = localStorage.getItem('schooldb_current_user') || 'school';
+                const urlParams = new URLSearchParams(window.location.search);
+                const branchParam = urlParams.get('user') || urlParams.get('branch');
+                if (branchParam === 'water') {
+                    currentBranch = 'water';
+                } else if (branchParam === 'school') {
+                    currentBranch = 'school';
+                } else {
+                    currentBranch = localStorage.getItem('schooldb_current_user') || 'school';
+                }
             }
         } catch (e) { currentBranch = 'school'; }
 
@@ -773,6 +782,12 @@
             const pillWater = document.getElementById('branch-pill-water');
             if (pillSchool) pillSchool.classList.toggle('active', currentBranch === 'school');
             if (pillWater) pillWater.classList.toggle('active', currentBranch === 'water');
+
+            const brandName = document.getElementById('mini-brand-name');
+            if (brandName) {
+                brandName.textContent = currentBranch === 'water' ? 'Water Mini Note' : 'School Mini Note';
+            }
+            document.title = currentBranch === 'water' ? 'Water Mini Note 💧 — Ghi Chú Hỏa Tốc' : 'School Mini Note 🏫 — Ghi Chú Hỏa Tốc';
         }
 
         function switchBranch(newBranch) {
@@ -783,8 +798,15 @@
                 localStorage.setItem(getDraftKey(currentBranch), JSON.stringify(tabs));
             } catch (e) {}
 
-            // 2. Chuyển branch
+            // 2. Chuyển branch và cập nhật URL sạch
             applyBranch(newBranch);
+            try {
+                if (window.history && window.history.pushState) {
+                    const isLocal = location.protocol === 'file:' || location.port !== '';
+                    const targetUrl = isLocal ? `mini.html?user=${newBranch}` : `/${newBranch}/mini`;
+                    window.history.pushState({ branch: newBranch }, '', targetUrl);
+                }
+            } catch (e) {}
 
             // 3. Tải tab nháp của branch mới
             loadDrafts();
@@ -792,6 +814,13 @@
             syncStateToUI();
 
             showToast(`🔄 Đã chuyển sang: USER ${newBranch.toUpperCase()}`);
+        }
+
+        function openNotebookBranch() {
+            const isLocal = location.protocol === 'file:' || location.port !== '';
+            const branch = currentBranch || 'school';
+            const target = isLocal ? `app.html?user=${branch}` : `/${branch}`;
+            window.location.href = target;
         }
 
         // --- STATE & DRAFTS ---

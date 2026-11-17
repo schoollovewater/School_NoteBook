@@ -8,6 +8,7 @@ const CACHE_NAME = 'schooldb-v4.3.0';
 const PRECACHE_URLS = [
     './',
     './index.html',
+    './app.html',
     './mini.html',
     './styles.css?v=4.3.0',
     './app.js?v=4.3.0',
