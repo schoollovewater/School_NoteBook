@@ -207,7 +207,11 @@ node mininote.js --todo -t "Việc hôm nay" "Học từ vựng\nLàm bài tập
 * **1-Click AI Tra từ vựng**: Tự động điền phiên âm IPA, chủ đề, nghĩa tiếng Việt chuẩn và câu ví dụ thực tế kèm bản dịch.
 * **AI Gia sư chấm bài đặt câu**: Nhận xét ngữ pháp, chấm điểm thang 10 và gợi ý câu tiếng Anh tự nhiên chuẩn bản xứ.
 * **AI Trắc nghiệm ôn tập**: Tự động tạo bộ đề trắc nghiệm 5 - 10 câu hỏi từ kho từ vựng cá nhân, chấm điểm và giải thích chi tiết.
-* **Tự phục hồi & Tự phát hiện Model (v4.1.1)**: Tự động gọi `ModelService.ListModels` để nhận diện các mô hình khả dụng theo API Key của từng người dùng, hỗ trợ cơ chế fallback đa tầng (`v1beta` & `v1`, tự động chuyển sang mô hình tương thích như `gemini-2.0-flash`, `gemini-1.5-flash`, `gemini-pro`) và cung cấp nút thử lại/đổi key nhanh khi có lỗi.
+* **Điều phối thông minh đa mô hình (Smart Task Routing - v4.2.0)**: Tự động hoán đổi mô hình theo tính chất tác vụ:
+  - ⚡ *Tác vụ nhanh (< 1s)*: Tra từ vựng, tạo trắc nghiệm quiz, dịch câu ngắn -> điều phối sang **`Gemini 2.0 Flash`**.
+  - 🧠 *Tác vụ nặng & suy nghĩ sâu*: AI Gia sư chấm bài đặt câu, giải thích code thuật toán, viết lại văn phong, trò chuyện Sidebar -> điều phối sang **`Gemini 2.0 Flash Thinking`** hoặc **`Gemini 2.0 Pro`**.
+  - Người dùng có thể để chế độ **`🤖 Tự động thông minh`** (mặc định) hoặc ghim cố định một mô hình yêu thích trong Cài đặt.
+* **Tự phục hồi & Tự phát hiện Model**: Tự động gọi `ModelService.ListModels` để nhận diện các mô hình khả dụng theo API Key của từng người dùng, hỗ trợ cơ chế fallback đa tầng (`v1beta` & `v1`) bảo đảm không bao giờ đứt đoạn.
 
 ### 🃏 Ôn luyện Flashcard 3D
 * **`Space` (Phím cách)**: Lật thẻ xem nghĩa và ví dụ / lật lại.
@@ -217,4 +221,4 @@ node mininote.js --todo -t "Việc hôm nay" "Học từ vựng\nLàm bài tập
 * **Vuốt trái (Cảm ứng)**: Đánh dấu cần ôn lại thẻ.
 
 ---
-*Tài liệu được cập nhật tự động và lưu trữ trực tiếp trong mã nguồn dự án School NoteBook (Phiên bản v4.1.1).*
+*Tài liệu được cập nhật tự động và lưu trữ trực tiếp trong mã nguồn dự án School NoteBook (Phiên bản v4.2.0).*

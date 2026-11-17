@@ -24,7 +24,7 @@
     <!-- KaTeX CSS for Math Equations (LaTeX) -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
     
-    <link rel="stylesheet" href="styles.css?v=4.1.1">
+    <link rel="stylesheet" href="styles.css?v=4.2.0">
 </head>
 <body>
     <div class="app-background">
@@ -46,7 +46,7 @@
                         <span class="workspace-name">School NoteBook</span>
                         <div class="workspace-meta">
                             <span class="workspace-plan">Personal</span>
-                            <span class="workspace-version-badge" id="app-version-badge" title="Phiên bản School NoteBook hiện tại">v4.1.1</span>
+                            <span class="workspace-version-badge" id="app-version-badge" title="Phiên bản School NoteBook hiện tại">v4.2.0</span>
                         </div>
                     </div>
                     <i class="ri-expand-up-down-line text-muted"></i>
@@ -729,9 +729,12 @@
                 </div>
                 <div style="display: flex; gap: 8px; margin-top: 8px; align-items: center;">
                     <select id="setting-gemini-model" onchange="aiService.setModel(this.value)" style="flex: 1; padding: 6px 10px; border-radius: 6px; background: var(--bg-surface); color: var(--text-primary); border: 1px solid var(--border-color); font-size: 12.5px;">
-                        <option value="gemini-2.0-flash">Gemini 2.0 Flash (Khuyên dùng - Siêu nhanh & Thông minh)</option>
-                        <option value="gemini-1.5-flash">Gemini 1.5 Flash (Ổn định)</option>
-                        <option value="gemini-1.5-pro">Gemini 1.5 Pro (Mô hình lớn chuyên sâu)</option>
+                        <option value="auto">🤖 Tự động thông minh (Khuyên dùng - Nhanh cho việc nhẹ, Tư duy sâu cho việc nặng)</option>
+                        <option value="gemini-2.0-flash">⚡ Gemini 2.0 Flash (Ghim cố định - Siêu tốc độ)</option>
+                        <option value="gemini-2.0-flash-thinking-exp-01-21">🧠 Gemini 2.0 Flash Thinking (Ghim cố định - Suy nghĩ từng bước)</option>
+                        <option value="gemini-2.0-pro-exp-02-05">👑 Gemini 2.0 Pro Experimental (Ghim cố định - Flagship mạnh nhất)</option>
+                        <option value="gemini-1.5-pro">📚 Gemini 1.5 Pro (Ghim cố định - Cửa sổ 2M tokens)</option>
+                        <option value="gemini-1.5-flash">🛡️ Gemini 1.5 Flash (Ghim cố định - Ổn định cơ bản)</option>
                     </select>
                     <button type="button" class="btn btn-secondary" onclick="aiService.testConnection(document.getElementById('setting-gemini-api-key').value)" style="white-space: nowrap; font-size: 12px; padding: 6px 10px;">
                         <i class="ri-wifi-line"></i> Kiểm tra kết nối
@@ -745,7 +748,7 @@
                 <div class="version-info-box">
                     <div class="version-info-row">
                         <span>Phiên bản đang chạy:</span>
-                        <strong class="version-number-tag" id="setting-app-version">v4.1.1</strong>
+                        <strong class="version-number-tag" id="setting-app-version">v4.2.0</strong>
                     </div>
                     <div class="version-info-row">
                         <span>Trạng thái:</span>
@@ -1168,8 +1171,8 @@
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 
     <script src="firebase-config.js"></script>
-    <script src="shared/note-schema.js?v=4.1.1"></script>
-    <script src="shared/ai-service.js?v=4.1.1"></script>
-    <script src="app.js?v=4.1.1"></script>
+    <script src="shared/note-schema.js?v=4.2.0"></script>
+    <script src="shared/ai-service.js?v=4.2.0"></script>
+    <script src="app.js?v=4.2.0"></script>
 </body>
 </html>

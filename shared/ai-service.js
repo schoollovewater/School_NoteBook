@@ -10,16 +10,15 @@ const aiService = {
         discoveredModels: 'schooldb_gemini_discovered_models',
         chatHistory: 'schooldb_ai_chat_history'
     },
-    defaultModel: 'gemini-2.0-flash',
+    defaultModel: 'auto',
     fallbackModels: [
         'gemini-2.0-flash',
+        'gemini-2.0-flash-thinking-exp-01-21',
+        'gemini-2.0-pro-exp-02-05',
         'gemini-1.5-flash',
         'gemini-1.5-flash-latest',
         'gemini-1.5-flash-002',
-        'gemini-1.5-flash-001',
-        'gemini-2.0-flash-exp',
         'gemini-1.5-pro',
-        'gemini-1.5-pro-latest',
         'gemini-pro'
     ],
     apiVersions: ['v1beta', 'v1'],
@@ -27,13 +26,15 @@ const aiService = {
     chatMessages: [],
     currentInlineResult: null,
     lastInlineAction: null,
+    lastUsedModel: null,
     activeQuiz: null,
     currentQuizIndex: 0,
     quizScore: 0,
     userAnswers: [],
 
     cleanModelName(name) {
-        if (!name) return this.defaultModel;
+        if (!name) return 'auto';
+        if (name === 'auto' || name === 'smart') return 'auto';
         return String(name).replace(/^models\//, '').trim();
     },
 
@@ -56,11 +57,78 @@ const aiService = {
         } catch (e) {}
     },
 
+    // Điều phối thông minh mô hình phù hợp nhất theo tính chất tác vụ
+    resolveModelForTask(taskType) {
+        const mode = this.getModel();
+        if (mode && mode !== 'auto' && mode !== 'smart') {
+            return this.cleanModelName(mode);
+        }
+
+        // Tác vụ tư duy sâu / phân tích chuyên sâu
+        const deepTasks = ['sentence_tutor', 'explain_code', 'explain_concept', 'improve', 'summarize', 'chat'];
+        if (deepTasks.includes(taskType)) {
+            return this.getBestDeepModel();
+        }
+
+        // Mặc định cho tác vụ nhanh (tra từ vựng, tạo bài quiz, dịch ngắn, sửa chính tả)
+        return this.getBestFastModel();
+    },
+
+    getBestDeepModel() {
+        const discovered = this.getDiscoveredModels();
+        const deepCandidates = [
+            'gemini-2.0-flash-thinking-exp-01-21',
+            'gemini-2.0-flash-thinking-exp',
+            'gemini-2.0-pro-exp-02-05',
+            'gemini-2.0-pro-exp',
+            'gemini-1.5-pro',
+            'gemini-1.5-pro-latest',
+            'gemini-2.0-flash'
+        ];
+
+        if (discovered && discovered.length > 0) {
+            for (const cand of deepCandidates) {
+                if (discovered.includes(cand)) return cand;
+            }
+            const anyThinking = discovered.find(m => m.includes('thinking'));
+            if (anyThinking) return anyThinking;
+            const anyPro = discovered.find(m => m.includes('pro'));
+            if (anyPro) return anyPro;
+        }
+
+        return 'gemini-2.0-flash-thinking-exp-01-21';
+    },
+
+    getBestFastModel() {
+        const discovered = this.getDiscoveredModels();
+        const fastCandidates = [
+            'gemini-2.0-flash',
+            'gemini-1.5-flash',
+            'gemini-1.5-flash-latest',
+            'gemini-1.5-flash-002',
+            'gemini-1.5-flash-001'
+        ];
+
+        if (discovered && discovered.length > 0) {
+            for (const cand of fastCandidates) {
+                if (discovered.includes(cand)) return cand;
+            }
+            const anyFlash = discovered.find(m => m.includes('flash') && !m.includes('thinking'));
+            if (anyFlash) return anyFlash;
+        }
+
+        return 'gemini-2.0-flash';
+    },
+
     getModelDisplayName(model) {
-        const clean = this.cleanModelName(model || this.getModel());
-        if (clean.includes('2.0-flash')) return 'Gemini 2.0 Flash';
-        if (clean.includes('1.5-flash')) return 'Gemini 1.5 Flash';
-        if (clean.includes('1.5-pro')) return 'Gemini 1.5 Pro';
+        const m = model || this.getModel();
+        if (m === 'auto' || m === 'smart') return '🤖 Tự động thông minh (Smart Router)';
+        const clean = this.cleanModelName(m);
+        if (clean.includes('thinking')) return '🧠 Gemini 2.0 Flash Thinking';
+        if (clean.includes('2.0-pro')) return '👑 Gemini 2.0 Pro';
+        if (clean.includes('2.0-flash')) return '⚡ Gemini 2.0 Flash';
+        if (clean.includes('1.5-pro')) return '📚 Gemini 1.5 Pro';
+        if (clean.includes('1.5-flash')) return '🛡️ Gemini 1.5 Flash';
         if (clean.includes('pro')) return 'Gemini Pro';
         return clean;
     },
@@ -82,28 +150,41 @@ const aiService = {
     updateModelSelectUI(models = null) {
         const select = document.getElementById('setting-gemini-model');
         const current = this.getModel();
-        const list = models || this.getDiscoveredModels() || [
-            'gemini-2.0-flash',
-            'gemini-1.5-flash',
-            'gemini-1.5-pro'
-        ];
+        const discovered = models || this.getDiscoveredModels();
 
         if (select) {
             select.innerHTML = '';
-            const allOpts = [...list];
-            if (current && !allOpts.includes(current)) {
-                allOpts.unshift(current);
+
+            // Tùy chọn Tự động thông minh
+            const autoOpt = document.createElement('option');
+            autoOpt.value = 'auto';
+            autoOpt.textContent = '🤖 Tự động thông minh (Khuyên dùng - Nhanh cho việc nhẹ, Tư duy sâu cho việc nặng)';
+            if (current === 'auto') autoOpt.selected = true;
+            select.appendChild(autoOpt);
+
+            // Các mô hình chuẩn
+            const presetModels = [
+                { id: 'gemini-2.0-flash', label: '⚡ Gemini 2.0 Flash (Ghim cố định - Siêu tốc độ)' },
+                { id: 'gemini-2.0-flash-thinking-exp-01-21', label: '🧠 Gemini 2.0 Flash Thinking (Ghim cố định - Suy nghĩ từng bước)' },
+                { id: 'gemini-2.0-pro-exp-02-05', label: '👑 Gemini 2.0 Pro Experimental (Ghim cố định - Flagship mạnh nhất)' },
+                { id: 'gemini-1.5-pro', label: '📚 Gemini 1.5 Pro (Ghim cố định - Cửa sổ 2M tokens)' },
+                { id: 'gemini-1.5-flash', label: '🛡️ Gemini 1.5 Flash (Ghim cố định - Ổn định cơ bản)' }
+            ];
+
+            const presetIds = presetModels.map(p => p.id);
+            if (discovered && Array.isArray(discovered)) {
+                discovered.forEach(d => {
+                    if (!presetIds.includes(d)) {
+                        presetModels.push({ id: d, label: `🔹 ${d} (Từ tài khoản của bạn)` });
+                    }
+                });
             }
-            allOpts.forEach(m => {
+
+            presetModels.forEach(m => {
                 const opt = document.createElement('option');
-                opt.value = m;
-                let label = m;
-                if (m === 'gemini-2.0-flash') label += ' (Khuyên dùng - Siêu nhanh & Mới nhất)';
-                else if (m === 'gemini-1.5-flash') label += ' (Ổn định)';
-                else if (m === 'gemini-1.5-flash-latest') label += ' (Bản mới nhất)';
-                else if (m === 'gemini-1.5-pro') label += ' (Chuyên sâu)';
-                opt.textContent = label;
-                if (m === current) opt.selected = true;
+                opt.value = m.id;
+                opt.textContent = m.label;
+                if (current === m.id) opt.selected = true;
                 select.appendChild(opt);
             });
         }
@@ -115,26 +196,35 @@ const aiService = {
     },
 
     getApiKey() {
+        if (typeof localStorage === 'undefined') return '';
         return (localStorage.getItem(this.STORAGE_KEYS.apiKey) || '').trim();
     },
 
     setApiKey(key) {
+        if (typeof localStorage === 'undefined') return;
         localStorage.setItem(this.STORAGE_KEYS.apiKey, (key || '').trim());
     },
 
     getModel() {
+        if (typeof localStorage === 'undefined') return this.defaultModel;
         const stored = localStorage.getItem(this.STORAGE_KEYS.model);
-        return this.cleanModelName(stored) || this.defaultModel;
+        if (!stored) return 'auto';
+        if (stored === 'auto') return 'auto';
+        return this.cleanModelName(stored) || 'auto';
     },
 
     setModel(model) {
         if (!model) return;
         const clean = this.cleanModelName(model);
-        localStorage.setItem(this.STORAGE_KEYS.model, clean);
-        const badge = document.getElementById('ai-sidebar-model-badge');
-        if (badge) badge.textContent = this.getModelDisplayName(clean);
-        const select = document.getElementById('setting-gemini-model');
-        if (select && select.value !== clean) select.value = clean;
+        if (typeof localStorage !== 'undefined') {
+            localStorage.setItem(this.STORAGE_KEYS.model, clean);
+        }
+        if (typeof document !== 'undefined') {
+            const badge = document.getElementById('ai-sidebar-model-badge');
+            if (badge) badge.textContent = this.getModelDisplayName(clean);
+            const select = document.getElementById('setting-gemini-model');
+            if (select && select.value !== clean) select.value = clean;
+        }
     },
 
     hasKey() {
@@ -360,8 +450,9 @@ const aiService = {
             throw new Error('Chưa cấu hình Gemini API Key. Vui lòng nhập API Key để sử dụng.');
         }
 
-        const requestedModel = options.model || this.getModel();
+        const requestedModel = options.model || this.resolveModelForTask(options.task);
         const primaryModel = this.cleanModelName(requestedModel);
+        this.lastUsedModel = primaryModel;
 
         // Chuỗi thử nghiệm 1: Model chính qua v1beta rồi v1
         const initialAttempts = [
@@ -373,7 +464,7 @@ const aiService = {
 
         for (const attempt of initialAttempts) {
             try {
-                return await this._callGeminiSingle(
+                const res = await this._callGeminiSingle(
                     attempt.apiVersion,
                     attempt.model,
                     apiKey,
@@ -381,6 +472,8 @@ const aiService = {
                     systemInstruction,
                     options
                 );
+                this.lastUsedModel = attempt.model;
+                return res;
             } catch (err) {
                 lastError = err;
                 // Nếu là lỗi 403 (bị chặn quyền) hoặc 400 (sai key), không thử thêm endpoint khác
@@ -432,10 +525,13 @@ const aiService = {
                             systemInstruction,
                             options
                         );
-                        // Thành công! Tự động lưu model này làm active model để các lần sau chạy tức thì
+                        // Thành công!
                         console.info(`Tự động phục hồi thành công! Đã chuyển sang model "${fallbackModel}".`);
-                        this.setModel(fallbackModel);
-                        this.updateModelSelectUI();
+                        this.lastUsedModel = fallbackModel;
+                        if (this.getModel() !== 'auto') {
+                            this.setModel(fallbackModel);
+                            this.updateModelSelectUI();
+                        }
                         return result;
                     } catch (fbErr) {
                         lastError = fbErr;
@@ -468,7 +564,9 @@ const aiService = {
 
             if (res.success && res.models && res.models.length > 0) {
                 let activeModel = this.getModel();
-                if (!res.models.includes(activeModel)) {
+                if (activeModel === 'auto') {
+                    activeModel = this.resolveModelForTask('vocab_autofill');
+                } else if (!res.models.includes(activeModel)) {
                     activeModel = this.pickBestModel(res.models);
                     this.setModel(activeModel);
                 }
@@ -485,9 +583,13 @@ const aiService = {
                 }
 
                 if (statusEl) {
+                    const modeDesc = this.getModel() === 'auto' 
+                        ? 'Chế độ: <strong>Tự động thông minh</strong> (Flash cho việc nhanh, Thinking/Pro cho việc sâu)'
+                        : `Mô hình ghim: <strong>${activeModel}</strong>`;
                     statusEl.innerHTML = `
                         <div style="color: #10b981; font-weight: 500; margin-top: 4px; line-height: 1.4;">
-                            <i class="ri-checkbox-circle-fill"></i> Kết nối thành công! Khả dụng <strong>${res.models.length}</strong> mô hình (Đang dùng: <strong>${activeModel}</strong>).
+                            <i class="ri-checkbox-circle-fill"></i> Kết nối thành công! Khả dụng <strong>${res.models.length}</strong> mô hình.<br>
+                            <span style="font-size: 11.5px; color: var(--text-secondary);">${modeDesc}</span>
                         </div>
                     `;
                 }
@@ -549,7 +651,7 @@ Hãy trả về DUY NHẤT một chuỗi JSON hợp lệ (không kèm giải th�
 }`;
 
         try {
-            const raw = await this.generateContent(prompt, 'Trả về JSON thuần tuý hợp lệ.', { jsonMode: true });
+            const raw = await this.generateContent(prompt, 'Trả về JSON thuần tuý hợp lệ.', { jsonMode: true, task: 'vocab_autofill' });
             let parsed = null;
             try {
                 parsed = JSON.parse(raw);
@@ -686,7 +788,7 @@ Hãy chấm điểm và đánh giá chi tiết. Trả về DUY NHẤT một chu�
 }`;
 
         try {
-            const raw = await this.generateContent(prompt, 'Trả về JSON thuần tuý hợp lệ.', { jsonMode: true });
+            const raw = await this.generateContent(prompt, 'Trả về JSON thuần tuý hợp lệ.', { jsonMode: true, task: 'sentence_tutor' });
             let parsed = null;
             try {
                 parsed = JSON.parse(raw);
@@ -701,6 +803,12 @@ Hãy chấm điểm và đánh giá chi tiết. Trả về DUY NHẤT một chu�
             const scoreColor = score >= 8.5 ? '#10b981' : (score >= 6.5 ? '#f59e0b' : '#ef4444');
 
             if (feedbackArea) {
+                const modelBadge = this.lastUsedModel ? `
+                    <div style="font-size: 11px; color: var(--text-placeholder); margin-top: 8px; text-align: right; display: flex; align-items: center; justify-content: flex-end; gap: 4px;">
+                        <i class="ri-sparkling-fill" style="color: #60a5fa;"></i> Đã chấm bởi: <strong>${escapeHtml(this.getModelDisplayName(this.lastUsedModel))}</strong>
+                    </div>
+                ` : '';
+
                 feedbackArea.innerHTML = `
                     <div class="tutor-result-card">
                         <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 10px;">
@@ -721,6 +829,7 @@ Hãy chấm điểm và đánh giá chi tiết. Trả về DUY NHẤT một chu�
                             <div style="font-weight: 500; margin-top: 2px;">${escapeHtml(parsed.naturalAlternative)}</div>
                         </div>
                         ` : ''}
+                        ${modelBadge}
                     </div>
                 `;
                 feedbackArea.style.display = 'block';
@@ -786,7 +895,7 @@ Trả về DUY NHẤT một mảng JSON hợp lệ chứa ${count} câu hỏi th
 ]`;
 
         try {
-            const raw = await this.generateContent(prompt, 'Trả về JSON thuần tuý hợp lệ.', { jsonMode: true });
+            const raw = await this.generateContent(prompt, 'Trả về JSON thuần tuý hợp lệ.', { jsonMode: true, task: 'vocab_quiz' });
             let questions = null;
             try {
                 questions = JSON.parse(raw);
@@ -958,8 +1067,24 @@ Trả về DUY NHẤT một mảng JSON hợp lệ chứa ${count} câu hỏi th
         this.lastInlineAction = { actionType, text: selectedText };
         this.openInlineResultModal(actionType, selectedText);
         const resultContainer = document.getElementById('ai-inline-result-text');
+
+        const deepTasks = ['sentence_tutor', 'explain_code', 'explain_concept', 'improve', 'summarize', 'chat'];
+        const isDeep = deepTasks.includes(actionType);
+        const resolvedModel = this.resolveModelForTask(actionType);
+        const modelLabel = this.getModelDisplayName(resolvedModel);
+
+        const loadingMsg = isDeep 
+            ? `Gemini AI đang suy luận & phân tích chuyên sâu... (${modelLabel})`
+            : `Gemini AI đang xử lý văn bản siêu tốc... (${modelLabel})`;
+
         if (resultContainer) {
-            resultContainer.innerHTML = '<div style="text-align: center; padding: 24px; color: var(--accent);"><i class="ri-loader-4-line ri-spin" style="font-size: 28px;"></i><div style="margin-top: 8px; font-weight: 500;">Gemini AI đang xử lý văn bản...</div></div>';
+            resultContainer.innerHTML = `
+                <div style="text-align: center; padding: 24px; color: var(--accent);">
+                    <i class="ri-loader-4-line ri-spin" style="font-size: 28px;"></i>
+                    <div style="margin-top: 8px; font-weight: 600; font-size: 13.5px;">${escapeHtml(loadingMsg)}</div>
+                    <div style="font-size: 12px; color: var(--text-placeholder); margin-top: 4px;">Tự động điều phối theo tính chất tác vụ</div>
+                </div>
+            `;
         }
 
         let prompt = '';
@@ -989,15 +1114,23 @@ Trả về DUY NHẤT một mảng JSON hợp lệ chứa ${count} câu hỏi th
         }
 
         try {
-            const aiOutput = await this.generateContent(prompt, systemPrompt);
+            const aiOutput = await this.generateContent(prompt, systemPrompt, { task: actionType });
             this.currentInlineResult = {
                 actionType: actionType,
                 originalText: selectedText,
                 aiOutput: aiOutput
             };
 
+            const usedModelName = this.lastUsedModel || resolvedModel;
             if (resultContainer) {
-                resultContainer.innerHTML = `<div class="ai-rendered-output">${this.formatAiMarkdown(aiOutput)}</div>`;
+                resultContainer.innerHTML = `
+                    <div style="margin-bottom: 8px; display: flex; align-items: center; justify-content: flex-end;">
+                        <span style="font-size: 11px; padding: 2px 8px; border-radius: 12px; background: rgba(96, 165, 250, 0.12); color: #60a5fa; font-weight: 500;">
+                            <i class="ri-sparkling-fill"></i> ${escapeHtml(this.getModelDisplayName(usedModelName))}
+                        </span>
+                    </div>
+                    <div class="ai-rendered-output">${this.formatAiMarkdown(aiOutput)}</div>
+                `;
             }
         } catch (err) {
             console.error('Inline action error:', err);
@@ -1281,9 +1414,9 @@ Hãy trả lời một cách tự nhiên, chính xác, súc tích và có ích b
 Sử dụng Markdown đẹp mắt: in đậm từ khóa, gạch đầu dòng, khối code có cú pháp rõ ràng nếu liên quan tới lập trình.`;
 
         try {
-            const aiReply = await this.generateContent(messageText, systemPrompt);
+            const aiReply = await this.generateContent(messageText, systemPrompt, { task: 'chat' });
             this.removeLoadingBubble(loadingId);
-            this.appendChatMessage('assistant', aiReply);
+            this.appendChatMessage('assistant', aiReply, this.lastUsedModel);
         } catch (err) {
             console.error('Chat error:', err);
             this.removeLoadingBubble(loadingId);
@@ -1294,7 +1427,7 @@ Sử dụng Markdown đẹp mắt: in đậm từ khóa, gạch đầu dòng, kh
         }
     },
 
-    appendChatMessage(role, content) {
+    appendChatMessage(role, content, modelUsed = null) {
         const container = document.getElementById('ai-chat-messages');
         if (!container) return;
 
@@ -1310,10 +1443,17 @@ Sử dụng Markdown đẹp mắt: in đậm từ khóa, gạch đầu dòng, kh
                 <div class="ai-msg-bubble user-bubble">${escapeHtml(content)}</div>
             `;
         } else {
+            const badgeHtml = modelUsed ? `
+                <div style="font-size: 11px; color: var(--text-placeholder); margin-top: 4px; display: flex; align-items: center; gap: 4px;">
+                    <i class="ri-sparkling-fill" style="font-size: 11px; color: #60a5fa;"></i> ${escapeHtml(this.getModelDisplayName(modelUsed))}
+                </div>
+            ` : '';
+
             msgDiv.innerHTML = `
                 <div class="ai-msg-avatar"><i class="ri-sparkling-fill"></i></div>
                 <div class="ai-msg-content-wrapper">
                     <div class="ai-msg-bubble assistant-bubble">${this.formatAiMarkdown(content)}</div>
+                    ${badgeHtml}
                     <div class="ai-msg-actions">
                         <button type="button" class="ai-msg-action-btn" onclick="aiService.copyText(this, ${JSON.stringify(content)})" title="Sao chép">
                             <i class="ri-file-copy-line"></i> Sao chép
@@ -1423,6 +1563,12 @@ Sử dụng Markdown đẹp mắt: in đậm từ khóa, gạch đầu dòng, kh
     },
 
     init() {
+        // Tự động kích hoạt chế độ Tự động thông minh (Smart Auto Router)
+        const currentStored = localStorage.getItem(this.STORAGE_KEYS.model);
+        if (!currentStored || currentStored === 'gemini-2.0-flash' || currentStored === 'gemini-1.5-flash') {
+            this.setModel('auto');
+        }
+
         this.updateModelSelectUI();
         const badge = document.getElementById('ai-sidebar-model-badge');
         if (badge) {
