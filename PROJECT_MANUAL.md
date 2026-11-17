@@ -201,6 +201,13 @@ node mininote.js --todo -t "Việc hôm nay" "Học từ vựng\nLàm bài tập
 * **`Alt + W`**: Đóng tab hiện tại.
 * **`Alt + 1..9`**: Chuyển nhanh giữa các tab.
 
+### 🤖 Trợ lý Trí tuệ Nhân tạo (Google Gemini AI)
+* **`Ctrl + J`**: Mở / Đóng nhanh thanh Trợ lý AI bên phải màn hình (AI Assistant Sidebar).
+* **Menu `✨ AI` khi bôi đen chữ**: Tóm tắt, Viết lại mượt mà, Dịch Anh-Việt, Sửa chính tả & ngữ pháp, Giải thích code, Giải thích thuật ngữ.
+* **1-Click AI Tra từ vựng**: Tự động điền phiên âm IPA, chủ đề, nghĩa tiếng Việt chuẩn và câu ví dụ thực tế kèm bản dịch.
+* **AI Gia sư chấm bài đặt câu**: Nhận xét ngữ pháp, chấm điểm thang 10 và gợi ý câu tiếng Anh tự nhiên chuẩn bản xứ.
+* **AI Trắc nghiệm ôn tập**: Tự động tạo bộ đề trắc nghiệm 5 - 10 câu hỏi từ kho từ vựng cá nhân, chấm điểm và giải thích chi tiết.
+
 ### 🃏 Ôn luyện Flashcard 3D
 * **`Space` (Phím cách)**: Lật thẻ xem nghĩa và ví dụ / lật lại.
 * **`→` (Mũi tên sang phải)**: Chuyển sang thẻ tiếp theo.
@@ -209,4 +216,4 @@ node mininote.js --todo -t "Việc hôm nay" "Học từ vựng\nLàm bài tập
 * **Vuốt trái (Cảm ứng)**: Đánh dấu cần ôn lại thẻ.
 
 ---
-*Tài liệu được cập nhật tự động và lưu trữ trực tiếp trong mã nguồn dự án School NoteBook (Phiên bản v4.0.5).*
+*Tài liệu được cập nhật tự động và lưu trữ trực tiếp trong mã nguồn dự án School NoteBook (Phiên bản v4.1.0).*

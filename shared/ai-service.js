@@ -1,0 +1,1118 @@
+/**
+ * School NoteBook — AI Service (Google Gemini Integration)
+ * Hỗ trợ AI toàn diện cho Sổ tay ghi chú & Kho từ vựng tiếng Anh.
+ */
+
+const aiService = {
+    STORAGE_KEYS: {
+        apiKey: 'schooldb_gemini_api_key',
+        model: 'schooldb_gemini_model',
+        chatHistory: 'schooldb_ai_chat_history'
+    },
+    defaultModel: 'gemini-2.0-flash',
+    fallbackModel: 'gemini-1.5-flash',
+
+    chatMessages: [],
+    currentInlineResult: null,
+    activeQuiz: null,
+    currentQuizIndex: 0,
+    quizScore: 0,
+    userAnswers: [],
+
+    getApiKey() {
+        return (localStorage.getItem(this.STORAGE_KEYS.apiKey) || '').trim();
+    },
+
+    setApiKey(key) {
+        localStorage.setItem(this.STORAGE_KEYS.apiKey, (key || '').trim());
+    },
+
+    getModel() {
+        return localStorage.getItem(this.STORAGE_KEYS.model) || this.defaultModel;
+    },
+
+    setModel(model) {
+        localStorage.setItem(this.STORAGE_KEYS.model, model);
+    },
+
+    hasKey() {
+        return this.getApiKey().length > 10;
+    },
+
+    // Kiểm tra và hiển thị modal nhập API Key nếu chưa có
+    ensureApiKey() {
+        if (this.hasKey()) return true;
+        this.openApiKeyModal();
+        return false;
+    },
+
+    openApiKeyModal() {
+        let modal = document.getElementById('ai-key-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'ai-key-modal';
+            modal.className = 'modal-overlay';
+            modal.innerHTML = `
+                <div class="modal-content ai-key-modal-content">
+                    <div class="modal-header">
+                        <h3><i class="ri-sparkling-fill" style="color: #60a5fa;"></i> Kích hoạt Trí tuệ nhân tạo (Gemini AI)</h3>
+                        <button class="modal-close-btn" onclick="document.getElementById('ai-key-modal').style.display='none'"><i class="ri-close-line"></i></button>
+                    </div>
+                    <div class="modal-body" style="padding: 12px 0;">
+                        <p style="font-size: 13.5px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 12px;">
+                            School NoteBook sử dụng <strong>Google Gemini API</strong> (Gemini 2.0 Flash) hoàn toàn <strong>miễn phí</strong> với tốc độ cực nhanh, hỗ trợ tiếng Việt & tiếng Anh chuyên sâu.
+                        </p>
+                        <div class="ai-key-guide-box">
+                            <i class="ri-information-line"></i>
+                            <div>
+                                <span>Lấy API Key miễn phí 100% trong 30 giây:</span>
+                                <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" style="color: var(--accent); font-weight: 600; text-decoration: underline;">
+                                    Truy cập Google AI Studio <i class="ri-external-link-line"></i>
+                                </a>
+                            </div>
+                        </div>
+                        <div class="form-group" style="margin-top: 14px;">
+                            <label style="font-weight: 600; font-size: 12.5px;">Google Gemini API Key <span style="color:#ef4444;">*</span></label>
+                            <div style="position: relative;">
+                                <input type="password" id="modal-gemini-key-input" placeholder="AIzaSy..." style="width: 100%; padding-right: 40px; font-family: monospace;">
+                                <button type="button" class="btn-toggle-key-visibility" onclick="aiService.toggleKeyVisibility('modal-gemini-key-input', this)" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-placeholder); cursor: pointer;">
+                                    <i class="ri-eye-line"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px;">
+                        <button type="button" class="btn btn-secondary" onclick="document.getElementById('ai-key-modal').style.display='none'">Để sau</button>
+                        <button type="button" class="btn btn-primary" onclick="aiService.saveKeyFromModal()">Lưu & Kích hoạt</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+        const input = document.getElementById('modal-gemini-key-input');
+        if (input) input.value = this.getApiKey();
+        modal.style.display = 'flex';
+        if (input) setTimeout(() => input.focus(), 60);
+    },
+
+    toggleKeyVisibility(inputId, btn) {
+        const input = document.getElementById(inputId);
+        if (!input) return;
+        if (input.type === 'password') {
+            input.type = 'text';
+            if (btn) btn.innerHTML = '<i class="ri-eye-off-line"></i>';
+        } else {
+            input.type = 'password';
+            if (btn) btn.innerHTML = '<i class="ri-eye-line"></i>';
+        }
+    },
+
+    saveKeyFromModal() {
+        const input = document.getElementById('modal-gemini-key-input');
+        const key = input ? input.value.trim() : '';
+        if (!key) {
+            showToast('⚠️ Vui lòng nhập API Key để tiếp tục.');
+            return;
+        }
+        this.setApiKey(key);
+        const modal = document.getElementById('ai-key-modal');
+        if (modal) modal.style.display = 'none';
+        
+        // Sync into settings modal if open
+        const settingInput = document.getElementById('setting-gemini-api-key');
+        if (settingInput) settingInput.value = key;
+
+        showToast('✅ Đã lưu Gemini API Key thành công!');
+        this.testConnection(key);
+    },
+
+    // Gọi API trực tiếp tới Google Gemini REST API
+    async generateContent(prompt, systemInstruction = '', options = {}) {
+        const apiKey = this.getApiKey();
+        if (!apiKey) {
+            this.openApiKeyModal();
+            throw new Error('Chưa cấu hình Gemini API Key');
+        }
+
+        const model = options.model || this.getModel();
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+        const bodyData = {
+            contents: [
+                {
+                    role: 'user',
+                    parts: [{ text: prompt }]
+                }
+            ],
+            generationConfig: {
+                temperature: options.temperature !== undefined ? options.temperature : 0.7,
+                topK: 40,
+                topP: 0.95
+            }
+        };
+
+        if (systemInstruction) {
+            bodyData.systemInstruction = {
+                parts: [{ text: systemInstruction }]
+            };
+        }
+
+        if (options.jsonMode) {
+            bodyData.generationConfig.responseMimeType = 'application/json';
+        }
+
+        try {
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(bodyData)
+            });
+
+            if (!res.ok) {
+                const errJson = await res.json().catch(() => ({}));
+                const errMsg = errJson?.error?.message || `HTTP ${res.status}: ${res.statusText}`;
+                
+                // Fallback to 1.5-flash if 2.0-flash is not available for this key
+                if (model !== this.fallbackModel && (res.status === 404 || errMsg.toLowerCase().includes('not found') || errMsg.toLowerCase().includes('not supported'))) {
+                    console.warn(`Model ${model} unavailable, falling back to ${this.fallbackModel}...`);
+                    return this.generateContent(prompt, systemInstruction, { ...options, model: this.fallbackModel });
+                }
+                throw new Error(errMsg);
+            }
+
+            const data = await res.json();
+            const candidate = data.candidates?.[0];
+            const text = candidate?.content?.parts?.[0]?.text || '';
+            return text;
+        } catch (err) {
+            console.error('Gemini API Error:', err);
+            throw err;
+        }
+    },
+
+    // Kiểm tra kết nối API Key
+    async testConnection(testKey = null) {
+        const key = testKey || this.getApiKey();
+        const statusEl = document.getElementById('ai-connection-status');
+        if (statusEl) {
+            statusEl.innerHTML = '<span style="color: var(--accent);"><i class="ri-loader-4-line ri-spin"></i> Đang kiểm tra kết nối tới Google Gemini...</span>';
+        }
+
+        if (!key) {
+            if (statusEl) statusEl.innerHTML = '<span style="color: #ef4444;"><i class="ri-error-warning-line"></i> Chưa nhập API Key.</span>';
+            return false;
+        }
+
+        try {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.getModel()}?key=${encodeURIComponent(key)}`;
+            const res = await fetch(url);
+            if (res.ok) {
+                if (statusEl) statusEl.innerHTML = `<span style="color: #10b981;"><i class="ri-checkbox-circle-fill"></i> Kết nối thành công! Sẵn sàng phục vụ (${this.getModel()}).</span>`;
+                return true;
+            } else {
+                const errJson = await res.json().catch(() => ({}));
+                const msg = errJson?.error?.message || 'Key không hợp lệ hoặc đã hết hạn.';
+                if (statusEl) statusEl.innerHTML = `<span style="color: #ef4444;"><i class="ri-close-circle-fill"></i> Lỗi kết nối: ${escapeHtml(msg)}</span>`;
+                return false;
+            }
+        } catch (e) {
+            if (statusEl) statusEl.innerHTML = `<span style="color: #ef4444;"><i class="ri-close-circle-fill"></i> Không thể kết nối mạng: ${escapeHtml(e.message)}</span>`;
+            return false;
+        }
+    },
+
+    // =========================================================================
+    // 1. TÍNH NĂNG TỪ VỰNG & FLASHCARD
+    // =========================================================================
+
+    // 1-Click Tự động tra từ (Auto-fill Vocab with AI)
+    async autoFillVocab() {
+        if (!this.ensureApiKey()) return;
+
+        const wordInput = document.getElementById('vocab-input-word');
+        const phoneticInput = document.getElementById('vocab-input-phonetic');
+        const meaningInput = document.getElementById('vocab-input-meaning');
+        const exampleInput = document.getElementById('vocab-input-example');
+        const tagInput = document.getElementById('vocab-input-tag');
+        const btn = document.getElementById('btn-vocab-ai-fill');
+
+        const word = wordInput ? wordInput.value.trim() : '';
+        if (!word) {
+            showToast('⚠️ Vui lòng nhập từ hoặc cụm từ tiếng Anh trước.');
+            if (wordInput) wordInput.focus();
+            return;
+        }
+
+        const originalBtnHtml = btn ? btn.innerHTML : '';
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="ri-loader-4-line ri-spin"></i> Đang tra...';
+        }
+
+        const prompt = `Bạn là từ điển Anh-Việt chuyên sâu. Hãy tra cứu từ/cụm từ tiếng Anh sau: "${word}".
+Hãy trả về DUY NHẤT một chuỗi JSON hợp lệ (không kèm giải thích ngoài JSON) theo cấu trúc:
+{
+  "phonetic": "phiên âm IPA chuẩn quốc tế (ví dụ: /rɪˈzɪl.i.ənt/)",
+  "tag": "chọn 1 trong 4 giá trị: 'TechAdvanced' (kỹ thuật/lập trình chuyên sâu), 'TechCommon' (kỹ thuật máy tính/IT thông dụng), 'TOEIC' (công sở/kinh doanh/TOEIC), 'Other'",
+  "meaning": "nghĩa tiếng Việt chính xác, súc tích, tự nhiên",
+  "example": "1 câu ví dụ tiếng Anh thực tế hay và tự nhiên, kèm bản dịch tiếng Việt trong ngoặc đơn (Ví dụ: She showed a resilient spirit. (Cô ấy thể hiện tinh thần kiên cường.))"
+}`;
+
+        try {
+            const raw = await this.generateContent(prompt, 'Trả về JSON thuần tuý hợp lệ.', { jsonMode: true });
+            let parsed = null;
+            try {
+                parsed = JSON.parse(raw);
+            } catch (pe) {
+                const match = raw.match(/\{[\s\S]*\}/);
+                if (match) parsed = JSON.parse(match[0]);
+            }
+
+            if (!parsed) throw new Error('Không thể phân tích dữ liệu trả về từ AI.');
+
+            if (phoneticInput && parsed.phonetic) phoneticInput.value = parsed.phonetic;
+            if (meaningInput && parsed.meaning) meaningInput.value = parsed.meaning;
+            if (exampleInput && parsed.example) exampleInput.value = parsed.example;
+            if (tagInput && parsed.tag && ['TechAdvanced', 'TechCommon', 'TOEIC', 'Other'].includes(parsed.tag)) {
+                tagInput.value = parsed.tag;
+            }
+
+            showToast(`✨ Đã tự động tra cứu từ "${word}" thành công!`);
+            if (meaningInput) meaningInput.focus();
+        } catch (err) {
+            console.error('AutoFill Vocab error:', err);
+            showToast(`❌ Lỗi tra từ: ${err.message}`);
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = originalBtnHtml;
+            }
+        }
+    },
+
+    // AI Gia sư chấm bài luyện đặt câu (AI Sentence Tutor)
+    openSentenceTutor(vocabId) {
+        if (!this.ensureApiKey()) return;
+
+        const item = vocab.items.find(i => i.id === vocabId);
+        if (!item) {
+            showToast('Không tìm thấy từ vựng này.');
+            return;
+        }
+
+        let modal = document.getElementById('ai-tutor-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'ai-tutor-modal';
+            modal.className = 'modal-overlay';
+            modal.innerHTML = `
+                <div class="modal-content ai-tutor-modal-content">
+                    <div class="modal-header">
+                        <h3><i class="ri-sparkling-fill" style="color: #60a5fa;"></i> AI Gia sư: Luyện đặt câu tiếng Anh</h3>
+                        <button class="modal-close-btn" onclick="document.getElementById('ai-tutor-modal').style.display='none'"><i class="ri-close-line"></i></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="tutor-target-card" id="tutor-target-card">
+                            <!-- Injected by JS -->
+                        </div>
+
+                        <div class="form-group" style="margin-top: 14px;">
+                            <label style="font-weight: 600; font-size: 13px;">Câu tiếng Anh của bạn với từ này:</label>
+                            <textarea id="tutor-user-sentence" rows="3" placeholder="Nhập câu tiếng Anh bạn tự đặt ở đây... (ví dụ: The team applied a resilient pattern to survive traffic spikes.)" style="width: 100%; border-radius: 8px;"></textarea>
+                        </div>
+
+                        <div style="display: flex; justify-content: flex-end; margin-top: 10px;">
+                            <button type="button" class="btn btn-primary" id="btn-tutor-submit" onclick="aiService.submitSentenceToTutor()">
+                                <i class="ri-sparkling-fill"></i> Chấm điểm & Nhận xét
+                            </button>
+                        </div>
+
+                        <div class="tutor-feedback-area" id="tutor-feedback-area" style="display: none; margin-top: 14px;">
+                            <!-- Injected result -->
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+
+        this.activeTutorVocab = item;
+        const targetCard = document.getElementById('tutor-target-card');
+        if (targetCard) {
+            targetCard.innerHTML = `
+                <div style="display: flex; align-items: baseline; justify-content: space-between;">
+                    <div style="font-size: 18px; font-weight: 700; color: var(--text-primary);">${escapeHtml(item.word)}</div>
+                    <div style="font-size: 13px; color: var(--accent); font-family: monospace;">${escapeHtml(item.phonetic || '')}</div>
+                </div>
+                <div style="font-size: 13.5px; color: var(--text-secondary); margin-top: 4px;"><strong>Nghĩa:</strong> ${escapeHtml(item.meaning)}</div>
+                ${item.example ? `<div style="font-size: 12px; color: var(--text-placeholder); margin-top: 4px; font-style: italic;">Gợi ý mẫu: ${escapeHtml(item.example)}</div>` : ''}
+            `;
+        }
+
+        const sentenceInput = document.getElementById('tutor-user-sentence');
+        if (sentenceInput) sentenceInput.value = '';
+
+        const feedbackArea = document.getElementById('tutor-feedback-area');
+        if (feedbackArea) {
+            feedbackArea.style.display = 'none';
+            feedbackArea.innerHTML = '';
+        }
+
+        modal.style.display = 'flex';
+        if (sentenceInput) setTimeout(() => sentenceInput.focus(), 60);
+    },
+
+    async submitSentenceToTutor() {
+        if (!this.activeTutorVocab) return;
+        const input = document.getElementById('tutor-user-sentence');
+        const feedbackArea = document.getElementById('tutor-feedback-area');
+        const btn = document.getElementById('btn-tutor-submit');
+
+        const userSentence = input ? input.value.trim() : '';
+        if (!userSentence) {
+            showToast('⚠️ Vui lòng nhập câu tiếng Anh của bạn.');
+            if (input) input.focus();
+            return;
+        }
+
+        const originalBtnHtml = btn ? btn.innerHTML : '';
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="ri-loader-4-line ri-spin"></i> AI đang chấm bài...';
+        }
+
+        const item = this.activeTutorVocab;
+        const prompt = `Bạn là giáo viên tiếng Anh bản xứ chấm bài đặt câu của học viên.
+Từ vựng mục tiêu: "${item.word}" (Nghĩa: "${item.meaning}").
+Câu của học viên: "${userSentence}".
+
+Hãy chấm điểm và đánh giá chi tiết. Trả về DUY NHẤT một chuỗi JSON hợp lệ theo định dạng:
+{
+  "score": 9.0, // Thang điểm 10 (số thực từ 1.0 đến 10.0)
+  "evaluation": "nhận xét ngắn gọn tiếng Việt (1-2 câu) về ngữ pháp, cách dùng từ và độ tự nhiên",
+  "correctedSentence": "câu hoàn chỉnh đã được sửa lỗi chính tả, ngữ pháp (nếu câu của học viên đã chuẩn thì giữ nguyên)",
+  "naturalAlternative": "câu viết lại tự nhiên hơn chuẩn phong cách người bản xứ / chuyên nghiệp",
+  "translation": "bản dịch tiếng Việt của câu đã sửa"
+}`;
+
+        try {
+            const raw = await this.generateContent(prompt, 'Trả về JSON thuần tuý hợp lệ.', { jsonMode: true });
+            let parsed = null;
+            try {
+                parsed = JSON.parse(raw);
+            } catch (pe) {
+                const match = raw.match(/\{[\s\S]*\}/);
+                if (match) parsed = JSON.parse(match[0]);
+            }
+
+            if (!parsed) throw new Error('Không thể phân tích phản hồi chấm điểm.');
+
+            const score = typeof parsed.score === 'number' ? parsed.score : 8;
+            const scoreColor = score >= 8.5 ? '#10b981' : (score >= 6.5 ? '#f59e0b' : '#ef4444');
+
+            if (feedbackArea) {
+                feedbackArea.innerHTML = `
+                    <div class="tutor-result-card">
+                        <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 10px;">
+                            <span style="font-weight: 700; font-size: 14px;"><i class="ri-award-line"></i> Kết quả chấm bài:</span>
+                            <span class="tutor-score-badge" style="background: ${scoreColor}; color: white; padding: 3px 10px; border-radius: 20px; font-weight: 700; font-size: 14px;">${score} / 10</span>
+                        </div>
+                        <div style="margin-bottom: 8px; font-size: 13.5px; color: var(--text-primary); line-height: 1.45;">
+                            <strong>Nhận xét:</strong> ${escapeHtml(parsed.evaluation || 'Tốt!')}
+                        </div>
+                        <div style="margin-bottom: 8px; font-size: 13.5px; background: var(--bg-surface); padding: 8px 10px; border-radius: 6px; border-left: 3px solid #10b981;">
+                            <div style="font-size: 11.5px; font-weight: 600; color: #10b981; text-transform: uppercase;">Câu chuẩn đã sửa:</div>
+                            <div style="font-weight: 600; margin-top: 2px;">${escapeHtml(parsed.correctedSentence || userSentence)}</div>
+                            <div style="font-size: 12px; color: var(--text-placeholder); margin-top: 3px; font-style: italic;">${escapeHtml(parsed.translation || '')}</div>
+                        </div>
+                        ${parsed.naturalAlternative ? `
+                        <div style="font-size: 13px; background: rgba(96, 165, 250, 0.12); padding: 8px 10px; border-radius: 6px; border-left: 3px solid #60a5fa;">
+                            <div style="font-size: 11.5px; font-weight: 600; color: #60a5fa; text-transform: uppercase;">Gợi ý câu phong cách bản xứ:</div>
+                            <div style="font-weight: 500; margin-top: 2px;">${escapeHtml(parsed.naturalAlternative)}</div>
+                        </div>
+                        ` : ''}
+                    </div>
+                `;
+                feedbackArea.style.display = 'block';
+            }
+            showToast(`🎉 Chấm điểm hoàn tất: ${score}/10!`);
+        } catch (err) {
+            console.error('Tutor submit error:', err);
+            showToast(`❌ Lỗi chấm bài: ${err.message}`);
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = originalBtnHtml;
+            }
+        }
+    },
+
+    // AI Tự động tạo bài tập trắc nghiệm Flashcard (AI Quiz Mode)
+    async startVocabQuiz(count = 5) {
+        if (!this.ensureApiKey()) return;
+
+        if (!vocab.items || vocab.items.length < 3) {
+            showToast('⚠️ Bạn cần có ít nhất 3 từ vựng trong kho để tạo bài trắc nghiệm.');
+            return;
+        }
+
+        const quizContainer = document.getElementById('vocab-quiz-container');
+        if (!quizContainer) return;
+
+        quizContainer.innerHTML = `
+            <div style="text-align: center; padding: 40px 20px;">
+                <i class="ri-sparkling-fill ri-spin" style="font-size: 36px; color: var(--accent);"></i>
+                <div style="font-size: 16px; font-weight: 600; margin-top: 14px;">Gemini AI đang soạn bộ câu hỏi trắc nghiệm...</div>
+                <div style="font-size: 13px; color: var(--text-placeholder); margin-top: 6px;">Dựa trên danh sách từ vựng cá nhân của bạn.</div>
+            </div>
+        `;
+
+        // Lấy ngẫu nhiên từ vựng trong kho
+        const shuffled = [...vocab.items].sort(() => 0.5 - Math.random());
+        const sampleWords = shuffled.slice(0, Math.min(count * 2, 20)).map(w => ({
+            word: w.word,
+            meaning: w.meaning,
+            tag: w.tag,
+            example: w.example || ''
+        }));
+
+        const prompt = `Bạn là chuyên gia khảo thí tiếng Anh. Dựa trên danh sách các từ vựng sau:
+${JSON.stringify(sampleWords, null, 2)}
+
+Hãy soạn ${count} câu hỏi trắc nghiệm tiếng Anh thông minh giúp học viên kiểm tra khả năng nhớ từ.
+Các dạng câu hỏi phong phú:
+- Dạng 1: Chọn nghĩa tiếng Việt đúng của từ
+- Dạng 2: Điền từ thích hợp vào chỗ trống trong câu ví dụ
+- Dạng 3: Chọn từ đồng nghĩa / ngữ cảnh phù hợp
+
+Trả về DUY NHẤT một mảng JSON hợp lệ chứa ${count} câu hỏi theo định dạng:
+[
+  {
+    "question": "Nội dung câu hỏi rõ ràng...",
+    "options": ["Đáp án A", "Đáp án B", "Đáp án C", "Đáp án D"],
+    "answer": 0, // số nguyên từ 0 đến 3 biểu thị chỉ số đáp án đúng trong mảng options
+    "explanation": "Giải thích ngắn gọn bằng tiếng Việt tại sao đáp án này đúng"
+  }
+]`;
+
+        try {
+            const raw = await this.generateContent(prompt, 'Trả về JSON thuần tuý hợp lệ.', { jsonMode: true });
+            let questions = null;
+            try {
+                questions = JSON.parse(raw);
+            } catch (pe) {
+                const match = raw.match(/\[[\s\S]*\]/);
+                if (match) questions = JSON.parse(match[0]);
+            }
+
+            if (!questions || !Array.isArray(questions) || questions.length === 0) {
+                throw new Error('AI không trả về danh sách câu hỏi hợp lệ.');
+            }
+
+            this.activeQuiz = questions;
+            this.currentQuizIndex = 0;
+            this.quizScore = 0;
+            this.userAnswers = [];
+
+            this.renderQuizQuestion();
+        } catch (err) {
+            console.error('Quiz generate error:', err);
+            quizContainer.innerHTML = `
+                <div style="text-align: center; padding: 30px 10px; color: #ef4444;">
+                    <i class="ri-error-warning-line" style="font-size: 32px;"></i>
+                    <div style="font-weight: 600; margin-top: 8px;">Không thể tạo bài trắc nghiệm: ${escapeHtml(err.message)}</div>
+                    <button class="btn btn-secondary" onclick="aiService.startVocabQuiz(${count})" style="margin-top: 14px;">Thử lại</button>
+                </div>
+            `;
+        }
+    },
+
+    renderQuizQuestion() {
+        const container = document.getElementById('vocab-quiz-container');
+        if (!container || !this.activeQuiz) return;
+
+        const qIdx = this.currentQuizIndex;
+        const total = this.activeQuiz.length;
+
+        if (qIdx >= total) {
+            // Render kết quả tổng kết
+            this.renderQuizResults();
+            return;
+        }
+
+        const q = this.activeQuiz[qIdx];
+        const progressPct = ((qIdx + 1) / total) * 100;
+
+        container.innerHTML = `
+            <div class="quiz-card-wrapper">
+                <div class="quiz-header-bar">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <span style="font-size: 13px; font-weight: 700; color: var(--accent);">CÂU HỎI ${qIdx + 1} / ${total}</span>
+                        <span style="font-size: 13px; color: var(--text-secondary); font-weight: 600;">Điểm hiện tại: ${this.quizScore}</span>
+                    </div>
+                    <div class="quiz-progress-track">
+                        <div class="quiz-progress-fill" style="width: ${progressPct}%;"></div>
+                    </div>
+                </div>
+
+                <div class="quiz-question-text">${escapeHtml(q.question)}</div>
+
+                <div class="quiz-options-list">
+                    ${q.options.map((opt, oIdx) => `
+                        <button type="button" class="quiz-option-btn" data-index="${oIdx}" onclick="aiService.handleAnswerChoice(${oIdx})">
+                            <span class="quiz-option-letter">${['A', 'B', 'C', 'D'][oIdx] || ''}</span>
+                            <span class="quiz-option-text">${escapeHtml(opt)}</span>
+                        </button>
+                    `).join('')}
+                </div>
+
+                <div id="quiz-explanation-box" class="quiz-explanation-box" style="display: none;">
+                    <!-- Explanation injected after answer -->
+                </div>
+
+                <div id="quiz-next-actions" style="display: none; justify-content: flex-end; margin-top: 16px;">
+                    <button type="button" class="btn btn-primary" onclick="aiService.nextQuizQuestion()">
+                        ${qIdx + 1 < total ? 'Câu tiếp theo <i class="ri-arrow-right-line"></i>' : 'Xem kết quả bài thi <i class="ri-trophy-line"></i>'}
+                    </button>
+                </div>
+            </div>
+        `;
+    },
+
+    handleAnswerChoice(chosenIdx) {
+        if (!this.activeQuiz) return;
+        const q = this.activeQuiz[this.currentQuizIndex];
+        const optionBtns = document.querySelectorAll('.quiz-option-btn');
+        optionBtns.forEach(btn => btn.disabled = true);
+
+        const isCorrect = chosenIdx === q.answer;
+        if (isCorrect) this.quizScore++;
+
+        this.userAnswers.push({
+            question: q.question,
+            chosen: chosenIdx,
+            correct: q.answer,
+            isCorrect: isCorrect
+        });
+
+        optionBtns.forEach(btn => {
+            const idx = parseInt(btn.getAttribute('data-index'), 10);
+            if (idx === q.answer) {
+                btn.classList.add('correct');
+            } else if (idx === chosenIdx && !isCorrect) {
+                btn.classList.add('wrong');
+            }
+        });
+
+        const explainBox = document.getElementById('quiz-explanation-box');
+        if (explainBox) {
+            explainBox.innerHTML = `
+                <div style="font-weight: 700; color: ${isCorrect ? '#10b981' : '#ef4444'}; margin-bottom: 4px;">
+                    <i class="${isCorrect ? 'ri-checkbox-circle-fill' : 'ri-close-circle-fill'}"></i> ${isCorrect ? 'Chính xác!' : 'Chưa đúng rồi!'}
+                </div>
+                <div style="font-size: 13px; color: var(--text-secondary); line-height: 1.45;">${escapeHtml(q.explanation || '')}</div>
+            `;
+            explainBox.style.display = 'block';
+        }
+
+        const nextAction = document.getElementById('quiz-next-actions');
+        if (nextAction) nextAction.style.display = 'flex';
+    },
+
+    nextQuizQuestion() {
+        this.currentQuizIndex++;
+        this.renderQuizQuestion();
+    },
+
+    renderQuizResults() {
+        const container = document.getElementById('vocab-quiz-container');
+        if (!container || !this.activeQuiz) return;
+
+        const total = this.activeQuiz.length;
+        const score = this.quizScore;
+        const pct = Math.round((score / total) * 100);
+        const trophyIcon = pct >= 80 ? '🏆' : (pct >= 50 ? '🌟' : '💪');
+
+        container.innerHTML = `
+            <div class="quiz-results-card">
+                <div style="font-size: 48px; margin-bottom: 8px;">${trophyIcon}</div>
+                <h2 style="margin: 0; font-size: 22px;">Hoàn thành bài kiểm tra!</h2>
+                <div style="font-size: 14px; color: var(--text-secondary); margin-top: 6px;">Bạn đã trả lời đúng <strong>${score} / ${total}</strong> câu (${pct}%)</div>
+                
+                <div style="display: flex; justify-content: center; gap: 10px; margin-top: 20px;">
+                    <button class="btn btn-primary" onclick="aiService.startVocabQuiz(${total})">
+                        <i class="ri-refresh-line"></i> Làm bài kiểm tra khác
+                    </button>
+                    <button class="btn btn-secondary" onclick="vocab.switchView('list')">
+                        <i class="ri-book-open-line"></i> Về kho từ vựng
+                    </button>
+                </div>
+            </div>
+        `;
+    },
+
+    // =========================================================================
+    // 2. TÍNH NĂNG AI TRONG NOTE EDITOR
+    // =========================================================================
+
+    // Chạy các lệnh AI khi bôi đen văn bản
+    async runInlineAction(actionType, text) {
+        if (!this.ensureApiKey()) return;
+
+        const selectedText = text || (window.getSelection() ? window.getSelection().toString().trim() : '');
+        if (!selectedText) {
+            showToast('⚠️ Vui lòng bôi đen đoạn văn bản cần xử lý.');
+            return;
+        }
+
+        this.openInlineResultModal(actionType, selectedText);
+        const resultContainer = document.getElementById('ai-inline-result-text');
+        if (resultContainer) {
+            resultContainer.innerHTML = '<div style="text-align: center; padding: 24px; color: var(--accent);"><i class="ri-loader-4-line ri-spin" style="font-size: 28px;"></i><div style="margin-top: 8px; font-weight: 500;">Gemini AI đang xử lý văn bản...</div></div>';
+        }
+
+        let prompt = '';
+        let systemPrompt = 'Bạn là chuyên gia biên tập và trợ lý học tập xuất sắc.';
+
+        switch (actionType) {
+            case 'summarize':
+                prompt = `Tóm tắt ngắn gọn, súc tích và mạch lạc đoạn văn bản sau bằng tiếng Việt:\n\n"""\n${selectedText}\n"""`;
+                break;
+            case 'improve':
+                prompt = `Hãy viết lại đoạn văn bản sau cho tự nhiên, mượt mà, chuẩn văn phong hơn nhưng giữ nguyên ý nghĩa cốt lõi:\n\n"""\n${selectedText}\n"""`;
+                break;
+            case 'translate':
+                prompt = `Hãy tự động phát hiện ngôn ngữ của đoạn văn bản sau: nếu là tiếng Việt hãy dịch sang tiếng Anh tự nhiên; nếu là tiếng Anh hãy dịch sang tiếng Việt chuẩn xác và tự nhiên:\n\n"""\n${selectedText}\n"""`;
+                break;
+            case 'grammar':
+                prompt = `Hãy kiểm tra và sửa toàn bộ lỗi chính tả, ngữ pháp, diễn đạt trong đoạn văn bản sau. Trả về đoạn văn bản đã được sửa hoàn chỉnh:\n\n"""\n${selectedText}\n"""`;
+                break;
+            case 'explain_code':
+                prompt = `Giải thích đoạn mã nguồn sau một cách dễ hiểu, chỉ ra luồng hoạt động chính và lưu ý quan trọng (nếu có):\n\n\`\`\`\n${selectedText}\n\`\`\``;
+                break;
+            case 'explain_concept':
+                prompt = `Hãy giải thích thuật ngữ / khái niệm sau một cách dễ hiểu, trực quan, kèm ví dụ minh họa ngắn gọn:\n\n"${selectedText}"`;
+                break;
+            default:
+                prompt = `Xử lý đoạn văn bản sau:\n\n"""\n${selectedText}\n"""`;
+        }
+
+        try {
+            const aiOutput = await this.generateContent(prompt, systemPrompt);
+            this.currentInlineResult = {
+                actionType: actionType,
+                originalText: selectedText,
+                aiOutput: aiOutput
+            };
+
+            if (resultContainer) {
+                resultContainer.innerHTML = `<div class="ai-rendered-output">${this.formatAiMarkdown(aiOutput)}</div>`;
+            }
+        } catch (err) {
+            console.error('Inline action error:', err);
+            if (resultContainer) {
+                resultContainer.innerHTML = `<div style="color: #ef4444; padding: 12px;"><i class="ri-error-warning-line"></i> Lỗi xử lý: ${escapeHtml(err.message)}</div>`;
+            }
+        }
+    },
+
+    openInlineResultModal(actionType, originalText) {
+        let modal = document.getElementById('ai-inline-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'ai-inline-modal';
+            modal.className = 'modal-overlay';
+            modal.innerHTML = `
+                <div class="modal-content ai-inline-modal-content">
+                    <div class="modal-header">
+                        <h3 id="ai-inline-modal-title"><i class="ri-sparkling-fill" style="color: #60a5fa;"></i> Kết quả AI Assistant</h3>
+                        <button class="modal-close-btn" onclick="document.getElementById('ai-inline-modal').style.display='none'"><i class="ri-close-line"></i></button>
+                    </div>
+                    <div class="modal-body" style="padding: 10px 0;">
+                        <div class="ai-inline-result-text" id="ai-inline-result-text">
+                            <!-- Injected by JS -->
+                        </div>
+                    </div>
+                    <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color); padding-top: 10px; margin-top: 10px;">
+                        <button type="button" class="btn btn-secondary" onclick="document.getElementById('ai-inline-modal').style.display='none'">Đóng</button>
+                        <div style="display: flex; gap: 8px;">
+                            <button type="button" class="btn btn-secondary" onclick="aiService.applyInlineResult('copy')" title="Sao chép nội dung">
+                                <i class="ri-file-copy-line"></i> Sao chép
+                            </button>
+                            <button type="button" class="btn btn-secondary" onclick="aiService.applyInlineResult('insertBelow')" title="Chèn xuống dòng bên dưới">
+                                <i class="ri-text-wrap"></i> Chèn xuống dưới
+                            </button>
+                            <button type="button" class="btn btn-primary" onclick="aiService.applyInlineResult('replace')" title="Thay thế đoạn bôi đen ban đầu">
+                                <i class="ri-check-line"></i> Thay thế chữ
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+
+        const titleMap = {
+            summarize: '📝 Tóm tắt nội dung',
+            improve: '✍️ Viết lại hay hơn',
+            translate: '🌐 Dịch thuật Anh ↔ Việt',
+            grammar: '🔤 Sửa lỗi chính tả & ngữ pháp',
+            explain_code: '💻 Giải thích đoạn Code',
+            explain_concept: '💡 Giải thích khái niệm'
+        };
+
+        const titleEl = document.getElementById('ai-inline-modal-title');
+        if (titleEl) {
+            titleEl.innerHTML = `<i class="ri-sparkling-fill" style="color: #60a5fa;"></i> ${titleMap[actionType] || 'Kết quả AI'}`;
+        }
+
+        modal.style.display = 'flex';
+    },
+
+    applyInlineResult(mode) {
+        if (!this.currentInlineResult || !this.currentInlineResult.aiOutput) return;
+        const output = this.currentInlineResult.aiOutput;
+
+        if (mode === 'copy') {
+            navigator.clipboard.writeText(output).then(() => {
+                showToast('📋 Đã sao chép kết quả AI vào bộ nhớ tạm!');
+            }).catch(() => {
+                showToast('⚠️ Không thể sao chép tự động.');
+            });
+            return;
+        }
+
+        const modal = document.getElementById('ai-inline-modal');
+        if (modal) modal.style.display = 'none';
+
+        if (mode === 'replace') {
+            document.execCommand('insertText', false, output);
+            showToast('✅ Đã thay thế đoạn chữ bằng kết quả AI!');
+            triggerSave();
+        } else if (mode === 'insertBelow') {
+            const sel = window.getSelection();
+            if (sel && sel.rangeCount > 0) {
+                const range = sel.getRangeAt(0);
+                let container = range.commonAncestorContainer;
+                if (container && container.nodeType === Node.TEXT_NODE) container = container.parentElement;
+                const wrapper = container ? container.closest('.block-wrapper') : null;
+                if (wrapper && wrapper.parentNode) {
+                    const indent = parseInt(wrapper.getAttribute('data-indent') || '0', 10);
+                    const newWrapper = createBlockElement('text', escapeHtml(output).replace(/\n/g, '<br>'), generateId(), indent);
+                    wrapper.parentNode.insertBefore(newWrapper, wrapper.nextSibling);
+                    triggerSave();
+                    showToast('⬇️ Đã chèn kết quả AI xuống dòng bên dưới!');
+                    return;
+                }
+            }
+            // Fallback: paste at caret
+            document.execCommand('insertText', false, '\n' + output);
+            showToast('⬇️ Đã chèn kết quả AI!');
+            triggerSave();
+        }
+    },
+
+    // =========================================================================
+    // 3. THANH AI TRỢ LÝ BÊN CẠNH (AI ASSISTANT SIDEBAR)
+    // =========================================================================
+
+    toggleSidebar(forceState = null) {
+        let sidebar = document.getElementById('ai-assistant-sidebar');
+        if (!sidebar) {
+            this.createSidebarElement();
+            sidebar = document.getElementById('ai-assistant-sidebar');
+        }
+
+        const isOpen = sidebar.classList.contains('open');
+        const shouldOpen = forceState !== null ? forceState : !isOpen;
+
+        if (shouldOpen) {
+            if (!this.ensureApiKey()) return;
+            sidebar.classList.add('open');
+            this.updateSidebarNoteContext();
+            const input = document.getElementById('ai-chat-input');
+            if (input) setTimeout(() => input.focus(), 150);
+        } else {
+            sidebar.classList.remove('open');
+        }
+    },
+
+    createSidebarElement() {
+        const sidebar = document.createElement('aside');
+        sidebar.id = 'ai-assistant-sidebar';
+        sidebar.className = 'ai-assistant-sidebar';
+        sidebar.innerHTML = `
+            <div class="ai-sidebar-header">
+                <div class="ai-sidebar-title-group">
+                    <div class="ai-sidebar-icon"><i class="ri-sparkling-fill"></i></div>
+                    <div>
+                        <div class="ai-sidebar-title">Trợ lý AI Gemini</div>
+                        <div class="ai-sidebar-subtitle" id="ai-sidebar-model-badge">Gemini 2.0 Flash</div>
+                    </div>
+                </div>
+                <div class="ai-sidebar-header-actions">
+                    <button class="ai-icon-btn" onclick="aiService.clearChat()" title="Làm mới cuộc trò chuyện"><i class="ri-delete-bin-line"></i></button>
+                    <button class="ai-icon-btn" onclick="aiService.toggleSidebar(false)" title="Đóng panel"><i class="ri-close-line"></i></button>
+                </div>
+            </div>
+
+            <!-- Note Context Bar -->
+            <div class="ai-context-indicator" id="ai-context-indicator">
+                <i class="ri-file-text-line"></i>
+                <span class="ai-context-title" id="ai-context-title">Đang kết nối trang ghi chú...</span>
+            </div>
+
+            <!-- Quick Action Chips -->
+            <div class="ai-quick-chips-row">
+                <button type="button" class="ai-chip-btn" onclick="aiService.sendQuickPrompt('Tóm tắt các điểm chính của trang ghi chú này một cách ngắn gọn, dễ hiểu.')">
+                    📝 Tóm tắt trang này
+                </button>
+                <button type="button" class="ai-chip-btn" onclick="aiService.sendQuickPrompt('Giải thích các thuật ngữ / khái niệm kỹ thuật trọng tâm trong bài viết này.')">
+                    💡 Giải thích thuật ngữ
+                </button>
+                <button type="button" class="ai-chip-btn" onclick="aiService.sendQuickPrompt('Tạo 3 câu hỏi ôn tập kèm đáp án dựa trên nội dung ghi chú này.')">
+                    ❓ 3 câu hỏi ôn tập
+                </button>
+                <button type="button" class="ai-chip-btn" onclick="aiService.sendQuickPrompt('Đánh giá và gợi ý bổ sung các ý còn thiếu để trang ghi chú hoàn thiện hơn.')">
+                    🔍 Gợi ý bổ sung ý
+                </button>
+            </div>
+
+            <!-- Messages List -->
+            <div class="ai-chat-messages" id="ai-chat-messages">
+                <div class="ai-welcome-card">
+                    <div style="font-size: 24px; margin-bottom: 6px;">✨</div>
+                    <div style="font-weight: 600; font-size: 14px;">Xin chào! Tôi có thể giúp gì cho bài học của bạn?</div>
+                    <div style="font-size: 12.5px; color: var(--text-secondary); margin-top: 4px; line-height: 1.4;">
+                        Tôi có thể giải đáp kiến thức, tóm tắt bài giảng, giải thích code, hoặc luyện tiếng Anh trực tiếp dựa trên ghi chú đang mở.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat Input Area -->
+            <div class="ai-chat-input-area">
+                <textarea id="ai-chat-input" rows="2" placeholder="Hỏi AI về bài này hoặc kiến thức bất kỳ... (Enter để gửi, Shift+Enter xuống dòng)"></textarea>
+                <button type="button" id="ai-chat-send-btn" class="ai-send-btn" onclick="aiService.sendChatMessage()" title="Gửi tin nhắn">
+                    <i class="ri-send-plane-2-fill"></i>
+                </button>
+            </div>
+        `;
+        document.body.appendChild(sidebar);
+
+        // Enter key to send
+        const input = document.getElementById('ai-chat-input');
+        if (input) {
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    aiService.sendChatMessage();
+                }
+            });
+        }
+    },
+
+    updateSidebarNoteContext() {
+        const titleEl = document.getElementById('ai-context-title');
+        const pageTitle = (elements.pageTitleInput ? elements.pageTitleInput.value.trim() : '') || 'Ghi chú hiện tại';
+        if (titleEl) {
+            titleEl.textContent = `Ngữ cảnh: "${pageTitle}"`;
+        }
+    },
+
+    getNoteContentContext() {
+        const title = (elements.pageTitleInput ? elements.pageTitleInput.value.trim() : '') || 'Untitled';
+        let bodyText = '';
+        if (elements.blockEditor) {
+            const blocks = Array.from(elements.blockEditor.querySelectorAll('.block-content'));
+            bodyText = blocks.map(b => b.innerText.trim()).filter(Boolean).join('\n');
+        }
+        return { title, bodyText };
+    },
+
+    sendQuickPrompt(promptText) {
+        const input = document.getElementById('ai-chat-input');
+        if (input) input.value = promptText;
+        this.sendChatMessage(promptText);
+    },
+
+    async sendChatMessage(customPrompt = null) {
+        if (!this.ensureApiKey()) return;
+
+        const input = document.getElementById('ai-chat-input');
+        const sendBtn = document.getElementById('ai-chat-send-btn');
+        const messagesContainer = document.getElementById('ai-chat-messages');
+
+        const messageText = customPrompt || (input ? input.value.trim() : '');
+        if (!messageText) return;
+
+        if (input) input.value = '';
+
+        // Render User Message
+        this.appendChatMessage('user', messageText);
+
+        // Render Loading Bubble
+        const loadingId = 'ai-loading-' + Date.now();
+        this.appendLoadingBubble(loadingId);
+
+        if (sendBtn) sendBtn.disabled = true;
+
+        const { title, bodyText } = this.getNoteContentContext();
+        const systemPrompt = `Bạn là Trợ lý AI học tập thông minh trong ứng dụng School NoteBook.
+Bạn đang hỗ trợ người dùng dựa trên trang ghi chú hiện tại:
+Tiêu đề: "${title}"
+Nội dung ghi chú:
+"""
+${bodyText.slice(0, 8000)}
+"""
+
+Hãy trả lời một cách tự nhiên, chính xác, súc tích và có ích bằng tiếng Việt (trừ khi người dùng hỏi bằng tiếng Anh).
+Sử dụng Markdown đẹp mắt: in đậm từ khóa, gạch đầu dòng, khối code có cú pháp rõ ràng nếu liên quan tới lập trình.`;
+
+        try {
+            const aiReply = await this.generateContent(messageText, systemPrompt);
+            this.removeLoadingBubble(loadingId);
+            this.appendChatMessage('assistant', aiReply);
+        } catch (err) {
+            console.error('Chat error:', err);
+            this.removeLoadingBubble(loadingId);
+            this.appendChatMessage('assistant', `⚠️ Lỗi: ${err.message}`);
+        } finally {
+            if (sendBtn) sendBtn.disabled = false;
+            if (input) input.focus();
+        }
+    },
+
+    appendChatMessage(role, content) {
+        const container = document.getElementById('ai-chat-messages');
+        if (!container) return;
+
+        // Remove welcome card on first message
+        const welcome = container.querySelector('.ai-welcome-card');
+        if (welcome) welcome.remove();
+
+        const msgDiv = document.createElement('div');
+        msgDiv.className = `ai-message-row ${role === 'user' ? 'user-msg' : 'assistant-msg'}`;
+
+        if (role === 'user') {
+            msgDiv.innerHTML = `
+                <div class="ai-msg-bubble user-bubble">${escapeHtml(content)}</div>
+            `;
+        } else {
+            msgDiv.innerHTML = `
+                <div class="ai-msg-avatar"><i class="ri-sparkling-fill"></i></div>
+                <div class="ai-msg-content-wrapper">
+                    <div class="ai-msg-bubble assistant-bubble">${this.formatAiMarkdown(content)}</div>
+                    <div class="ai-msg-actions">
+                        <button type="button" class="ai-msg-action-btn" onclick="aiService.copyText(this, ${JSON.stringify(content)})" title="Sao chép">
+                            <i class="ri-file-copy-line"></i> Sao chép
+                        </button>
+                        <button type="button" class="ai-msg-action-btn" onclick="aiService.insertChatToNote(${JSON.stringify(content)})" title="Chèn vào trang ghi chú">
+                            <i class="ri-add-box-line"></i> Chèn vào bài
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        container.appendChild(msgDiv);
+        container.scrollTop = container.scrollHeight;
+    },
+
+    appendLoadingBubble(id) {
+        const container = document.getElementById('ai-chat-messages');
+        if (!container) return;
+        const loadingDiv = document.createElement('div');
+        loadingDiv.id = id;
+        loadingDiv.className = 'ai-message-row assistant-msg';
+        loadingDiv.innerHTML = `
+            <div class="ai-msg-avatar"><i class="ri-sparkling-fill"></i></div>
+            <div class="ai-msg-bubble assistant-bubble loading-bubble">
+                <span class="ai-typing-dot"></span>
+                <span class="ai-typing-dot"></span>
+                <span class="ai-typing-dot"></span>
+            </div>
+        `;
+        container.appendChild(loadingDiv);
+        container.scrollTop = container.scrollHeight;
+    },
+
+    removeLoadingBubble(id) {
+        const el = document.getElementById(id);
+        if (el) el.remove();
+    },
+
+    clearChat() {
+        const container = document.getElementById('ai-chat-messages');
+        if (container) {
+            container.innerHTML = `
+                <div class="ai-welcome-card">
+                    <div style="font-size: 24px; margin-bottom: 6px;">✨</div>
+                    <div style="font-weight: 600; font-size: 14px;">Cuộc trò chuyện đã được làm mới!</div>
+                    <div style="font-size: 12.5px; color: var(--text-secondary); margin-top: 4px; line-height: 1.4;">
+                        Bạn có thể hỏi bất cứ điều gì liên quan đến ghi chú hiện tại.
+                    </div>
+                </div>
+            `;
+        }
+        showToast('🧹 Đã xóa lịch sử trò chuyện.');
+    },
+
+    copyText(btn, text) {
+        navigator.clipboard.writeText(text).then(() => {
+            if (btn) {
+                const orig = btn.innerHTML;
+                btn.innerHTML = '<i class="ri-check-line"></i> Đã chép';
+                setTimeout(() => btn.innerHTML = orig, 1500);
+            }
+            showToast('📋 Đã sao chép vào bộ nhớ tạm!');
+        });
+    },
+
+    insertChatToNote(content) {
+        if (!elements.blockEditor) return;
+        const newBlock = createBlockElement('text', escapeHtml(content).replace(/\n/g, '<br>'), generateId(), 0);
+        elements.blockEditor.appendChild(newBlock);
+        triggerSave();
+        showToast('📥 Đã chèn phản hồi của AI vào cuối bài viết!');
+    },
+
+    // Format Markdown cơ bản sang HTML an toàn
+    formatAiMarkdown(md) {
+        if (!md) return '';
+        let html = escapeHtml(md);
+
+        // Code blocks: ```code```
+        html = html.replace(/```([\s\S]*?)```/g, (match, p1) => {
+            return `<pre class="ai-code-block"><code>${p1.trim()}</code></pre>`;
+        });
+
+        // Inline code: `code`
+        html = html.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
+
+        // Bold: **text**
+        html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+
+        // Italic: *text*
+        html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+
+        // Headers
+        html = html.replace(/^### (.*$)/gim, '<h4 style="margin: 8px 0 4px; font-size: 14px;">$1</h4>');
+        html = html.replace(/^## (.*$)/gim, '<h3 style="margin: 10px 0 4px; font-size: 15px;">$1</h3>');
+        html = html.replace(/^# (.*$)/gim, '<h2 style="margin: 12px 0 6px; font-size: 16px;">$1</h2>');
+
+        // Bullets
+        html = html.replace(/^\s*-\s+(.*$)/gim, '<li style="margin-left: 16px;">$1</li>');
+        html = html.replace(/(<li.*<\/li>)/gims, '<ul style="margin: 4px 0; padding-left: 8px;">$1</ul>');
+
+        // Line breaks
+        html = html.replace(/\n/g, '<br>');
+
+        return html;
+    }
+};
+
+if (typeof module !== 'undefined') {
+    module.exports = { aiService };
+} else {
+    window.aiService = aiService;
+}

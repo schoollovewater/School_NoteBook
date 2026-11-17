@@ -1,5 +1,5 @@
 // --- CONFIG & STATE ---
-const APP_VERSION = 'v4.0.5';
+const APP_VERSION = 'v4.1.0';
 const DELETED_PAGES_KEY = 'schooldb_deleted_pages';
 const appState = {
     theme: localStorage.getItem('theme') || 'dark',
@@ -263,6 +263,10 @@ function initApp() {
         document.getElementById('setting-workspace-name').value = localStorage.getItem('schooldb_workspace') || 'School NoteBook';
         const settingVer = document.getElementById('setting-app-version');
         if (settingVer) settingVer.textContent = APP_VERSION;
+        const keyInput = document.getElementById('setting-gemini-api-key');
+        if (keyInput && typeof aiService !== 'undefined') keyInput.value = aiService.getApiKey();
+        const modelSelect = document.getElementById('setting-gemini-model');
+        if (modelSelect && typeof aiService !== 'undefined') modelSelect.value = aiService.getModel();
     });
     
     // Settings Save
@@ -436,6 +440,10 @@ function initApp() {
                 e.preventDefault();
                 applyTechPillToSelection('amber');
             }
+        }
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'j') {
+            e.preventDefault();
+            if (typeof aiService !== 'undefined') aiService.toggleSidebar();
         }
     });
 
@@ -5916,6 +5924,9 @@ const vocab = {
                     </span>
 
                     <div class="vocab-card-actions">
+                        <button class="vocab-icon-action ai-tutor-btn" onclick="aiService.openSentenceTutor('${item.id}')" title="AI Gia sư: Luyện đặt câu với từ này">
+                            <i class="ri-sparkling-fill" style="color: #60a5fa;"></i>
+                        </button>
                         <button class="vocab-icon-action" onclick="vocab.editWord('${item.id}')" title="Sửa">
                             <i class="ri-edit-line"></i>
                         </button>
@@ -5934,23 +5945,33 @@ const vocab = {
         const listView = document.getElementById('vocab-grid-view');
         const filterBar = document.getElementById('vocab-filter-bar');
         const flashcardView = document.getElementById('vocab-flashcard-view');
+        const quizView = document.getElementById('vocab-quiz-view');
         const tabList = document.getElementById('tab-vocab-list');
         const tabFc = document.getElementById('tab-vocab-flashcard');
+        const tabQuiz = document.getElementById('tab-vocab-quiz');
+
+        [tabList, tabFc, tabQuiz].forEach(t => t && t.classList.remove('active'));
 
         if (view === 'list') {
-            listView.style.display = 'block';
-            filterBar.style.display = 'flex';
-            flashcardView.style.display = 'none';
-            tabList.classList.add('active');
-            tabFc.classList.remove('active');
+            if (listView) listView.style.display = 'block';
+            if (filterBar) filterBar.style.display = 'flex';
+            if (flashcardView) flashcardView.style.display = 'none';
+            if (quizView) quizView.style.display = 'none';
+            if (tabList) tabList.classList.add('active');
             vocab.renderGrid();
-        } else {
-            listView.style.display = 'none';
-            filterBar.style.display = 'none';
-            flashcardView.style.display = 'block';
-            tabList.classList.remove('active');
-            tabFc.classList.add('active');
+        } else if (view === 'flashcard') {
+            if (listView) listView.style.display = 'none';
+            if (filterBar) filterBar.style.display = 'none';
+            if (flashcardView) flashcardView.style.display = 'block';
+            if (quizView) quizView.style.display = 'none';
+            if (tabFc) tabFc.classList.add('active');
             vocab.initDeck();
+        } else if (view === 'quiz') {
+            if (listView) listView.style.display = 'none';
+            if (filterBar) filterBar.style.display = 'none';
+            if (flashcardView) flashcardView.style.display = 'none';
+            if (quizView) quizView.style.display = 'block';
+            if (tabQuiz) tabQuiz.classList.add('active');
         }
     },
 
@@ -6203,6 +6224,8 @@ function initFloatingToolbar() {
     const typeDropdown = document.getElementById('nft-type-dropdown');
     const techBtn = document.getElementById('bubble-tech-btn');
     const techDropdown = document.getElementById('bubble-tech-dropdown');
+    const aiBtn = document.getElementById('bubble-ai-btn');
+    const aiDropdown = document.getElementById('bubble-ai-dropdown');
     const moreBtn = document.getElementById('bubble-more-btn');
     const moreDropdown = document.getElementById('bubble-more-dropdown');
     const addVocabBtn = document.getElementById('bubble-add-vocab-btn');
@@ -6213,6 +6236,7 @@ function initFloatingToolbar() {
         if (typeDropdown) typeDropdown.style.display = 'none';
         if (colorDropdown) colorDropdown.style.display = 'none';
         if (techDropdown) techDropdown.style.display = 'none';
+        if (aiDropdown) aiDropdown.style.display = 'none';
         if (moreDropdown) moreDropdown.style.display = 'none';
     }
 
@@ -6256,6 +6280,17 @@ function initFloatingToolbar() {
             const isOpen = techDropdown.style.display !== 'none';
             closeAllFloatingDropdowns();
             techDropdown.style.display = isOpen ? 'none' : 'flex';
+        });
+    }
+
+    // AI Actions Dropdown Toggle
+    if (aiBtn && aiDropdown) {
+        aiBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const isOpen = aiDropdown.style.display !== 'none';
+            closeAllFloatingDropdowns();
+            aiDropdown.style.display = isOpen ? 'none' : 'flex';
         });
     }
 
