@@ -118,20 +118,25 @@
             filter: blur(40px);
         }
 
+        /* Sticky Header Container */
+        .app-header-sticky {
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            background: var(--bg-surface);
+            border-bottom: 1px solid var(--border);
+            padding-top: env(safe-area-inset-top, 0px);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+        }
+
         /* Top Bar */
         .top-bar {
-            height: 56px;
+            height: 52px;
             padding: 0 16px;
-            padding-top: env(safe-area-inset-top, 0px);
             display: flex;
             align-items: center;
             justify-content: space-between;
-            background: var(--bg-surface);
-            border-bottom: 1px solid var(--border);
-            position: sticky;
-            top: 0;
-            z-index: 40;
-            backdrop-filter: blur(16px);
         }
 
         .top-bar-left {
@@ -215,13 +220,8 @@
         /* Navigation Mode Tabs */
         .mode-nav {
             display: flex;
-            padding: 8px 14px;
+            padding: 0 14px 10px;
             gap: 6px;
-            background: var(--bg-surface);
-            border-bottom: 1px solid var(--border);
-            position: sticky;
-            top: 56px;
-            z-index: 30;
         }
         .mode-btn {
             flex: 1;
@@ -893,27 +893,6 @@
             cursor: pointer;
         }
 
-        /* iOS Audio Hint */
-        .ios-audio-hint {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            background: rgba(245, 158, 11, 0.12);
-            border: 1px solid rgba(245, 158, 11, 0.3);
-            border-radius: 14px;
-            padding: 10px 14px;
-            margin-bottom: 12px;
-            font-size: 12px;
-            line-height: 1.4;
-            color: var(--text-secondary);
-        }
-        .ios-audio-hint strong {
-            color: #f59e0b;
-        }
-        .ios-audio-hint u {
-            text-decoration-color: #f59e0b;
-        }
-
         /* Toast Message */
         .toast {
             position: fixed;
@@ -942,41 +921,43 @@
     <div class="ambient-glow"></div>
 
     <div class="app-wrapper">
-        <!-- Top Bar -->
-        <header class="top-bar">
-            <div class="top-bar-left">
-                <a href="/school" class="btn-back-hub" title="Về Sổ tay School">
-                    <i class="ri-arrow-left-s-line"></i>
-                </a>
-                <div class="brand-title">
-                    <h1>
-                        School Vocab <span class="brand-badge">v4.3.7</span>
-                    </h1>
-                    <span class="brand-sub">Tiếng Anh bỏ túi • Đi đường rảnh tay</span>
+        <!-- Sticky Header Container -->
+        <header class="app-header-sticky">
+            <div class="top-bar">
+                <div class="top-bar-left">
+                    <a href="/school" class="btn-back-hub" title="Về Sổ tay School">
+                        <i class="ri-arrow-left-s-line"></i>
+                    </a>
+                    <div class="brand-title">
+                        <h1>
+                            School Vocab <span class="brand-badge">v4.3.8</span>
+                        </h1>
+                        <span class="brand-sub">Tiếng Anh bỏ túi • Đi đường rảnh tay</span>
+                    </div>
+                </div>
+                <div class="top-bar-actions">
+                    <button type="button" class="btn-icon-top" id="btn-theme-toggle" title="Đổi giao diện">
+                        <i class="ri-moon-line"></i>
+                    </button>
+                    <button type="button" class="btn-icon-top" id="btn-open-add" title="Thêm từ mới">
+                        <i class="ri-add-line"></i>
+                    </button>
                 </div>
             </div>
-            <div class="top-bar-actions">
-                <button type="button" class="btn-icon-top" id="btn-theme-toggle" title="Đổi giao diện">
-                    <i class="ri-moon-line"></i>
-                </button>
-                <button type="button" class="btn-icon-top" id="btn-open-add" title="Thêm từ mới">
-                    <i class="ri-add-line"></i>
-                </button>
-            </div>
-        </header>
 
-        <!-- Navigation Tabs -->
-        <nav class="mode-nav" aria-label="Chế độ học">
-            <button type="button" class="mode-btn active" id="tab-flashcard" onclick="setMode('flashcard')">
-                <i class="ri-stack-line"></i> Lật Thẻ
-            </button>
-            <button type="button" class="mode-btn" id="tab-quiz" onclick="setMode('quiz')">
-                <i class="ri-brain-line"></i> Quiz
-            </button>
-            <button type="button" class="mode-btn" id="tab-list" onclick="setMode('list')">
-                <i class="ri-list-check-2"></i> Danh Sách
-            </button>
-        </nav>
+            <!-- Navigation Tabs -->
+            <nav class="mode-nav" aria-label="Chế độ học">
+                <button type="button" class="mode-btn active" id="tab-flashcard" onclick="setMode('flashcard')">
+                    <i class="ri-stack-line"></i> Lật Thẻ
+                </button>
+                <button type="button" class="mode-btn" id="tab-quiz" onclick="setMode('quiz')">
+                    <i class="ri-brain-line"></i> Quiz
+                </button>
+                <button type="button" class="mode-btn" id="tab-list" onclick="setMode('list')">
+                    <i class="ri-list-check-2"></i> Danh Sách
+                </button>
+            </nav>
+        </header>
 
         <!-- Main Content -->
         <main class="content-area">
@@ -986,15 +967,6 @@
                     📲 Cài đặt <strong>School Vocab</strong> vào điện thoại để học mọi lúc mọi nơi!
                 </div>
                 <button type="button" class="btn-install-pwa" id="btn-pwa-install">Cài Ngay</button>
-            </div>
-
-            <!-- iOS Audio Hint Banner -->
-            <div class="ios-audio-hint" id="ios-audio-hint" style="display: none;">
-                <i class="ri-volume-up-line" style="color: #f59e0b; font-size: 18px; flex-shrink: 0;"></i>
-                <div style="flex: 1;">
-                    <strong>Lưu ý iPhone:</strong> Nếu không nghe thấy tiếng, hãy kiểm tra <u>nút gạt im lặng bên sườn máy</u> (gạt sang BẬT chuông, không để vạch cam) và tăng âm lượng nhé!
-                </div>
-                <button type="button" onclick="dismissIosHint()" style="background:none;border:none;color:var(--text-muted);font-size:18px;cursor:pointer;padding:0 4px;line-height:1;" title="Đóng">&times;</button>
             </div>
 
             <!-- Stats & Filter Strip -->
@@ -2043,22 +2015,6 @@
             };
         }
 
-        // --- IOS AUDIO HINT ---
-        function checkIosAudioHint() {
-            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-            let dismissed = false;
-            try { dismissed = localStorage.getItem('school_ios_audio_dismissed') === 'true'; } catch(e) {}
-            if (isIOS && !dismissed) {
-                const hintEl = document.getElementById('ios-audio-hint');
-                if (hintEl) hintEl.style.display = 'flex';
-            }
-        }
-        function dismissIosHint() {
-            try { localStorage.setItem('school_ios_audio_dismissed', 'true'); } catch(e) {}
-            const hintEl = document.getElementById('ios-audio-hint');
-            if (hintEl) hintEl.style.display = 'none';
-        }
-
         // --- SERVICE WORKER FOR OFFLINE ---
         if ('serviceWorker' in navigator && location.protocol !== 'file:') {
             navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW err:', err));
@@ -2067,7 +2023,6 @@
         // --- INITIALIZE ---
         window.addEventListener('DOMContentLoaded', () => {
             loadVocab();
-            checkIosAudioHint();
         });
     </script>
 </body>

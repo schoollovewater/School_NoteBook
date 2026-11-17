@@ -1,7 +1,7 @@
 # 📚 School NoteBook — Hướng Dẫn & Tài Liệu Kỹ Thuật Toàn Diện
 
 > **Sổ tay ghi chép học tập, lập trình & Kho từ vựng thông minh theo phong cách Notion kết hợp Thẻ nhớ 3D Flashcards, Mini Note hỏa tốc & Trợ lý AI Gemini thông minh.**  
-> *Phiên bản hiện tại:* **v4.3.7**  
+> *Phiên bản hiện tại:* **v4.3.8**  
 > *Nền tảng:* Web App & PWA (HTML5, Vanilla CSS, Vanilla JavaScript, Firebase Compat, SortableJS, Service Worker).
 
 ---
@@ -252,22 +252,27 @@ node mininote.js --todo -t "Việc hôm nay" "Học từ vựng\nLàm bài tập
 
 ## 5. Lịch sử phiên bản & Sửa lỗi kỹ thuật quan trọng
 
-### 🚀 Phiên bản v4.3.7 (Hiện tại)
+### 🚀 Phiên bản v4.3.8 (Hiện tại)
+* **Sửa dứt điểm lỗi giao diện đè tem Header & Tabs trên iPhone (Dynamic Island / Notch)**:
+  - Gom toàn bộ thanh tiêu đề `.top-bar` và thanh tab điều hướng `.mode-nav` vào thẻ bao bọc chung `.app-header-sticky`.
+  - Căn đệm chuẩn xác theo tai thỏ `padding-top: env(safe-area-inset-top, 0px)` ở cấp container cha, triệt tiêu hoàn toàn lỗi tabs đè lên tiêu đề và thương hiệu School Vocab trên mọi dòng máy iPhone/iPad.
+  - Bỏ dòng cảnh báo âm thanh `ios-audio-hint` theo yêu cầu người dùng sau khi đã xác nhận âm thanh hoạt động hoàn hảo.
+* **Đồng bộ số hiệu phiên bản v4.3.8 cho toàn bộ hệ sinh thái**:
+  - Universe Portal (`/`): `v4.3.8`
+  - Sổ tay School (`/school`): `v4.3.8`
+  - Sổ tay Water (`/water`): `v4.3.8`
+  - Mini Note hỏa tốc (`/mini`): `v4.3.8`
+  - School Vocab Pocket (`/school/vocab`): `v4.3.8`
+
+### 🚀 Phiên bản v4.3.6 - v4.3.7
 * **Khắc phục dứt điểm lỗi âm thanh trên iOS Safari**:
   - Chuyển hoàn toàn sang giọng đọc **Apple Siri/Samantha bản xứ** tích hợp sẵn trong WebKit iOS/macOS.
   - Loại bỏ lỗi **404 Not Found** từ máy chủ Google Translate TTS do chính sách chặn Referer bên ngoài.
   - Thực thi phát âm **ĐỒNG BỘ (Synchronously)** trực tiếp trong cú chạm ngón tay của người dùng, vượt qua chính sách kiểm duyệt Autoplay khắt khe của Safari.
   - Tích hợp `navigator.audioSession.type = 'playback'` mở kênh âm thanh Media trên iOS 15+ và gửi câu mồi rỗng (Audio Primer) ngay khi chạm màn hình lần đầu.
-  - Bổ sung thanh thông báo thông minh nhắc nhở người dùng iPhone tắt nút gạt im lặng (Silent/Mute Switch) để âm thanh phát ra loa ngoài.
 * **Khắc phục lỗi đơ nút đáp án Quiz phản xạ (v4.3.6)**:
   - Chuyển cơ chế truyền tham số sang **Index số học mảng (`checkQuizAnswerByIdx(idx)`)**, triệt tiêu 100% lỗi vỡ cú pháp JavaScript/HTML khi từ vựng chứa dấu nháy kép `"`, nháy đơn `'`, dấu ngoặc hoặc ngắt dòng.
   - Khóa thẻ con `.quiz-btn * { pointer-events: none; }` và thêm `touch-action: manipulation` loại bỏ độ trễ 300ms trên điện thoại.
-* **Đồng bộ số hiệu phiên bản v4.3.7 cho toàn hệ thống**:
-  - Universe Portal (`/`): `v4.3.7`
-  - Sổ tay School (`/school`): `v4.3.7`
-  - Sổ tay Water (`/water`): `v4.3.7`
-  - Mini Note hỏa tốc (`/mini`): `v4.3.7`
-  - School Vocab Pocket (`/school/vocab`): `v4.3.7`
 
 ### 🚀 Phiên bản v4.3.4 - v4.3.5
 * **Chuẩn hóa nhận diện thương hiệu School Vocab**:
@@ -282,4 +287,4 @@ node mininote.js --todo -t "Việc hôm nay" "Học từ vựng\nLàm bài tập
   - Cách ly dữ liệu Cloud Firestore và tự động di trú an toàn ghi chú cũ sang School.
 
 ---
-*Tài liệu được cập nhật tự động và lưu trữ trực tiếp trong mã nguồn dự án School NoteBook (Phiên bản v4.3.7).*
+*Tài liệu được cập nhật tự động và lưu trữ trực tiếp trong mã nguồn dự án School NoteBook (Phiên bản v4.3.8).*
