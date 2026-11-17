@@ -229,7 +229,7 @@ node mininote.js --todo -t "Việc hôm nay" "Học từ vựng\nLàm bài tập
 * **Mini Note Phân luồng chuẩn xác**: Mini Note PWA hỗ trợ nút gạt chuyển nhánh nhanh `🏫 SCHOOL` / `💧 WATER`. Khi bấm "Gửi", ghi chú và từ vựng sẽ nạp chuẩn xác vào Inbox của đúng User đang chọn, kèm theo giao diện đổi màu tương ứng.
 * **Đồng bộ Cloud Firestore phân vùng**: Các tài liệu `notes` và `vocab_items` trên Firestore mang trường `user: 'school'` hoặc `user: 'water'`, các thiết bị khác nhau chỉ lắng nghe và nạp ghi chú thuộc về User đang kích hoạt.
 
-### 🎧 Nhánh Từ Vựng Bỏ Túi School EB (EB Vocab Pocket — v4.3.3)
+### 🎧 Nhánh Từ Vựng Bỏ Túi School Vocab (School Vocab Pocket — v4.3.3)
 * **Đường dẫn**: `/school/vocab` hoặc `/school/eb`
 * **Mục tiêu**: Ứng dụng PWA chuyên biệt cho việc học từ vựng tiếng Anh trên điện thoại di động, tối ưu thao tác 1 tay và dùng tốt khi đang đi ngoài đường.
 * **Các tính năng nổi bật**:
