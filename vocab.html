@@ -29,6 +29,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
     <script src="firebase-config.js"></script>
     <script src="shared/note-schema.js?v=4.3.2"></script>
+    <script src="shared/ai-service.js?v=4.4.0"></script>
 
     <style>
         :root {
@@ -930,7 +931,7 @@
                     </a>
                     <div class="brand-title">
                         <h1>
-                            School Vocab <span class="brand-badge">v4.3.9</span>
+                            School Vocab <span class="brand-badge">v4.4.0</span>
                         </h1>
                         <span class="brand-sub">Tiếng Anh bỏ túi • Đi đường rảnh tay</span>
                     </div>
@@ -980,6 +981,7 @@
                 </div>
                 <select class="tag-pill-select" id="tag-filter-select" onchange="onTagFilterChange()">
                     <option value="all">Tất cả chủ đề</option>
+                    <option value="Acronym">🔤 Từ viết tắt (Acronym)</option>
                     <option value="TechAdvanced">🔧 Kỹ thuật sâu</option>
                     <option value="TechCommon">💻 Kỹ thuật chung</option>
                     <option value="TOEIC">🎯 Tiếng Anh TOEIC</option>
@@ -1034,6 +1036,16 @@
                             </div>
 
                             <div class="card-back-body">
+                                <div id="fc-back-fullform-box" style="display: none; margin-bottom: 12px; background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.32); border-radius: 10px; padding: 10px 14px; text-align: left;">
+                                    <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #60a5fa; display: flex; align-items: center; justify-content: space-between;">
+                                        <span>🇬🇧 DẠNG ĐẦY ĐỦ (FULL FORM)</span>
+                                        <button type="button" onclick="event.stopPropagation(); playCurrentFullformAudio()" style="background: none; border: none; color: #93c5fd; cursor: pointer; font-size: 14px; padding: 0 4px;" title="Nghe phát âm dạng đầy đủ">
+                                            <i class="ri-volume-up-line"></i>
+                                        </button>
+                                    </div>
+                                    <div class="back-fullform-text" id="fc-back-fullform" style="font-size: 16px; font-weight: 800; color: #f8fafc; margin-top: 4px; letter-spacing: 0.3px;"></div>
+                                </div>
+
                                 <div>
                                     <div class="back-meaning-title">Nghĩa tiếng Việt</div>
                                     <div class="back-meaning-text" id="fc-back-meaning">Vi điều khiển: chip tích hợp bộ xử lý và bộ nhớ</div>
@@ -1094,6 +1106,7 @@
                 </div>
 
                 <div class="quiz-card">
+                    <div id="quiz-tag-badge" style="display: none; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 6px; background: rgba(236, 72, 153, 0.16); color: #f472b6; border: 1px solid rgba(236, 72, 153, 0.35); margin-bottom: 6px;"></div>
                     <div class="quiz-question-word" id="quiz-word">Concurrency</div>
                     <div class="quiz-question-ipa" id="quiz-ipa">/kənˈkɝː.ən.si/</div>
                     <button type="button" class="btn-audio-hero" style="width: 44px; height: 44px; font-size: 20px; margin-bottom: 6px;" onclick="playQuizWordAudio()">
@@ -1131,16 +1144,25 @@
                 </button>
             </div>
             <div class="form-group">
-                <label class="form-label">Từ tiếng Anh (*)</label>
-                <input type="text" class="form-input" id="new-word-input" placeholder="Ví dụ: Resilience" autofocus>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <label class="form-label" style="margin: 0;">Từ tiếng Anh / Từ viết tắt (*)</label>
+                    <button type="button" class="btn-ai-autofill" id="btn-vocab-ai-fill-pocket" onclick="aiService.autoFillVocab()" title="Tự động tra từ, phiên âm, dạng viết tắt và nghĩa bằng Gemini AI" style="font-size: 11px; padding: 4px 9px; border-radius: 6px; background: rgba(59, 130, 246, 0.16); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.35); cursor: pointer; display: inline-flex; align-items: center; gap: 4px; font-weight: 600;">
+                        <i class="ri-sparkling-fill"></i> AI Tra từ
+                    </button>
+                </div>
+                <input type="text" class="form-input" id="new-word-input" placeholder="Ví dụ: MHU, ECU, Resilience..." autofocus>
+            </div>
+            <div class="form-group" id="group-new-fullform">
+                <label class="form-label">Dạng đầy đủ tiếng Anh (Full Form - với từ viết tắt)</label>
+                <input type="text" class="form-input" id="new-fullform-input" placeholder="Ví dụ: Media Head Unit, Electronic Control Unit...">
             </div>
             <div class="form-group">
                 <label class="form-label">Phiên âm IPA</label>
-                <input type="text" class="form-input" id="new-ipa-input" placeholder="Ví dụ: /rɪˈzɪl.jəns/">
+                <input type="text" class="form-input" id="new-ipa-input" placeholder="Ví dụ: /rɪˈzɪl.jəns/ hoặc /ˌem.eɪtʃˈjuː/">
             </div>
             <div class="form-group">
                 <label class="form-label">Nghĩa tiếng Việt (*)</label>
-                <input type="text" class="form-input" id="new-meaning-input" placeholder="Ví dụ: Khả năng phục hồi, kiên cường">
+                <input type="text" class="form-input" id="new-meaning-input" placeholder="Ví dụ: Đầu phát đa phương tiện trên ô tô, Kiên cường...">
             </div>
             <div class="form-group">
                 <label class="form-label">Câu ví dụ</label>
@@ -1149,7 +1171,8 @@
             <div class="form-group">
                 <label class="form-label">Chủ đề</label>
                 <select class="form-input" id="new-tag-input">
-                    <option value="TechCommon">💻 Kỹ thuật chung (TechCommon)</option>
+                    <option value="Acronym">🔤 Từ viết tắt (Acronym / Abbr)</option>
+                    <option value="TechCommon" selected>💻 Kỹ thuật chung (TechCommon)</option>
                     <option value="TechAdvanced">🔧 Kỹ thuật chuyên sâu (TechAdvanced)</option>
                     <option value="TOEIC">🎯 Tiếng Anh TOEIC</option>
                     <option value="Other">📝 Khác</option>
@@ -1242,6 +1265,9 @@
             } else {
                 // Fallback starters
                 vocabItems = [
+                    { id: 'v_mhu', word: 'MHU', fullform: 'Media Head Unit', phonetic: '/ˌem.eɪtʃˈjuː/', meaning: 'Đầu phát đa phương tiện: thiết bị điều khiển màn hình trung tâm và giải trí trên ô tô', example: 'The MHU communicates with the instrument cluster via the CAN bus.', tag: 'Acronym', status: 'learning', user: 'school' },
+                    { id: 'v_ecu', word: 'ECU', fullform: 'Electronic Control Unit', phonetic: '/ˌiː.siːˈjuː/', meaning: 'Bộ điều khiển điện tử: máy tính nhúng điều khiển các hệ thống cơ điện tử trên ô tô', example: 'Engine ECUs monitor sensors to optimize fuel injection.', tag: 'Acronym', status: 'learning', user: 'school' },
+                    { id: 'v_ota', word: 'OTA', fullform: 'Over-The-Air', phonetic: '/ˌoʊ.tiːˈeɪ/', meaning: 'Cập nhật không dây: tải và cài đặt firmware/phần mềm ô tô từ xa qua mạng', example: 'Modern electric vehicles receive regular OTA software updates.', tag: 'Acronym', status: 'mastered', user: 'school' },
                     { id: 'v1', word: 'Microcontroller', phonetic: '/ˌmaɪ.kroʊ.kənˈtroʊ.lɚ/', meaning: 'Vi điều khiển: chip tích hợp bộ vi xử lý và bộ nhớ', example: 'Modern automotive ECUs rely on a high-performance 32-bit microcontroller.', tag: 'TechAdvanced', status: 'learning', user: 'school' },
                     { id: 'v2', word: 'Concurrency', phonetic: '/kənˈkɝː.ən.si/', meaning: 'Tính đồng thời: khả năng phân chia và xử lý nhiều tác vụ cùng lúc', example: 'Concurrency control is critical for high-throughput distributed systems.', tag: 'TechAdvanced', status: 'mastered', user: 'school' },
                     { id: 'v3', word: 'Refactoring', phonetic: '/riːˈfæk.tər.ɪŋ/', meaning: 'Tái cấu trúc mã nguồn: cải thiện thiết kế cấu trúc code bên trong', example: 'Regular code refactoring improves software maintainability.', tag: 'TechCommon', status: 'mastered', user: 'school' },
@@ -1317,7 +1343,11 @@
             }
             if (searchQuery.trim()) {
                 const q = searchQuery.toLowerCase().trim();
-                filtered = filtered.filter(i => (i.word && i.word.toLowerCase().includes(q)) || (i.meaning && i.meaning.toLowerCase().includes(q)));
+                filtered = filtered.filter(i => 
+                    (i.word && i.word.toLowerCase().includes(q)) || 
+                    (i.meaning && i.meaning.toLowerCase().includes(q)) ||
+                    (i.fullform && i.fullform.toLowerCase().includes(q))
+                );
             }
             activeDeck = filtered;
             if (currentIndex >= activeDeck.length) currentIndex = 0;
@@ -1366,10 +1396,20 @@
             isCardFlipped = false;
             cardEl.classList.remove('is-flipped');
 
+            // Tag text mapping
+            const tagLabels = {
+                'Acronym': '🔤 Từ viết tắt',
+                'TechAdvanced': '🔧 Kỹ thuật sâu',
+                'TechCommon': '💻 Kỹ thuật chung',
+                'TOEIC': '🎯 Tiếng Anh TOEIC',
+                'Other': '📝 Khác'
+            };
+            const tagText = tagLabels[item.tag] || item.tag || 'Khác';
+
             // Front
             document.getElementById('fc-front-word').textContent = item.word || '';
             document.getElementById('fc-front-ipa').textContent = item.phonetic || '/.../';
-            document.getElementById('fc-front-tag').textContent = item.tag || 'Khác';
+            document.getElementById('fc-front-tag').textContent = tagText;
             const statusFront = document.getElementById('fc-front-status');
             if (statusFront) {
                 statusFront.className = 'card-status-indicator ' + (item.status === 'mastered' ? 'status-mastered' : 'status-learning');
@@ -1377,7 +1417,20 @@
             }
 
             // Back
-            document.getElementById('fc-back-tag').textContent = item.tag || 'Khác';
+            document.getElementById('fc-back-tag').textContent = tagText;
+
+            const fullformBox = document.getElementById('fc-back-fullform-box');
+            const fullformText = document.getElementById('fc-back-fullform');
+            if (fullformBox && fullformText) {
+                if (item.fullform) {
+                    fullformBox.style.display = 'block';
+                    fullformText.textContent = item.fullform;
+                } else {
+                    fullformBox.style.display = 'none';
+                    fullformText.textContent = '';
+                }
+            }
+
             document.getElementById('fc-back-meaning').textContent = item.meaning || '';
             document.getElementById('fc-back-example').textContent = item.example || '';
             const statusBack = document.getElementById('fc-back-status');
@@ -1388,6 +1441,14 @@
 
             if (progressEl) {
                 progressEl.textContent = `${currentIndex + 1} / ${activeDeck.length}`;
+            }
+        }
+
+        function playCurrentFullformAudio() {
+            if (activeDeck.length === 0) return;
+            const item = activeDeck[currentIndex];
+            if (item && item.fullform) {
+                playWordAudio(item.fullform);
             }
         }
 
@@ -1629,21 +1690,34 @@
             playWordAudio(item.word, () => {
                 if (!walkModeActive) return;
 
-                // 3. Tạm dừng 2.0s để người học nhớ nghĩa
-                walkTimer = setTimeout(() => {
+                const proceedToPause = () => {
                     if (!walkModeActive) return;
-                    // Lật thẻ xem nghĩa
-                    isCardFlipped = true;
-                    cardEl.classList.add('is-flipped');
-
-                    // 4. Tạm dừng 2.5s rồi chuyển sang thẻ tiếp theo
+                    // 3. Tạm dừng 2.0s để người học nhớ nghĩa
                     walkTimer = setTimeout(() => {
                         if (!walkModeActive) return;
-                        currentIndex = (currentIndex + 1) % activeDeck.length;
-                        renderCurrentCard();
-                        runWalkStep();
-                    }, 2500);
-                }, 2000);
+                        // Lật thẻ xem nghĩa
+                        isCardFlipped = true;
+                        cardEl.classList.add('is-flipped');
+
+                        // 4. Tạm dừng 2.5s rồi chuyển sang thẻ tiếp theo
+                        walkTimer = setTimeout(() => {
+                            if (!walkModeActive) return;
+                            currentIndex = (currentIndex + 1) % activeDeck.length;
+                            renderCurrentCard();
+                            runWalkStep();
+                        }, 2500);
+                    }, 2000);
+                };
+
+                // Nếu là từ viết tắt có dạng đầy đủ tiếng Anh (fullform), đọc tiếp dạng đầy đủ
+                if (item.fullform) {
+                    walkTimer = setTimeout(() => {
+                        if (!walkModeActive) return;
+                        playWordAudio(item.fullform, proceedToPause);
+                    }, 400);
+                } else {
+                    proceedToPause();
+                }
             });
         }
 
@@ -1754,8 +1828,17 @@
 
             const wordEl = document.getElementById('quiz-word');
             const ipaEl = document.getElementById('quiz-ipa');
+            const tagBadgeEl = document.getElementById('quiz-tag-badge');
             if (wordEl) wordEl.textContent = currentQuizItem.word || '';
             if (ipaEl) ipaEl.textContent = currentQuizItem.phonetic || '/.../';
+            if (tagBadgeEl) {
+                if (currentQuizItem.tag === 'Acronym') {
+                    tagBadgeEl.style.display = 'inline-block';
+                    tagBadgeEl.textContent = '🔤 TỪ VIẾT TẮT (ACRONYM)';
+                } else {
+                    tagBadgeEl.style.display = 'none';
+                }
+            }
 
             // Tạo 3 phương án sai ngẫu nhiên
             let pool = vocabItems.filter(i => i.id !== currentQuizItem.id);
@@ -1807,7 +1890,8 @@
                 if ('vibrate' in navigator) {
                     try { navigator.vibrate([20, 50, 20]); } catch(e) {}
                 }
-                showToast('🎉 Chính xác! +1 Streak');
+                const fullHint = currentQuizItem.fullform ? ` (${currentQuizItem.fullform})` : '';
+                showToast(`🎉 Chính xác! +1 Streak${fullHint}`);
             } else {
                 if (chosenBtn) {
                     chosenBtn.classList.add('wrong');
@@ -1826,7 +1910,8 @@
                         if (icon) icon.className = 'ri-checkbox-circle-fill';
                     }
                 });
-                showToast('❌ Chưa đúng rồi!');
+                const fullHint = currentQuizItem.fullform ? ` (${currentQuizItem.fullform})` : '';
+                showToast(`❌ Chưa đúng rồi! Đáp án: ${currentQuizItem.meaning}${fullHint}`);
             }
 
             const streakEl = document.getElementById('quiz-streak');
@@ -1879,6 +1964,11 @@
                             <span>${escapeHtml(item.word)}</span>
                             <span class="vocab-list-ipa">${escapeHtml(item.phonetic || '')}</span>
                         </div>
+                        ${item.fullform ? `
+                        <div style="font-size: 12.5px; font-weight: 700; color: #38bdf8; margin: 3px 0 4px; display: flex; align-items: center; gap: 5px;">
+                            <span style="font-size: 9px; font-weight: 800; padding: 1px 5px; border-radius: 3px; background: rgba(56, 189, 248, 0.16); border: 1px solid rgba(56, 189, 248, 0.32); text-transform: uppercase;">FULL FORM</span>
+                            <span>${escapeHtml(item.fullform)}</span>
+                        </div>` : ''}
                         <div class="vocab-list-meaning">${escapeHtml(item.meaning || '')}</div>
                     </div>
                     <div class="vocab-list-actions">
@@ -1954,6 +2044,7 @@
 
         function submitNewWord() {
             const word = document.getElementById('new-word-input').value.trim();
+            const fullform = (document.getElementById('new-fullform-input')?.value || '').trim();
             const meaning = document.getElementById('new-meaning-input').value.trim();
             const ipa = document.getElementById('new-ipa-input').value.trim();
             const example = document.getElementById('new-example-input').value.trim();
@@ -1967,10 +2058,11 @@
             const newItem = {
                 id: 'v_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5),
                 word: word,
+                fullform: fullform || '',
                 phonetic: ipa || '/.../',
                 meaning: meaning,
                 example: example || '',
-                tag: tag || 'TechCommon',
+                tag: tag || (fullform ? 'Acronym' : 'TechCommon'),
                 status: 'learning',
                 user: VOCAB_USER,
                 createdAt: Date.now()
@@ -1983,6 +2075,7 @@
 
             // Clear form
             document.getElementById('new-word-input').value = '';
+            if (document.getElementById('new-fullform-input')) document.getElementById('new-fullform-input').value = '';
             document.getElementById('new-meaning-input').value = '';
             document.getElementById('new-ipa-input').value = '';
             document.getElementById('new-example-input').value = '';

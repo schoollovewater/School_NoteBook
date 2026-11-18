@@ -3,7 +3,7 @@
  * Hỗ trợ offline đầy đủ cho cả Sổ tay chính và Mini Note.
  */
 
-const CACHE_NAME = 'schooldb-v4.3.3';
+const CACHE_NAME = 'schooldb-v4.4.0';
 
 const PRECACHE_URLS = [
     './',

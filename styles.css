@@ -2620,6 +2620,12 @@ body.is-dragging {
     gap: 4px;
 }
 
+.vocab-tag-badge.tag-acronym {
+    background: rgba(236, 72, 153, 0.16);
+    color: #f472b6;
+    border-color: rgba(236, 72, 153, 0.35);
+}
+
 .vocab-tag-badge.tag-tech-adv {
     background: rgba(168, 85, 247, 0.15);
     color: #c084fc;

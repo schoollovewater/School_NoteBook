@@ -6064,6 +6064,39 @@ window.addEventListener('DOMContentLoaded', initApp);
 // --- VOCABULARY & FLASHCARDS MODULE ---
 const defaultVocabItems = [
     {
+        id: 'v_mhu',
+        word: 'MHU',
+        phonetic: '/ˌem.eɪtʃˈjuː/',
+        fullform: 'Media Head Unit',
+        meaning: 'Đầu phát đa phương tiện: thiết bị điều khiển màn hình trung tâm, âm thanh và kết nối giải trí trên ô tô',
+        example: 'The MHU communicates with the instrument cluster and telematics box via the CAN bus.',
+        tag: 'Acronym',
+        status: 'learning',
+        createdAt: 1715000500000
+    },
+    {
+        id: 'v_ecu',
+        word: 'ECU',
+        phonetic: '/ˌiː.siːˈjuː/',
+        fullform: 'Electronic Control Unit',
+        meaning: 'Bộ điều khiển điện tử: máy tính vi xử lý nhúng điều khiển các hệ thống cơ điện tử trên ô tô',
+        example: 'Engine ECUs receive inputs from various sensors to determine the optimal ignition timing.',
+        tag: 'Acronym',
+        status: 'learning',
+        createdAt: 1715000600000
+    },
+    {
+        id: 'v_ota',
+        word: 'OTA',
+        phonetic: '/ˌoʊ.tiːˈeɪ/',
+        fullform: 'Over-The-Air',
+        meaning: 'Cập nhật phần mềm không dây: công nghệ tải và cài đặt bản cập nhật firmware qua sóng viễn thông/Wi-Fi',
+        example: 'Modern electric vehicles receive regular OTA updates to upgrade software features remotely.',
+        tag: 'Acronym',
+        status: 'mastered',
+        createdAt: 1715000700000
+    },
+    {
         id: 'v1',
         word: 'Microcontroller',
         phonetic: '/ˌmaɪ.kroʊ.kənˈtroʊ.lɚ/',
@@ -6145,6 +6178,8 @@ const vocab = {
 
     getTagInfo: (tag) => {
         switch (tag) {
+            case 'Acronym':
+                return { label: 'Từ viết tắt', icon: '🔤', cls: 'tag-acronym' };
             case 'TechAdvanced':
                 return { label: 'Kỹ thuật chuyên sâu', icon: '🔧', cls: 'tag-tech-adv' };
             case 'TechCommon':
@@ -6268,7 +6303,10 @@ const vocab = {
         let filtered = vocab.items.filter(item => {
             const matchesTag = vocab.activeTag === 'all' || item.tag === vocab.activeTag;
             const q = vocab.searchQuery.toLowerCase();
-            const matchesQuery = !q || item.word.toLowerCase().includes(q) || item.meaning.toLowerCase().includes(q);
+            const matchesQuery = !q || 
+                item.word.toLowerCase().includes(q) || 
+                item.meaning.toLowerCase().includes(q) ||
+                (item.fullform && item.fullform.toLowerCase().includes(q));
             return matchesTag && matchesQuery;
         });
 
@@ -6297,6 +6335,13 @@ const vocab = {
                         </div>
                         <span class="vocab-tag-badge ${tagInfo.cls}">${tagInfo.icon} ${escapeHtml(tagInfo.label)}</span>
                     </div>
+
+                    ${item.fullform ? `
+                    <div class="vocab-card-fullform" style="font-size: 13px; font-weight: 700; color: #38bdf8; margin: 4px 0 6px; display: flex; align-items: center; gap: 6px;">
+                        <span style="font-size: 9.5px; font-weight: 800; padding: 1px 6px; border-radius: 4px; background: rgba(56, 189, 248, 0.16); border: 1px solid rgba(56, 189, 248, 0.35); text-transform: uppercase;">FULL FORM</span>
+                        <span>${escapeHtml(item.fullform)}</span>
+                        <i class="ri-volume-up-line vocab-audio-icon" style="font-size: 13px; cursor: pointer; color: #7dd3fc;" onclick="event.stopPropagation(); vocab.speakWord('${escapeJs(item.fullform)}')" title="Nghe phát âm cụm từ đầy đủ"></i>
+                    </div>` : ''}
 
                     ${item.phonetic ? `<div class="vocab-card-phonetic">${escapeHtml(item.phonetic)}</div>` : ''}
                     <div class="vocab-card-meaning">${escapeHtml(item.meaning)}</div>
@@ -6379,6 +6424,7 @@ const vocab = {
         const titleEl = document.getElementById('vocab-modal-title');
         const idInput = document.getElementById('vocab-edit-id');
         const wordInput = document.getElementById('vocab-input-word');
+        const fullformInput = document.getElementById('vocab-input-fullform');
         const phoneticInput = document.getElementById('vocab-input-phonetic');
         const meaningInput = document.getElementById('vocab-input-meaning');
         const exampleInput = document.getElementById('vocab-input-example');
@@ -6387,6 +6433,7 @@ const vocab = {
         titleEl.innerHTML = '<i class="ri-book-2-line"></i> Thêm từ vựng mới';
         idInput.value = '';
         wordInput.value = prefillWord;
+        if (fullformInput) fullformInput.value = '';
         phoneticInput.value = '';
         meaningInput.value = '';
         exampleInput.value = '';
@@ -6410,6 +6457,7 @@ const vocab = {
         const titleEl = document.getElementById('vocab-modal-title');
         const idInput = document.getElementById('vocab-edit-id');
         const wordInput = document.getElementById('vocab-input-word');
+        const fullformInput = document.getElementById('vocab-input-fullform');
         const phoneticInput = document.getElementById('vocab-input-phonetic');
         const meaningInput = document.getElementById('vocab-input-meaning');
         const exampleInput = document.getElementById('vocab-input-example');
@@ -6418,6 +6466,7 @@ const vocab = {
         titleEl.innerHTML = '<i class="ri-edit-line"></i> Chỉnh sửa từ vựng';
         idInput.value = item.id;
         wordInput.value = item.word;
+        if (fullformInput) fullformInput.value = item.fullform || '';
         phoneticInput.value = item.phonetic || '';
         meaningInput.value = item.meaning;
         exampleInput.value = item.example || '';
@@ -6435,6 +6484,7 @@ const vocab = {
         e.preventDefault();
         const id = document.getElementById('vocab-edit-id').value;
         const word = document.getElementById('vocab-input-word').value.trim();
+        const fullform = (document.getElementById('vocab-input-fullform')?.value || '').trim();
         const phonetic = document.getElementById('vocab-input-phonetic').value.trim();
         const meaning = document.getElementById('vocab-input-meaning').value.trim();
         const example = document.getElementById('vocab-input-example').value.trim();
@@ -6447,6 +6497,7 @@ const vocab = {
             const item = vocab.items.find(i => i.id === id);
             if (item) {
                 item.word = word;
+                item.fullform = fullform;
                 item.phonetic = phonetic;
                 item.meaning = meaning;
                 item.example = example;
@@ -6459,6 +6510,7 @@ const vocab = {
             const newItem = {
                 id: 'v_' + generateId(),
                 word,
+                fullform,
                 phonetic,
                 meaning,
                 example,
@@ -6585,11 +6637,32 @@ const vocab = {
         document.getElementById('fc-front-word').textContent = item.word;
         document.getElementById('fc-front-phonetic').textContent = item.phonetic || '';
         document.getElementById('fc-back-tag').textContent = (item.status === 'mastered' ? '✅ Đã thuộc' : '⏳ Cần ôn');
+
+        const fullformBox = document.getElementById('fc-back-fullform-box');
+        const fullformText = document.getElementById('fc-back-fullform');
+        if (fullformBox && fullformText) {
+            if (item.fullform) {
+                fullformBox.style.display = 'block';
+                fullformText.textContent = item.fullform;
+            } else {
+                fullformBox.style.display = 'none';
+                fullformText.textContent = '';
+            }
+        }
+
         document.getElementById('fc-back-meaning').textContent = item.meaning;
         document.getElementById('fc-back-example').textContent = item.example ? `"${item.example}"` : 'Chưa có câu ví dụ';
 
         document.getElementById('flashcard-counter').textContent = `Thẻ ${current} / ${total}`;
         document.getElementById('flashcard-progress-fill').style.width = `${(current / total) * 100}%`;
+    },
+
+    speakCurrentFullform: () => {
+        if (vocab.flashcardDeck.length === 0) return;
+        const item = vocab.flashcardDeck[vocab.flashcardIndex];
+        if (item && item.fullform) {
+            vocab.speakWord(item.fullform);
+        }
     },
 
     flipCurrentCard: () => {

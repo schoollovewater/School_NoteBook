@@ -51,7 +51,7 @@
                         <span class="workspace-name" id="current-workspace-name">School NoteBook</span>
                         <div class="workspace-meta">
                             <span class="workspace-plan" id="current-workspace-badge">🏫 SCHOOL</span>
-                            <span class="workspace-version-badge" id="app-version-badge" title="Phiên bản School NoteBook hiện tại">v4.3.9</span>
+                            <span class="workspace-version-badge" id="app-version-badge" title="Phiên bản School NoteBook hiện tại">v4.4.0</span>
                         </div>
                     </div>
                     <i class="ri-expand-up-down-line text-muted"></i>
@@ -281,6 +281,7 @@
                         </div>
                         <div class="vocab-tag-filters" id="vocab-tag-filters">
                             <button class="tag-filter-btn active" onclick="vocab.setTagFilter('all', this)">Tất cả</button>
+                            <button class="tag-filter-btn" onclick="vocab.setTagFilter('Acronym', this)">🔤 Từ viết tắt (Acronym)</button>
                             <button class="tag-filter-btn" onclick="vocab.setTagFilter('TechAdvanced', this)">🔧 Kỹ thuật chuyên sâu</button>
                             <button class="tag-filter-btn" onclick="vocab.setTagFilter('TechCommon', this)">💻 Kỹ thuật quen thuộc</button>
                             <button class="tag-filter-btn" onclick="vocab.setTagFilter('TOEIC', this)">🎯 Tiếng Anh TOEIC</button>
@@ -329,6 +330,13 @@
                                     <div class="flashcard-face flashcard-back">
                                         <div class="fc-tag" id="fc-back-tag">Nghĩa & Ví dụ</div>
                                         <div class="fc-meaning-group">
+                                            <div class="fc-fullform-box" id="fc-back-fullform-box" style="display: none; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 8px; padding: 7px 12px; margin-bottom: 10px;">
+                                                <div style="font-size: 10.5px; font-weight: 700; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; justify-content: space-between;">
+                                                    <span>🇬🇧 DẠNG ĐẦY ĐỦ TIẾNG ANH (FULL FORM):</span>
+                                                    <i class="ri-volume-up-line" style="font-size: 13px; cursor: pointer; color: #7dd3fc;" onclick="event.stopPropagation(); vocab.speakCurrentFullform()" title="Nghe phát âm dạng đầy đủ"></i>
+                                                </div>
+                                                <div id="fc-back-fullform" style="font-size: 15px; font-weight: 700; color: #f8fafc; margin-top: 2px;"></div>
+                                            </div>
                                             <div class="fc-meaning" id="fc-back-meaning">Kiên cường, phục hồi nhanh</div>
                                             <div class="fc-example" id="fc-back-example">"She has a resilient personality in tough times."</div>
                                         </div>
@@ -785,7 +793,7 @@
                 <div class="version-info-box">
                     <div class="version-info-row">
                         <span>Phiên bản đang chạy:</span>
-                        <strong class="version-number-tag" id="setting-app-version">v4.3.9</strong>
+                        <strong class="version-number-tag" id="setting-app-version">v4.4.0</strong>
                     </div>
                     <div class="version-info-row">
                         <span>Trạng thái:</span>
@@ -1050,22 +1058,28 @@
                 
                 <div class="form-group">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                        <label style="margin: 0;">Từ tiếng Anh / Cụm từ <span class="required" style="color: #ef4444;">*</span></label>
+                        <label style="margin: 0;">Từ tiếng Anh / Từ viết tắt <span class="required" style="color: #ef4444;">*</span></label>
                         <button type="button" class="btn-ai-autofill" id="btn-vocab-ai-fill" onclick="aiService.autoFillVocab()" title="Tự động tra từ, phiên âm, nghĩa và ví dụ bằng Gemini AI">
                             <i class="ri-sparkling-fill"></i> AI Tra từ
                         </button>
                     </div>
-                    <input type="text" id="vocab-input-word" placeholder="Ví dụ: Resilient, Breakthrough..." required autocomplete="off">
+                    <input type="text" id="vocab-input-word" placeholder="Ví dụ: MHU, ECU, Resilient..." required autocomplete="off">
+                </div>
+
+                <div class="form-group" id="vocab-group-fullform">
+                    <label>Dạng đầy đủ tiếng Anh (Full Form - cho từ viết tắt)</label>
+                    <input type="text" id="vocab-input-fullform" placeholder="Ví dụ: Media Head Unit, Electronic Control Unit..." autocomplete="off">
                 </div>
 
                 <div class="form-row" style="display: flex; gap: 12px;">
                     <div class="form-group" style="flex: 1;">
                         <label>Phiên âm</label>
-                        <input type="text" id="vocab-input-phonetic" placeholder="Ví dụ: /rɪˈzɪl.i.ənt/" autocomplete="off">
+                        <input type="text" id="vocab-input-phonetic" placeholder="Ví dụ: /rɪˈzɪl.i.ənt/ hoặc /ˌem.eɪtʃˈjuː/" autocomplete="off">
                     </div>
                     <div class="form-group" style="flex: 1;">
                         <label>Chủ đề / Phân loại</label>
                         <select id="vocab-input-tag">
+                            <option value="Acronym">🔤 Từ viết tắt (Acronym / Abbr)</option>
                             <option value="TechAdvanced">🔧 Kỹ thuật chuyên sâu</option>
                             <option value="TechCommon" selected>💻 Kỹ thuật quen thuộc</option>
                             <option value="TOEIC">🎯 Tiếng Anh TOEIC</option>

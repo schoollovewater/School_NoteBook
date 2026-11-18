@@ -620,16 +620,17 @@ const aiService = {
     // 1. TÍNH NĂNG TỪ VỰNG & FLASHCARD
     // =========================================================================
 
-    // 1-Click Tự động tra từ (Auto-fill Vocab with AI)
+    // 1-Click Tự động tra từ (Auto-fill Vocab with AI - Hỗ trợ Từ viết tắt/Acronym & Từ thông dụng)
     async autoFillVocab() {
         if (!this.ensureApiKey()) return;
 
-        const wordInput = document.getElementById('vocab-input-word');
-        const phoneticInput = document.getElementById('vocab-input-phonetic');
-        const meaningInput = document.getElementById('vocab-input-meaning');
-        const exampleInput = document.getElementById('vocab-input-example');
-        const tagInput = document.getElementById('vocab-input-tag');
-        const btn = document.getElementById('btn-vocab-ai-fill');
+        const wordInput = document.getElementById('vocab-input-word') || document.getElementById('new-word-input');
+        const fullformInput = document.getElementById('vocab-input-fullform') || document.getElementById('new-fullform-input');
+        const phoneticInput = document.getElementById('vocab-input-phonetic') || document.getElementById('new-ipa-input');
+        const meaningInput = document.getElementById('vocab-input-meaning') || document.getElementById('new-meaning-input');
+        const exampleInput = document.getElementById('vocab-input-example') || document.getElementById('new-example-input');
+        const tagInput = document.getElementById('vocab-input-tag') || document.getElementById('new-tag-input');
+        const btn = document.getElementById('btn-vocab-ai-fill') || document.getElementById('btn-vocab-ai-fill-pocket');
 
         const word = wordInput ? wordInput.value.trim() : '';
         if (!word) {
@@ -644,13 +645,28 @@ const aiService = {
             btn.innerHTML = '<i class="ri-loader-4-line ri-spin"></i> Đang tra...';
         }
 
-        const prompt = `Bạn là từ điển Anh-Việt chuyên sâu. Hãy tra cứu từ/cụm từ tiếng Anh sau: "${word}".
+        const prompt = `Bạn là từ điển Anh-Việt chuyên sâu và chuyên gia về thuật ngữ công nghệ, từ viết tắt kỹ thuật (Acronym/Abbreviation). Hãy tra cứu từ/cụm từ tiếng Anh sau: "${word}".
+QUY TẮC PHÂN TÍCH:
+- Nếu "${word}" là một từ viết tắt (Acronym / Abbreviation) trong công nghệ, kỹ thuật, xe hơi ô tô hoặc giao tiếp (ví dụ: MHU, ECU, OTA, API, CAN, RAM, CPU, HTML, IoT, ADAS, HVAC, v.v.):
+  + "fullform": Cụm từ tiếng Anh viết đầy đủ (ví dụ: "Media Head Unit", "Electronic Control Unit", "Over-The-Air", "Application Programming Interface").
+  + "tag": Bắt buộc chọn "Acronym".
+  + "meaning": Nghĩa tiếng Việt chính xác, súc tích và nêu rõ ngữ cảnh chuyên ngành (ví dụ: "Đầu phát đa phương tiện trên ô tô (thiết bị điều khiển màn hình và âm thanh giải trí)").
+  + "phonetic": Phiên âm cách đọc chữ cái hoặc từ (ví dụ: "/ˌem.eɪtʃˈjuː/").
+  + "example": 1 câu ví dụ tiếng Anh thực tế trong kỹ thuật/công việc kèm bản dịch tiếng Việt trong ngoặc đơn.
+- Nếu "${word}" là từ vựng bình thường (không phải từ viết tắt):
+  + "fullform": Để chuỗi rỗng "".
+  + "tag": Chọn 1 trong 4 giá trị: 'TechAdvanced' (kỹ thuật chuyên sâu), 'TechCommon' (kỹ thuật IT thông dụng), 'TOEIC' (công sở/kinh doanh), 'Other' (khác).
+  + "meaning": Nghĩa tiếng Việt chính xác, súc tích, tự nhiên.
+  + "phonetic": Phiên âm IPA chuẩn quốc tế.
+  + "example": 1 câu ví dụ thực tế kèm bản dịch tiếng Việt trong ngoặc đơn.
+
 Hãy trả về DUY NHẤT một chuỗi JSON hợp lệ (không kèm giải thích ngoài JSON) theo cấu trúc:
 {
-  "phonetic": "phiên âm IPA chuẩn quốc tế (ví dụ: /rɪˈzɪl.i.ənt/)",
-  "tag": "chọn 1 trong 4 giá trị: 'TechAdvanced' (kỹ thuật/lập trình chuyên sâu), 'TechCommon' (kỹ thuật máy tính/IT thông dụng), 'TOEIC' (công sở/kinh doanh/TOEIC), 'Other'",
+  "fullform": "cụm từ tiếng Anh viết đầy đủ nếu là từ viết tắt, hoặc để rỗng",
+  "phonetic": "phiên âm IPA hoặc đọc từng chữ cái",
+  "tag": "chọn 1 trong 5 giá trị: 'Acronym', 'TechAdvanced', 'TechCommon', 'TOEIC', 'Other'",
   "meaning": "nghĩa tiếng Việt chính xác, súc tích, tự nhiên",
-  "example": "1 câu ví dụ tiếng Anh thực tế hay và tự nhiên, kèm bản dịch tiếng Việt trong ngoặc đơn (Ví dụ: She showed a resilient spirit. (Cô ấy thể hiện tinh thần kiên cường.))"
+  "example": "1 câu ví dụ tiếng Anh thực tế kèm bản dịch tiếng Việt trong ngoặc đơn"
 }`;
 
         try {
@@ -665,14 +681,18 @@ Hãy trả về DUY NHẤT một chuỗi JSON hợp lệ (không kèm giải th�
 
             if (!parsed) throw new Error('Không thể phân tích dữ liệu trả về từ AI.');
 
+            if (fullformInput) fullformInput.value = parsed.fullform || '';
             if (phoneticInput && parsed.phonetic) phoneticInput.value = parsed.phonetic;
             if (meaningInput && parsed.meaning) meaningInput.value = parsed.meaning;
             if (exampleInput && parsed.example) exampleInput.value = parsed.example;
-            if (tagInput && parsed.tag && ['TechAdvanced', 'TechCommon', 'TOEIC', 'Other'].includes(parsed.tag)) {
+            if (tagInput && parsed.tag && ['Acronym', 'TechAdvanced', 'TechCommon', 'TOEIC', 'Other'].includes(parsed.tag)) {
                 tagInput.value = parsed.tag;
             }
 
-            showToast(`✨ Đã tự động tra cứu từ "${word}" thành công!`);
+            const successMsg = parsed.fullform 
+                ? `✨ Đã tra từ viết tắt "${word}": ${parsed.fullform}!`
+                : `✨ Đã tự động tra cứu từ "${word}" thành công!`;
+            showToast(successMsg);
             if (meaningInput) meaningInput.focus();
         } catch (err) {
             console.error('AutoFill Vocab error:', err);
@@ -873,6 +893,7 @@ Hãy chấm điểm và đánh giá chi tiết. Trả về DUY NHẤT một chu�
         const shuffled = [...vocab.items].sort(() => 0.5 - Math.random());
         const sampleWords = shuffled.slice(0, Math.min(count * 2, 20)).map(w => ({
             word: w.word,
+            fullform: w.fullform || '',
             meaning: w.meaning,
             tag: w.tag,
             example: w.example || ''
@@ -884,8 +905,9 @@ ${JSON.stringify(sampleWords, null, 2)}
 Hãy soạn ${count} câu hỏi trắc nghiệm tiếng Anh thông minh giúp học viên kiểm tra khả năng nhớ từ.
 Các dạng câu hỏi phong phú:
 - Dạng 1: Chọn nghĩa tiếng Việt đúng của từ
-- Dạng 2: Điền từ thích hợp vào chỗ trống trong câu ví dụ
-- Dạng 3: Chọn từ đồng nghĩa / ngữ cảnh phù hợp
+- Dạng 2: Với từ viết tắt (Acronym có trường fullform): Hỏi dạng đầy đủ tiếng Anh (English Full Form) hoặc nghĩa chuyên ngành (ví dụ: "Trong ô tô/kỹ thuật, MHU là viết tắt của cụm từ nào?")
+- Dạng 3: Điền từ thích hợp vào chỗ trống trong câu ví dụ
+- Dạng 4: Chọn từ đồng nghĩa / ngữ cảnh phù hợp
 
 Trả về DUY NHẤT một mảng JSON hợp lệ chứa ${count} câu hỏi theo định dạng:
 [

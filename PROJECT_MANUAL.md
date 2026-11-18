@@ -1,7 +1,7 @@
 # 📚 School NoteBook — Hướng Dẫn & Tài Liệu Kỹ Thuật Toàn Diện
 
 > **Sổ tay ghi chép học tập, lập trình & Kho từ vựng thông minh theo phong cách Notion kết hợp Thẻ nhớ 3D Flashcards, Mini Note hỏa tốc & Trợ lý AI Gemini thông minh.**  
-> *Phiên bản hiện tại:* **v4.3.9**  
+> *Phiên bản hiện tại:* **v4.4.0**  
 > *Nền tảng:* Web App & PWA (HTML5, Vanilla CSS, Vanilla JavaScript, Firebase Compat, SortableJS, Service Worker).
 
 ---
@@ -252,7 +252,30 @@ node mininote.js --todo -t "Việc hôm nay" "Học từ vựng\nLàm bài tập
 
 ## 5. Lịch sử phiên bản & Sửa lỗi kỹ thuật quan trọng
 
-### 🚀 Phiên bản v4.3.9 (Hiện tại)
+### 🚀 Phiên bản v4.4.0 (Hiện tại)
+* **Bổ sung Danh mục Từ Viết Tắt (Acronym / Abbreviation) & Hỗ trợ English Full Form**:
+  - Hỗ trợ học các từ viết tắt chuyên ngành (ví dụ: `MHU`, `ECU`, `OTA`, `API`, `CAN`, `ADAS`, `RAM`, `CPU`, `HTML`, `IoT`...):
+    1. **Từ viết tắt (Acronym)**: Hiển thị nổi bật ở mặt trước thẻ, danh sách và bài kiểm tra (ví dụ: `MHU`).
+    2. **Dạng đầy đủ tiếng Anh (English Full Form)**: Hiển thị trong khối badge màu xanh cyan cao cấp ở mặt sau thẻ Flashcard (ví dụ: `MEDIA HEAD UNIT`), kèm nút phát âm riêng để nghe chuẩn ngữ điệu cụm từ đầy đủ.
+    3. **Nghĩa tiếng Việt chuyên ngành**: Giải thích nghĩa ngữ cảnh kỹ thuật/ô tô chuẩn xác và súc tích (ví dụ: *Đầu phát đa phương tiện trên ô tô (thiết bị điều khiển màn hình và âm thanh giải trí)*).
+    4. **Ngữ cảnh & Ví dụ ứng dụng**: Đưa ra câu ví dụ thực tế trong kỹ thuật kèm bản dịch.
+  - **Tích hợp Gemini AI Tra từ 1-Click thông minh**:
+    - Khi người dùng nhập từ viết tắt (ví dụ `MHU`, `ECU`), bấm "AI Tra từ" sẽ tự động nhận diện từ viết tắt, tự động điền cụm từ đầy đủ `Media Head Unit` vào ô **Full Form**, tự động gán chủ đề `🔤 Từ viết tắt (Acronym)`, dịch nghĩa tiếng Việt sát ngữ cảnh kỹ thuật ô tô/IT và tạo ví dụ thực tế.
+    - Hoạt động mượt mà trên cả Sổ tay chính (`app.html`) lẫn ứng dụng bỏ túi School Vocab (`vocab.html`).
+  - **Nâng cấp chế độ Đi Đường Rảnh Tay (Hands-free Walk Mode)**:
+    - Khi gặp từ viết tắt, hệ thống thông minh phát âm cả 2 phần: Đọc từ viết tắt (`MHU`) -> Đọc dạng đầy đủ (`Media Head Unit`) -> Tạm dừng để người học nhớ nghĩa -> Lật thẻ xem nghĩa tiếng Việt. Tối ưu cực độ cho người vừa đi đường vừa đeo tai nghe.
+  - **Nâng cấp Bài kiểm tra (Quiz) & Tìm kiếm**:
+    - Tự động gắn nhãn `🔤 TỪ VIẾT TẮT (ACRONYM)` trong bài trắc nghiệm. Khi trả lời, thông báo phản hồi hiển thị kèm tên đầy đủ tiếng Anh để khắc sâu trí nhớ.
+    - Tìm kiếm tức thì trong danh sách hỗ trợ tìm theo cả từ viết tắt lẫn cụm từ đầy đủ tiếng Anh (nhập `Media Head Unit` vẫn tìm thấy `MHU`).
+  - **Đồng bộ số hiệu phiên bản v4.4.0 cho toàn bộ hệ sinh thái**:
+    - Universe Portal (`/`): `v4.4.0`
+    - Sổ tay School (`/school`): `v4.4.0`
+    - Sổ tay Water (`/water`): `v4.4.0`
+    - Mini Note hỏa tốc (`/mini`): `v4.4.0`
+    - School Vocab Pocket (`/school/vocab`): `v4.4.0`
+    - Service Worker Cache: `schooldb-v4.4.0`
+
+### 🚀 Phiên bản v4.3.9
 * **Khắc phục lỗi thanh Trợ lý AI (Gemini AI Sidebar) đè lên trang ghi chú chính**:
   - Cơ chế **Responsive Side-by-Side**: Khi bật thanh AI trên màn hình máy tính (> 768px), trang chính (`.main-content`) tự động thu lùi sang trái (`margin-right: var(--ai-sidebar-width, 400px)`), co dãn lề đệm phù hợp giúp người dùng vừa đọc/sửa ghi chú vừa trò chuyện với AI cùng lúc mà không bị che khuất bất kỳ nội dung hay nút bấm nào.
   - Bổ sung thanh kéo phân cách **`.ai-sidebar-resizer`** ở cạnh trái bảng AI, cho phép tùy chỉnh độ rộng linh hoạt từ 320px đến 750px với chuyển động mượt mà 60fps và tự động ghi nhớ kích thước đã chọn vào `localStorage`.
@@ -295,4 +318,4 @@ node mininote.js --todo -t "Việc hôm nay" "Học từ vựng\nLàm bài tập
   - Cách ly dữ liệu Cloud Firestore và tự động di trú an toàn ghi chú cũ sang School.
 
 ---
-*Tài liệu được cập nhật tự động và lưu trữ trực tiếp trong mã nguồn dự án School NoteBook (Phiên bản v4.3.9).*
+*Tài liệu được cập nhật tự động và lưu trữ trực tiếp trong mã nguồn dự án School NoteBook (Phiên bản v4.4.0).*
