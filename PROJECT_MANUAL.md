@@ -1,7 +1,7 @@
 # 📚 School NoteBook — Hướng Dẫn & Tài Liệu Kỹ Thuật Toàn Diện
 
 > **Sổ tay ghi chép học tập, lập trình & Kho từ vựng thông minh theo phong cách Notion kết hợp Thẻ nhớ 3D Flashcards, Mini Note hỏa tốc & Trợ lý AI Gemini thông minh.**  
-> *Phiên bản hiện tại:* **v4.4.0**  
+> *Phiên bản hiện tại:* **v4.5.0**  
 > *Nền tảng:* Web App & PWA (HTML5, Vanilla CSS, Vanilla JavaScript, Firebase Compat, SortableJS, Service Worker).
 
 ---
@@ -252,7 +252,28 @@ node mininote.js --todo -t "Việc hôm nay" "Học từ vựng\nLàm bài tập
 
 ## 5. Lịch sử phiên bản & Sửa lỗi kỹ thuật quan trọng
 
-### 🚀 Phiên bản v4.4.0 (Hiện tại)
+### 🚀 Phiên bản v4.5.0 (Hiện tại)
+* **Bổ sung Tính Năng Nhập Từ Vựng Hàng Loạt (Quizlet / Excel / Word Bulk Import)**:
+  - Cho phép người dùng dán toàn bộ danh sách hàng chục, hàng trăm từ vựng cùng lúc vào kho chỉ trong **1 giây**:
+    - **Phân tách từ & nghĩa linh hoạt**: Hỗ trợ tự động nhận diện (Auto-detect), dấu gạch nối có khoảng trắng (` - `), phím Tab (`\t` - khi copy từ cột bảng tính Excel/Google Sheets), dấu hai chấm (`:`), hoặc dấu phẩy (`,`).
+    - **Hỗ trợ định dạng 3 phần thông minh cho Từ Viết Tắt**: Khi dán dòng dạng `MHU - Media Head Unit - Đầu phát đa phương tiện trên ô tô`, hệ thống tự động tách chính xác: Phần 1 = Từ viết tắt (`MHU`), Phần 2 = Full Form tiếng Anh (`Media Head Unit`), Phần 3 = Nghĩa tiếng Việt, và tự động gắn thẻ `🔤 Từ viết tắt (Acronym)`.
+    - **Hỗ trợ định dạng 2 phần thông dụng**: `Word - Meaning` (ví dụ `Microcontroller - Vi điều khiển tích hợp vi xử lý`).
+    - **Bảng xem trước trực quan tức thì (Live Preview)**: Hiển thị ngay bảng thống kê số thẻ hợp lệ, preview từ, fullform, nghĩa, và tag tương ứng ngay khi đang gõ/dán.
+    - **Cơ chế chống trùng lặp (Duplicate Protection)**: Tự động phát hiện và bỏ qua các từ đã có trong kho dữ liệu, bảo đảm không làm rối kho thẻ nhớ.
+    - **Nút "Dán mẫu thử" 1-Click**: Cung cấp dữ liệu mẫu sẵn để người dùng bấm thử nghiệm ngay mà không cần tự soạn thảo.
+  - **Tích hợp đồng bộ trên cả 2 nền tảng**:
+    - **Sổ tay School NoteBook (`/school`)**: Nút "Nhập hàng loạt (Quizlet)" ở đầu kho từ vựng.
+    - **School Vocab Pocket PWA (`/school/vocab`)**: Nút biểu tượng Import `📥` trên thanh tiêu đề và liên kết chuyển nhanh trong popup thêm từ.
+  - **Đồng bộ Cloud Firestore & Lưu trữ Offline**: Dữ liệu sau khi nạp được lưu tức thì vào `localStorage` và đẩy đồng loạt lên Firestore qua cơ chế `batch write`.
+  - **Đồng bộ số hiệu phiên bản v4.5.0 cho toàn bộ hệ sinh thái**:
+    - Universe Portal (`/`): `v4.5.0`
+    - Sổ tay School (`/school`): `v4.5.0`
+    - Sổ tay Water (`/water`): `v4.5.0`
+    - Mini Note hỏa tốc (`/mini`): `v4.5.0`
+    - School Vocab Pocket (`/school/vocab`): `v4.5.0`
+    - Service Worker Cache: `schooldb-v4.5.0`
+
+### 🚀 Phiên bản v4.4.0
 * **Bổ sung Danh mục Từ Viết Tắt (Acronym / Abbreviation) & Hỗ trợ English Full Form**:
   - Hỗ trợ học các từ viết tắt chuyên ngành (ví dụ: `MHU`, `ECU`, `OTA`, `API`, `CAN`, `ADAS`, `RAM`, `CPU`, `HTML`, `IoT`...):
     1. **Từ viết tắt (Acronym)**: Hiển thị nổi bật ở mặt trước thẻ, danh sách và bài kiểm tra (ví dụ: `MHU`).
@@ -318,4 +339,4 @@ node mininote.js --todo -t "Việc hôm nay" "Học từ vựng\nLàm bài tập
   - Cách ly dữ liệu Cloud Firestore và tự động di trú an toàn ghi chú cũ sang School.
 
 ---
-*Tài liệu được cập nhật tự động và lưu trữ trực tiếp trong mã nguồn dự án School NoteBook (Phiên bản v4.4.0).*
+*Tài liệu được cập nhật tự động và lưu trữ trực tiếp trong mã nguồn dự án School NoteBook (Phiên bản v4.5.0).*

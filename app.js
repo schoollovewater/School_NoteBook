@@ -6168,6 +6168,91 @@ const defaultVocabItems = [
     }
 ];
 
+// Bộ phân tích văn bản danh sách từ vựng chuẩn Quizlet / Excel / Text
+function parseQuizletVocabText(rawText, termSep = 'auto', rowSep = 'newline', defaultTag = 'auto') {
+    if (!rawText || !rawText.trim()) return [];
+
+    let rows = [];
+    if (rowSep === 'semicolon') {
+        rows = rawText.split(';');
+    } else {
+        rows = rawText.split(/\r?\n/);
+    }
+
+    const results = [];
+
+    rows.forEach(row => {
+        const line = row.trim();
+        if (!line) return;
+        if (line.startsWith('//') || line.startsWith('#')) return;
+
+        let parts = [];
+        if (termSep === 'tab') {
+            parts = line.split('\t');
+        } else if (termSep === 'dash') {
+            parts = (/\s+[-–—]\s+/.test(line)) ? line.split(/\s+[-–—]\s+/) : line.split(/\s*[-–—]\s*/);
+        } else if (termSep === 'colon') {
+            parts = line.split(/\s*[:]\s*/);
+        } else if (termSep === 'comma') {
+            parts = line.split(/\s*[,]\s*/);
+        } else {
+            // Tự động nhận diện (Ưu tiên Tab -> Spaced Dash -> Colon -> Unspaced Dash -> Comma)
+            if (line.includes('\t')) {
+                parts = line.split('\t');
+            } else if (/\s+[-–—]\s+/.test(line)) {
+                parts = line.split(/\s+[-–—]\s+/);
+            } else if (line.includes(':')) {
+                parts = line.split(/\s*[:]\s*/);
+            } else if (/\s*[-–—]\s*/.test(line)) {
+                parts = line.split(/\s*[-–—]\s*/);
+            } else if (line.includes(',')) {
+                parts = line.split(/\s*[,]\s*/);
+            } else {
+                parts = [line];
+            }
+        }
+
+        parts = parts.map(p => p.trim()).filter(Boolean);
+        if (parts.length === 0) return;
+
+        const word = parts[0];
+        let fullform = '';
+        let meaning = '';
+
+        if (parts.length >= 3) {
+            // Định dạng 3 phần: Word - Fullform - Meaning (ví dụ: MHU - Media Head Unit - Đầu phát đa phương tiện)
+            fullform = parts[1];
+            meaning = parts.slice(2).join(' - ');
+        } else if (parts.length === 2) {
+            // Định dạng 2 phần: Word - Meaning
+            meaning = parts[1];
+        }
+
+        let tag = defaultTag;
+        if (tag === 'auto') {
+            if (fullform || (/^[A-Z0-9]{2,8}$/.test(word) && word === word.toUpperCase())) {
+                tag = 'Acronym';
+            } else {
+                tag = 'TechCommon';
+            }
+        }
+
+        if (word) {
+            results.push({
+                word,
+                fullform,
+                meaning: meaning || 'Chưa có nghĩa',
+                phonetic: '',
+                example: '',
+                tag,
+                status: 'learning'
+            });
+        }
+    });
+
+    return results;
+}
+
 const vocab = {
     items: [],
     activeTag: 'all',
@@ -6528,6 +6613,150 @@ const vocab = {
         if (vocab.currentView === 'flashcard') {
             vocab.initDeck();
         }
+    },
+
+    // --- BULK IMPORT (QUIZLET STYLE) ---
+    openImportModal: () => {
+        const modal = document.getElementById('vocab-import-modal');
+        if (!modal) return;
+        const textInput = document.getElementById('import-raw-text');
+        if (textInput) textInput.value = '';
+        vocab.updateImportPreview();
+        modal.style.display = 'flex';
+        setTimeout(() => {
+            if (textInput) textInput.focus();
+        }, 60);
+    },
+
+    closeImportModal: () => {
+        const modal = document.getElementById('vocab-import-modal');
+        if (modal) modal.style.display = 'none';
+    },
+
+    pasteSampleImport: () => {
+        const sample = [
+            'MHU - Media Head Unit - Đầu phát đa phương tiện trên ô tô',
+            'ECU - Electronic Control Unit - Hộp điều khiển điện tử cơ điện',
+            'OTA - Over-The-Air - Cập nhật phần mềm không dây từ xa',
+            'Microcontroller - Vi điều khiển tích hợp vi xử lý và bộ nhớ',
+            'Latency - Độ trễ truyền tải dữ liệu giữa client và server'
+        ].join('\n');
+        const textInput = document.getElementById('import-raw-text');
+        if (textInput) textInput.value = sample;
+        vocab.updateImportPreview();
+    },
+
+    updateImportPreview: () => {
+        const raw = document.getElementById('import-raw-text')?.value || '';
+        const termSep = document.getElementById('import-term-sep')?.value || 'auto';
+        const rowSep = document.getElementById('import-row-sep')?.value || 'newline';
+        const defaultTag = document.getElementById('import-default-tag')?.value || 'auto';
+
+        const parsed = parseQuizletVocabText(raw, termSep, rowSep, defaultTag);
+        const countEl = document.getElementById('import-detected-count');
+        const submitBtn = document.getElementById('btn-submit-import');
+        const tableBox = document.getElementById('import-preview-table-box');
+
+        if (countEl) countEl.textContent = `${parsed.length} thẻ được phát hiện`;
+        if (submitBtn) {
+            submitBtn.disabled = parsed.length === 0;
+            submitBtn.innerHTML = `<i class="ri-download-2-line"></i> Nhập ${parsed.length} từ vào kho`;
+        }
+
+        if (!tableBox) return;
+        if (parsed.length === 0) {
+            tableBox.innerHTML = `
+                <div style="text-align: center; padding: 24px; color: var(--text-placeholder); font-size: 13px;">
+                    Chưa có dữ liệu. Dán danh sách từ hoặc bấm "Dán mẫu thử" ở trên để xem trước.
+                </div>
+            `;
+            return;
+        }
+
+        tableBox.innerHTML = `
+            <table class="import-preview-table">
+                <thead>
+                    <tr>
+                        <th style="width: 32px;">#</th>
+                        <th>Từ / Viết tắt</th>
+                        <th>Full Form</th>
+                        <th>Nghĩa tiếng Việt</th>
+                        <th>Chủ đề</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${parsed.map((item, idx) => {
+                        const tagInfo = vocab.getTagInfo(item.tag);
+                        return `
+                        <tr>
+                            <td style="color: var(--text-muted);">${idx + 1}</td>
+                            <td style="font-weight: 700; color: #f8fafc;">${escapeHtml(item.word)}</td>
+                            <td style="color: #38bdf8;">${escapeHtml(item.fullform || '-')}</td>
+                            <td>${escapeHtml(item.meaning)}</td>
+                            <td><span class="vocab-tag-badge ${tagInfo.cls}">${tagInfo.icon} ${escapeHtml(tagInfo.label)}</span></td>
+                        </tr>
+                        `;
+                    }).join('')}
+                </tbody>
+            </table>
+        `;
+    },
+
+    submitBulkImport: () => {
+        const raw = document.getElementById('import-raw-text')?.value || '';
+        const termSep = document.getElementById('import-term-sep')?.value || 'auto';
+        const rowSep = document.getElementById('import-row-sep')?.value || 'newline';
+        const defaultTag = document.getElementById('import-default-tag')?.value || 'auto';
+        const skipDuplicates = document.getElementById('import-skip-duplicates')?.checked ?? true;
+
+        const parsed = parseQuizletVocabText(raw, termSep, rowSep, defaultTag);
+        if (parsed.length === 0) {
+            showToast('⚠️ Không tìm thấy từ vựng hợp lệ để nhập.');
+            return;
+        }
+
+        let addedCount = 0;
+        let skippedCount = 0;
+        const existingWords = new Set(vocab.items.map(i => (i.word || '').toLowerCase().trim()));
+        const newItems = [];
+
+        parsed.forEach(p => {
+            const cleanWord = p.word.trim();
+            if (skipDuplicates && existingWords.has(cleanWord.toLowerCase())) {
+                skippedCount++;
+                return;
+            }
+            existingWords.add(cleanWord.toLowerCase());
+            const newItem = {
+                id: 'v_' + generateId(),
+                word: cleanWord,
+                fullform: p.fullform || '',
+                phonetic: p.phonetic || '',
+                meaning: p.meaning || '',
+                example: p.example || '',
+                tag: p.tag || 'TechCommon',
+                status: 'learning',
+                user: appState.currentUser || 'school',
+                createdAt: Date.now()
+            };
+            newItems.push(newItem);
+            addedCount++;
+        });
+
+        if (newItems.length > 0) {
+            vocab.items.unshift(...newItems);
+            vocab.save();
+            vocab.renderGrid();
+            if (vocab.currentView === 'flashcard') {
+                vocab.initDeck();
+            }
+        }
+
+        vocab.closeImportModal();
+        const msg = skippedCount > 0
+            ? `🎉 Đã nhập ${addedCount} từ vựng mới (Bỏ qua ${skippedCount} từ trùng lặp)!`
+            : `🎉 Đã nhập thành công toàn bộ ${addedCount} từ vựng mới vào kho!`;
+        showToast(msg);
     },
 
     deleteWord: (id) => {

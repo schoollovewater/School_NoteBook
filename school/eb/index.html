@@ -931,12 +931,15 @@
                     </a>
                     <div class="brand-title">
                         <h1>
-                            School Vocab <span class="brand-badge">v4.4.0</span>
+                            School Vocab <span class="brand-badge">v4.5.0</span>
                         </h1>
                         <span class="brand-sub">Tiếng Anh bỏ túi • Đi đường rảnh tay</span>
                     </div>
                 </div>
                 <div class="top-bar-actions">
+                    <button type="button" class="btn-icon-top" id="btn-open-import" onclick="openImportModal()" title="Nhập danh sách từ vựng hàng loạt kiểu Quizlet">
+                        <i class="ri-file-upload-line"></i>
+                    </button>
                     <button type="button" class="btn-icon-top" id="btn-theme-toggle" title="Đổi giao diện">
                         <i class="ri-moon-line"></i>
                     </button>
@@ -1180,6 +1183,73 @@
             </div>
             <button type="button" class="btn-submit-word" onclick="submitNewWord()">
                 <i class="ri-check-line"></i> Lưu Vào Kho Từ Vựng School
+            </button>
+            <div style="text-align: center; margin-top: 4px;">
+                <button type="button" onclick="closeAddModal(); openImportModal();" style="background: none; border: none; color: #60a5fa; cursor: pointer; font-size: 12.5px; text-decoration: underline; font-weight: 500;">
+                    <i class="ri-file-upload-line"></i> Hoặc Nhập hàng loạt nhiều từ cùng lúc (kiểu Quizlet)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Bulk Import Modal Sheet (Quizlet Style) -->
+    <div class="modal-overlay" id="import-word-modal">
+        <div class="modal-sheet modal-sheet-import">
+            <div class="modal-header">
+                <h3><i class="ri-file-upload-line" style="color: var(--accent);"></i> Nhập Từ Vựng Hàng Loạt (Quizlet)</h3>
+                <button type="button" class="btn-icon-top" onclick="closeImportModal()">
+                    <i class="ri-close-line"></i>
+                </button>
+            </div>
+            
+            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                <div class="form-group" style="flex: 1; min-width: 130px;">
+                    <label class="form-label">Phân tách từ & nghĩa</label>
+                    <select class="form-input" id="pocket-import-term-sep" onchange="updatePocketImportPreview()">
+                        <option value="auto" selected>✨ Tự động nhận diện</option>
+                        <option value="dash">Dấu gạch nối ( - )</option>
+                        <option value="tab">Dấu Tab (Excel/Sheets)</option>
+                        <option value="colon">Dấu hai chấm ( : )</option>
+                        <option value="comma">Dấu phẩy ( , )</option>
+                    </select>
+                </div>
+                <div class="form-group" style="flex: 1; min-width: 130px;">
+                    <label class="form-label">Chủ đề mặc định</label>
+                    <select class="form-input" id="pocket-import-default-tag" onchange="updatePocketImportPreview()">
+                        <option value="auto" selected>✨ Tự động nhận diện</option>
+                        <option value="Acronym">🔤 Từ viết tắt (Acronym)</option>
+                        <option value="TechCommon">💻 Kỹ thuật chung</option>
+                        <option value="TechAdvanced">🔧 Kỹ thuật sâu</option>
+                        <option value="TOEIC">🎯 Tiếng Anh TOEIC</option>
+                        <option value="Other">📝 Khác</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+                    <label class="form-label" style="margin: 0;">Dán danh sách từ (Word - Meaning...):</label>
+                    <button type="button" onclick="pastePocketSampleImport()" style="background: none; border: none; color: #60a5fa; cursor: pointer; font-size: 11.5px; font-weight: 600;">
+                        📋 Dán mẫu thử
+                    </button>
+                </div>
+                <textarea class="form-input" id="pocket-import-raw-text" rows="5" placeholder="Ví dụ:&#10;MHU - Media Head Unit - Đầu phát đa phương tiện trên ô tô&#10;ECU - Electronic Control Unit - Hộp điều khiển điện tử&#10;Microcontroller - Vi điều khiển tích hợp bộ vi xử lý" oninput="updatePocketImportPreview()" style="font-family: monospace; font-size: 12.5px;"></textarea>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span id="pocket-import-count" style="font-size: 12px; font-weight: 700; color: #38bdf8;">0 thẻ được phát hiện</span>
+                <label style="display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--text-secondary); cursor: pointer;">
+                    <input type="checkbox" id="pocket-import-skip-dup" checked>
+                    <span>Bỏ qua từ trùng</span>
+                </label>
+            </div>
+
+            <div id="pocket-import-preview-box" style="max-height: 140px; overflow-y: auto; background: rgba(0,0,0,0.3); border-radius: 8px; border: 1px solid var(--border); padding: 8px; font-size: 12px;">
+                <div style="text-align: center; color: var(--text-muted); padding: 12px;">Chưa có dữ liệu xem trước</div>
+            </div>
+
+            <button type="button" class="btn-submit-word" id="btn-pocket-submit-import" onclick="submitPocketBulkImport()" disabled>
+                <i class="ri-download-2-line"></i> Nhập vào Kho Từ Vựng
             </button>
         </div>
     </div>
@@ -2081,6 +2151,205 @@
             document.getElementById('new-example-input').value = '';
 
             showToast(`✅ Đã thêm: "${word}"`);
+        }
+
+        // --- BULK IMPORT LOGIC (QUIZLET STYLE) ---
+        const importModalEl = document.getElementById('import-word-modal');
+        function openImportModal() {
+            if (!importModalEl) return;
+            importModalEl.classList.add('active');
+            const textInput = document.getElementById('pocket-import-raw-text');
+            if (textInput) {
+                textInput.value = '';
+                updatePocketImportPreview();
+                setTimeout(() => textInput.focus(), 60);
+            }
+        }
+        function closeImportModal() {
+            if (importModalEl) importModalEl.classList.remove('active');
+        }
+        if (importModalEl) {
+            importModalEl.onclick = (e) => {
+                if (e.target === importModalEl) closeImportModal();
+            };
+        }
+
+        function parseQuizletVocabText(rawText, termSep = 'auto', rowSep = 'newline', defaultTag = 'auto') {
+            if (!rawText || !rawText.trim()) return [];
+            let rows = (rowSep === 'semicolon') ? rawText.split(';') : rawText.split(/\r?\n/);
+            const results = [];
+
+            rows.forEach(row => {
+                const line = row.trim();
+                if (!line || line.startsWith('//') || line.startsWith('#')) return;
+
+                let parts = [];
+                if (termSep === 'tab') {
+                    parts = line.split('\t');
+                } else if (termSep === 'dash') {
+                    parts = (/\s+[-–—]\s+/.test(line)) ? line.split(/\s+[-–—]\s+/) : line.split(/\s*[-–—]\s*/);
+                } else if (termSep === 'colon') {
+                    parts = line.split(/\s*[:]\s*/);
+                } else if (termSep === 'comma') {
+                    parts = line.split(/\s*[,]\s*/);
+                } else {
+                    if (line.includes('\t')) parts = line.split('\t');
+                    else if (/\s+[-–—]\s+/.test(line)) parts = line.split(/\s+[-–—]\s+/);
+                    else if (line.includes(':')) parts = line.split(/\s*[:]\s*/);
+                    else if (/\s*[-–—]\s*/.test(line)) parts = line.split(/\s*[-–—]\s*/);
+                    else if (line.includes(',')) parts = line.split(/\s*[,]\s*/);
+                    else parts = [line];
+                }
+
+                parts = parts.map(p => p.trim()).filter(Boolean);
+                if (parts.length === 0) return;
+
+                const word = parts[0];
+                let fullform = '';
+                let meaning = '';
+
+                if (parts.length >= 3) {
+                    fullform = parts[1];
+                    meaning = parts.slice(2).join(' - ');
+                } else if (parts.length === 2) {
+                    meaning = parts[1];
+                }
+
+                let tag = defaultTag;
+                if (tag === 'auto') {
+                    if (fullform || (/^[A-Z0-9]{2,8}$/.test(word) && word === word.toUpperCase())) {
+                        tag = 'Acronym';
+                    } else {
+                        tag = 'TechCommon';
+                    }
+                }
+
+                if (word) {
+                    results.push({
+                        word,
+                        fullform,
+                        meaning: meaning || 'Chưa có nghĩa',
+                        phonetic: '',
+                        example: '',
+                        tag,
+                        status: 'learning'
+                    });
+                }
+            });
+            return results;
+        }
+
+        function pastePocketSampleImport() {
+            const sample = [
+                'MHU - Media Head Unit - Đầu phát đa phương tiện trên ô tô',
+                'ECU - Electronic Control Unit - Hộp điều khiển điện tử',
+                'OTA - Over-The-Air - Cập nhật phần mềm ô tô không dây',
+                'Microcontroller - Vi điều khiển tích hợp vi xử lý và bộ nhớ',
+                'Latency - Độ trễ mạng giữa client và server'
+            ].join('\n');
+            const textInput = document.getElementById('pocket-import-raw-text');
+            if (textInput) textInput.value = sample;
+            updatePocketImportPreview();
+        }
+
+        function updatePocketImportPreview() {
+            const raw = document.getElementById('pocket-import-raw-text')?.value || '';
+            const termSep = document.getElementById('pocket-import-term-sep')?.value || 'auto';
+            const defaultTag = document.getElementById('pocket-import-default-tag')?.value || 'auto';
+
+            const parsed = parseQuizletVocabText(raw, termSep, 'newline', defaultTag);
+            const countEl = document.getElementById('pocket-import-count');
+            const submitBtn = document.getElementById('btn-pocket-submit-import');
+            const previewBox = document.getElementById('pocket-import-preview-box');
+
+            if (countEl) countEl.textContent = `${parsed.length} thẻ được phát hiện`;
+            if (submitBtn) {
+                submitBtn.disabled = parsed.length === 0;
+                submitBtn.innerHTML = `<i class="ri-download-2-line"></i> Nhập ${parsed.length} từ vào Kho`;
+            }
+
+            if (!previewBox) return;
+            if (parsed.length === 0) {
+                previewBox.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 12px;">Chưa có dữ liệu xem trước</div>';
+                return;
+            }
+
+            previewBox.innerHTML = parsed.map((item, idx) => `
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 6px; border-bottom: 1px solid rgba(255,255,255,0.06); gap: 6px;">
+                    <div>
+                        <strong style="color: #f8fafc;">${idx + 1}. ${escapeHtml(item.word)}</strong>
+                        ${item.fullform ? `<span style="color: #38bdf8; font-size: 11px;"> (${escapeHtml(item.fullform)})</span>` : ''}
+                        <div style="color: var(--text-secondary); font-size: 11px;">${escapeHtml(item.meaning)}</div>
+                    </div>
+                    <span style="font-size: 10px; padding: 2px 5px; border-radius: 4px; background: rgba(59,130,246,0.15); color: #60a5fa; white-space: nowrap;">${item.tag}</span>
+                </div>
+            `).join('');
+        }
+
+        function submitPocketBulkImport() {
+            const raw = document.getElementById('pocket-import-raw-text')?.value || '';
+            const termSep = document.getElementById('pocket-import-term-sep')?.value || 'auto';
+            const defaultTag = document.getElementById('pocket-import-default-tag')?.value || 'auto';
+            const skipDuplicates = document.getElementById('pocket-import-skip-dup')?.checked ?? true;
+
+            const parsed = parseQuizletVocabText(raw, termSep, 'newline', defaultTag);
+            if (parsed.length === 0) {
+                showToast('⚠️ Không tìm thấy từ vựng hợp lệ để nhập.');
+                return;
+            }
+
+            let addedCount = 0;
+            let skippedCount = 0;
+            const existingWords = new Set(vocabItems.map(i => (i.word || '').toLowerCase().trim()));
+            const newItems = [];
+
+            parsed.forEach(p => {
+                const cleanWord = p.word.trim();
+                if (skipDuplicates && existingWords.has(cleanWord.toLowerCase())) {
+                    skippedCount++;
+                    return;
+                }
+                existingWords.add(cleanWord.toLowerCase());
+                const newItem = {
+                    id: 'v_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5),
+                    word: cleanWord,
+                    fullform: p.fullform || '',
+                    phonetic: p.phonetic || '/.../',
+                    meaning: p.meaning || '',
+                    example: p.example || '',
+                    tag: p.tag || 'TechCommon',
+                    status: 'learning',
+                    user: VOCAB_USER,
+                    createdAt: Date.now()
+                };
+                newItems.push(newItem);
+                addedCount++;
+            });
+
+            if (newItems.length > 0) {
+                vocabItems.unshift(...newItems);
+                saveVocab();
+                if (db) {
+                    try {
+                        const batch = db.batch();
+                        let c = 0;
+                        newItems.forEach(item => {
+                            if (c < 450) {
+                                batch.set(db.collection('vocab_items').doc(item.id), item, { merge: true });
+                                c++;
+                            }
+                        });
+                        batch.commit().catch(e => console.warn('Sync err:', e));
+                    } catch (e) {}
+                }
+                filterDeck();
+            }
+
+            closeImportModal();
+            const msg = skippedCount > 0
+                ? `🎉 Đã nhập ${addedCount} từ vựng mới (Bỏ qua ${skippedCount} từ trùng)!`
+                : `🎉 Đã nhập thành công ${addedCount} từ vựng mới vào kho!`;
+            showToast(msg);
         }
 
         // --- PWA INSTALLATION PROMPT ---
