@@ -29,7 +29,7 @@
     <!-- KaTeX CSS for Math Equations (LaTeX) -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
     
-    <link rel="stylesheet" href="styles.css?v=4.6.0">
+    <link rel="stylesheet" href="styles.css?v=4.7.0">
 </head>
 <body>
     <div class="app-background">
@@ -51,7 +51,7 @@
                         <span class="workspace-name" id="current-workspace-name">School NoteBook</span>
                         <div class="workspace-meta">
                             <span class="workspace-plan" id="current-workspace-badge">🏫 SCHOOL</span>
-                            <span class="workspace-version-badge" id="app-version-badge" title="Phiên bản School NoteBook hiện tại">v4.6.0</span>
+                            <span class="workspace-version-badge" id="app-version-badge" title="Phiên bản School NoteBook hiện tại">v4.7.0</span>
                         </div>
                     </div>
                     <i class="ri-expand-up-down-line text-muted"></i>
@@ -316,8 +316,18 @@
                                     <div class="flashcard-face flashcard-front">
                                         <div class="fc-tag" id="fc-front-tag">IELTS</div>
                                         <div class="fc-word-group">
+                                            <!-- Chữ viết tắt (hoặc từ chính) viết TRÊN -->
                                             <div class="fc-word" id="fc-front-word">Resilient</div>
-                                            <div class="fc-phonetic-row">
+                                            <!-- Chữ đầy đủ viết DƯỚI khi là từ viết tắt -->
+                                            <div class="fc-fullform-sub" id="fc-front-fullform-box" style="display: none; margin-top: 6px;">
+                                                <div style="font-size: 11px; font-weight: 700; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.5px; display: inline-flex; align-items: center; gap: 6px;">
+                                                    <span>🇬🇧 DẠNG ĐẦY ĐỦ (FULL FORM):</span>
+                                                    <i class="ri-volume-up-line" style="font-size: 13px; cursor: pointer; color: #7dd3fc;" onclick="event.stopPropagation(); vocab.speakCurrentFullform()" title="Nghe phát âm dạng đầy đủ"></i>
+                                                </div>
+                                                <div id="fc-front-fullform" style="font-size: 17px; font-weight: 700; color: #f8fafc; margin-top: 2px;"></div>
+                                            </div>
+                                            <!-- Dòng phiên âm mặt trước (cho từ vựng thông thường) -->
+                                            <div class="fc-phonetic-row" id="fc-front-phonetic-row">
                                                 <span class="fc-phonetic" id="fc-front-phonetic">/rɪˈzɪl.i.ənt/</span>
                                                 <button class="fc-audio-btn" onclick="event.stopPropagation(); vocab.speakWord()" title="Phát âm">
                                                     <i class="ri-volume-up-line"></i>
@@ -333,12 +343,13 @@
                                     <div class="flashcard-face flashcard-back">
                                         <div class="fc-tag" id="fc-back-tag">Nghĩa & Ví dụ</div>
                                         <div class="fc-meaning-group">
-                                            <div class="fc-fullform-box" id="fc-back-fullform-box" style="display: none; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 8px; padding: 7px 12px; margin-bottom: 10px;">
-                                                <div style="font-size: 10.5px; font-weight: 700; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; justify-content: space-between;">
-                                                    <span>🇬🇧 DẠNG ĐẦY ĐỦ TIẾNG ANH (FULL FORM):</span>
-                                                    <i class="ri-volume-up-line" style="font-size: 13px; cursor: pointer; color: #7dd3fc;" onclick="event.stopPropagation(); vocab.speakCurrentFullform()" title="Nghe phát âm dạng đầy đủ"></i>
-                                                </div>
-                                                <div id="fc-back-fullform" style="font-size: 15px; font-weight: 700; color: #f8fafc; margin-top: 2px;"></div>
+                                            <!-- Mặt sau: Hiển thị Phiên âm IPA nổi bật cho cả từ viết tắt và từ thường -->
+                                            <div class="fc-back-ipa-box" id="fc-back-ipa-box" style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 12px; background: rgba(52, 211, 153, 0.1); border: 1px solid rgba(52, 211, 153, 0.25); border-radius: 8px; padding: 6px 14px;">
+                                                <span style="font-size: 12px; color: #a7f3d0; font-weight: 600;">Phiên âm:</span>
+                                                <span class="fc-phonetic" id="fc-back-phonetic" style="font-family: monospace; font-size: 15px; font-weight: 700; color: #34d399;"></span>
+                                                <button class="fc-audio-btn" onclick="event.stopPropagation(); vocab.speakWord()" title="Phát âm" style="width: 28px; height: 28px; font-size: 13px;">
+                                                    <i class="ri-volume-up-line"></i>
+                                                </button>
                                             </div>
                                             <div class="fc-meaning" id="fc-back-meaning">Kiên cường, phục hồi nhanh</div>
                                             <div class="fc-example" id="fc-back-example">"She has a resilient personality in tough times."</div>
@@ -796,7 +807,7 @@
                 <div class="version-info-box">
                     <div class="version-info-row">
                         <span>Phiên bản đang chạy:</span>
-                        <strong class="version-number-tag" id="setting-app-version">v4.6.0</strong>
+                        <strong class="version-number-tag" id="setting-app-version">v4.7.0</strong>
                     </div>
                     <div class="version-info-row">
                         <span>Trạng thái:</span>
@@ -1059,19 +1070,27 @@
             <form id="vocab-form" onsubmit="vocab.handleFormSubmit(event)">
                 <input type="hidden" id="vocab-edit-id">
                 
-                <div class="form-group">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                        <label style="margin: 0;">Từ tiếng Anh / Từ viết tắt <span class="required" style="color: #ef4444;">*</span></label>
-                        <button type="button" class="btn-ai-autofill" id="btn-vocab-ai-fill" onclick="aiService.autoFillVocab()" title="Tự động tra từ, phiên âm, nghĩa và ví dụ bằng Gemini AI">
-                            <i class="ri-sparkling-fill"></i> AI Tra từ
-                        </button>
-                    </div>
-                    <input type="text" id="vocab-input-word" placeholder="Ví dụ: MHU, ECU, Resilient..." required autocomplete="off">
+                <!-- Checkbox Là từ viết tắt -->
+                <div style="margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; background: rgba(59, 130, 246, 0.08); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(59, 130, 246, 0.25);">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; font-weight: 600; color: #93c5fd; margin: 0;">
+                        <input type="checkbox" id="vocab-is-acronym" onchange="vocab.toggleAcronymMode(this.checked)" style="width: 16px; height: 16px; cursor: pointer;">
+                        <span>🔤 Là từ viết tắt (Acronym / Abbreviation)</span>
+                    </label>
+                    <button type="button" class="btn-ai-autofill" id="btn-vocab-ai-fill" onclick="aiService.autoFillVocab()" title="Tự động tra từ, phiên âm, nghĩa và ví dụ bằng Gemini AI" style="font-size: 12px; padding: 4px 10px;">
+                        <i class="ri-sparkling-fill"></i> AI Tra từ
+                    </button>
                 </div>
 
-                <div class="form-group" id="vocab-group-fullform">
-                    <label>Dạng đầy đủ tiếng Anh (Full Form - cho từ viết tắt)</label>
-                    <input type="text" id="vocab-input-fullform" placeholder="Ví dụ: Media Head Unit, Electronic Control Unit..." autocomplete="off">
+                <!-- Ô TỪ VIẾT TẮT ĐƯỢC ĐẨY LÊN ĐẦU KHI TICK VÀO Ô VIẾT TẮT -->
+                <div class="form-group" id="vocab-group-acronym" style="display: none;">
+                    <label>Từ viết tắt (Acronym) <span class="required" style="color: #ef4444;">*</span></label>
+                    <input type="text" id="vocab-input-acronym" placeholder="Ví dụ: MHU, ECU, OTA, API, CAN..." autocomplete="off">
+                </div>
+
+                <!-- Ô TỪ CHÍNH / FULL FORM -->
+                <div class="form-group" id="vocab-group-word">
+                    <label id="vocab-label-word">Từ tiếng Anh <span class="required" style="color: #ef4444;">*</span></label>
+                    <input type="text" id="vocab-input-word" placeholder="Ví dụ: Marketing, Include, Attract, Resilience..." required autocomplete="off">
                 </div>
 
                 <div class="form-row" style="display: flex; gap: 12px;">
@@ -1147,7 +1166,11 @@
                             <option value="Other">📝 Khác</option>
                         </select>
                     </div>
-                    <div style="display: flex; align-items: flex-end; gap: 6px;">
+                    <div style="display: flex; align-items: flex-end; gap: 8px;">
+                        <label style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #93c5fd; cursor: pointer; padding: 8px 10px; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 6px; height: 38px; white-space: nowrap;" title="Bật chế độ này khi dán danh sách từ viết tắt (MHU - Media Head Unit - Nghĩa...)">
+                            <input type="checkbox" id="import-is-acronym-mode" onchange="vocab.updateImportPreview()" style="cursor: pointer; width: 15px; height: 15px;">
+                            <span>🔤 Nhập từ viết tắt</span>
+                        </label>
                         <button type="button" class="btn btn-secondary btn-sm" onclick="vocab.pasteSampleImport()" style="height: 38px; white-space: nowrap; font-size: 12px; font-weight: 600;" title="Dán thử dữ liệu mẫu">
                             <i class="ri-clipboard-line"></i> Dán mẫu thử
                         </button>
@@ -1159,10 +1182,10 @@
 
                 <div class="form-group" style="margin-top: 12px; margin-bottom: 0;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                        <label style="font-size: 12px; font-weight: 600; margin: 0;">Dán danh sách từ (Hỗ trợ kèm Phiên âm /ipa/ hoặc [ipa] và FullForm):</label>
+                        <label style="font-size: 12px; font-weight: 600; margin: 0;">Dán danh sách từ (Hỗ trợ kèm Phiên âm /ipa/ hoặc [ipa]):</label>
                         <span id="import-detected-count" style="color: var(--accent); font-weight: 700; font-size: 12px;">0 thẻ được phát hiện</span>
                     </div>
-                    <textarea id="import-raw-text" rows="7" placeholder="Ví dụ các định dạng được hỗ trợ:&#10;MHU - Media Head Unit - /ˌem.eɪtʃˈjuː/ - Đầu phát đa phương tiện trên ô tô&#10;ECU - Electronic Control Unit - Hộp điều khiển điện tử cơ điện&#10;Resilience /rɪˈzɪl.jəns/ - Khả năng phục hồi, kiên cường vượt khó&#10;Microcontroller [ˌmaɪ.kroʊ.kənˈtroʊ.lɚ] - Vi điều khiển tích hợp vi xử lý&#10;Latency - Độ trễ mạng giữa client và server (Bấm nút 'AI Điền Phiên Âm' để tự tạo IPA)" oninput="vocab.updateImportPreview()" style="font-family: monospace; font-size: 13px; line-height: 1.5;"></textarea>
+                    <textarea id="import-raw-text" rows="7" placeholder="Ví dụ các định dạng được hỗ trợ:&#10;Marketing - /'mɑ:kɪtɪŋ/ (n)- Ngành tiếp thị, chiến lược thị trường.&#10;Attract - /ə'trækt/ (v) - Hấp dẫn, lôi cuốn, thu hút khách hàng.&#10;Consume - /kən'sju:m/ (v)- Tiêu thụ, tiêu dùng.&#10;Include /ɪnˈkluːd/ - Bao gồm, chứa đựng&#10;Resilience - [rɪˈzɪl.jəns] - Khả năng phục hồi nhanh&#10;&#10;Hoặc nếu tick chọn 'Nhập từ viết tắt':&#10;MHU - Media Head Unit - /ˌem.eɪtʃˈjuː/ - Đầu phát đa phương tiện trên ô tô&#10;ECU - Electronic Control Unit - Hộp điều khiển điện tử" oninput="vocab.updateImportPreview()" style="font-family: monospace; font-size: 13px; line-height: 1.5;"></textarea>
                 </div>
 
                 <div class="import-preview-wrapper" style="margin-top: 12px;">
@@ -1317,8 +1340,8 @@
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 
     <script src="firebase-config.js"></script>
-    <script src="shared/note-schema.js?v=4.6.0"></script>
-    <script src="shared/ai-service.js?v=4.6.0"></script>
-    <script src="app.js?v=4.6.0"></script>
+    <script src="shared/note-schema.js?v=4.7.0"></script>
+    <script src="shared/ai-service.js?v=4.7.0"></script>
+    <script src="app.js?v=4.7.0"></script>
 </body>
 </html>

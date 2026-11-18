@@ -28,8 +28,8 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
     <script src="firebase-config.js"></script>
-    <script src="shared/note-schema.js?v=4.6.0"></script>
-    <script src="shared/ai-service.js?v=4.6.0"></script>
+    <script src="shared/note-schema.js?v=4.7.0"></script>
+    <script src="shared/ai-service.js?v=4.7.0"></script>
 
     <style>
         :root {
@@ -931,7 +931,7 @@
                     </a>
                     <div class="brand-title">
                         <h1>
-                            School Vocab <span class="brand-badge">v4.6.0</span>
+                            School Vocab <span class="brand-badge">v4.7.0</span>
                         </h1>
                         <span class="brand-sub">Tiếng Anh bỏ túi • Đi đường rảnh tay</span>
                     </div>
@@ -1015,8 +1015,23 @@
                             </div>
 
                             <div class="card-word-center">
+                                <!-- Chữ viết tắt (hoặc từ chính) viết TRÊN -->
                                 <div class="card-main-word" id="fc-front-word">Microcontroller</div>
+                                
+                                <!-- Chữ đầy đủ viết DƯỚI khi là từ viết tắt -->
+                                <div id="fc-front-fullform-box" style="display: none; margin-top: 6px; padding: 4px 12px; background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.35); border-radius: 8px;">
+                                    <div style="font-size: 10px; font-weight: 700; color: #60a5fa; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; justify-content: space-between; gap: 6px;">
+                                        <span>🇬🇧 FULL FORM</span>
+                                        <button type="button" onclick="event.stopPropagation(); playCurrentFullformAudio()" style="background: none; border: none; color: #93c5fd; cursor: pointer; font-size: 13px; padding: 0 4px;" title="Nghe phát âm dạng đầy đủ">
+                                            <i class="ri-volume-up-line"></i>
+                                        </button>
+                                    </div>
+                                    <div id="fc-front-fullform" style="font-size: 15px; font-weight: 700; color: #f8fafc; margin-top: 2px;"></div>
+                                </div>
+
+                                <!-- Phiên âm mặt trước (dành cho từ thường) -->
                                 <div class="card-phonetic-ipa" id="fc-front-ipa">/ˌmaɪ.kroʊ.kənˈtroʊ.lɚ/</div>
+
                                 <div>
                                     <button type="button" class="btn-audio-hero" onclick="event.stopPropagation(); playCurrentAudio()" title="Nghe phát âm">
                                         <i class="ri-volume-up-fill"></i>
@@ -1039,14 +1054,13 @@
                             </div>
 
                             <div class="card-back-body">
-                                <div id="fc-back-fullform-box" style="display: none; margin-bottom: 12px; background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.32); border-radius: 10px; padding: 10px 14px; text-align: left;">
-                                    <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #60a5fa; display: flex; align-items: center; justify-content: space-between;">
-                                        <span>🇬🇧 DẠNG ĐẦY ĐỦ (FULL FORM)</span>
-                                        <button type="button" onclick="event.stopPropagation(); playCurrentFullformAudio()" style="background: none; border: none; color: #93c5fd; cursor: pointer; font-size: 14px; padding: 0 4px;" title="Nghe phát âm dạng đầy đủ">
-                                            <i class="ri-volume-up-line"></i>
-                                        </button>
-                                    </div>
-                                    <div class="back-fullform-text" id="fc-back-fullform" style="font-size: 16px; font-weight: 800; color: #f8fafc; margin-top: 4px; letter-spacing: 0.3px;"></div>
+                                <!-- Mặt sau: Hiển thị Phiên âm IPA nổi bật cho cả từ viết tắt và từ thường -->
+                                <div id="fc-back-ipa-box" style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 12px; background: rgba(52, 211, 153, 0.12); border: 1px solid rgba(52, 211, 153, 0.3); border-radius: 8px; padding: 6px 12px;">
+                                    <span style="font-size: 11px; color: #a7f3d0; font-weight: 600;">Phiên âm:</span>
+                                    <span id="fc-back-ipa" style="font-family: monospace; font-size: 15px; font-weight: 700; color: #34d399;"></span>
+                                    <button type="button" onclick="event.stopPropagation(); playCurrentAudio()" style="background: none; border: none; color: #6ee7b7; cursor: pointer; font-size: 14px; padding: 0 4px;" title="Nghe phát âm">
+                                        <i class="ri-volume-up-line"></i>
+                                    </button>
                                 </div>
 
                                 <div>
@@ -1146,18 +1160,27 @@
                     <i class="ri-close-line"></i>
                 </button>
             </div>
-            <div class="form-group">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                    <label class="form-label" style="margin: 0;">Từ tiếng Anh / Từ viết tắt (*)</label>
-                    <button type="button" class="btn-ai-autofill" id="btn-vocab-ai-fill-pocket" onclick="aiService.autoFillVocab()" title="Tự động tra từ, phiên âm, dạng viết tắt và nghĩa bằng Gemini AI" style="font-size: 11px; padding: 4px 9px; border-radius: 6px; background: rgba(59, 130, 246, 0.16); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.35); cursor: pointer; display: inline-flex; align-items: center; gap: 4px; font-weight: 600;">
-                        <i class="ri-sparkling-fill"></i> AI Tra từ
-                    </button>
-                </div>
-                <input type="text" class="form-input" id="new-word-input" placeholder="Ví dụ: MHU, ECU, Resilience..." autofocus>
+            <!-- Checkbox Là từ viết tắt -->
+            <div style="margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; background: rgba(59, 130, 246, 0.08); padding: 7px 10px; border-radius: 8px; border: 1px solid rgba(59, 130, 246, 0.25);">
+                <label style="display: flex; align-items: center; gap: 7px; cursor: pointer; font-size: 12px; font-weight: 600; color: #93c5fd; margin: 0;">
+                    <input type="checkbox" id="pocket-is-acronym" onchange="togglePocketAcronymMode(this.checked)" style="width: 15px; height: 15px; cursor: pointer;">
+                    <span>🔤 Là từ viết tắt (Acronym)</span>
+                </label>
+                <button type="button" class="btn-ai-autofill" id="btn-vocab-ai-fill-pocket" onclick="aiService.autoFillVocab()" title="Tự động tra từ, phiên âm, dạng viết tắt và nghĩa bằng Gemini AI" style="font-size: 11px; padding: 3px 8px; border-radius: 6px; background: rgba(59, 130, 246, 0.16); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.35); cursor: pointer; display: inline-flex; align-items: center; gap: 4px; font-weight: 600;">
+                    <i class="ri-sparkling-fill"></i> AI Tra từ
+                </button>
             </div>
-            <div class="form-group" id="group-new-fullform">
-                <label class="form-label">Dạng đầy đủ tiếng Anh (Full Form - với từ viết tắt)</label>
-                <input type="text" class="form-input" id="new-fullform-input" placeholder="Ví dụ: Media Head Unit, Electronic Control Unit...">
+
+            <!-- Ô TỪ VIẾT TẮT ĐẨY LÊN ĐẦU KHI TICK VÀO Ô VIẾT TẮT -->
+            <div class="form-group" id="group-new-acronym" style="display: none;">
+                <label class="form-label">Từ viết tắt (Acronym) (*)</label>
+                <input type="text" class="form-input" id="new-acronym-input" placeholder="Ví dụ: MHU, ECU, OTA, API, CAN...">
+            </div>
+
+            <!-- Ô TỪ CHÍNH / FULL FORM -->
+            <div class="form-group" id="group-new-word">
+                <label class="form-label" id="label-new-word">Từ tiếng Anh (*)</label>
+                <input type="text" class="form-input" id="new-word-input" placeholder="Ví dụ: Marketing, Include, Attract, Resilience..." autofocus>
             </div>
             <div class="form-group">
                 <label class="form-label">Phiên âm IPA</label>
@@ -1224,6 +1247,12 @@
                         <option value="Other">📝 Khác</option>
                     </select>
                 </div>
+                <div class="form-group" style="flex: 1; min-width: 130px; display: flex; align-items: flex-end;">
+                    <label style="display: flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; color: #93c5fd; cursor: pointer; padding: 6px 8px; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 6px; width: 100%; height: 36px;" title="Bật chế độ này khi dán danh sách từ viết tắt">
+                        <input type="checkbox" id="pocket-import-is-acronym" onchange="updatePocketImportPreview()" style="cursor: pointer;">
+                        <span>🔤 Nhập từ viết tắt</span>
+                    </label>
+                </div>
             </div>
 
             <div class="form-group">
@@ -1238,7 +1267,7 @@
                         </button>
                     </div>
                 </div>
-                <textarea class="form-input" id="pocket-import-raw-text" rows="5" placeholder="Ví dụ:&#10;Include /ɪnˈkluːd/ - Bao gồm, chứa đựng&#10;MHU - Media Head Unit - /ˌem.eɪtʃˈjuː/ - Đầu phát đa phương tiện trên ô tô&#10;ECU - Electronic Control Unit - Hộp điều khiển điện tử&#10;Resilience - [rɪˈzɪl.jəns] - Khả năng phục hồi nhanh&#10;Microcontroller - Vi điều khiển tích hợp bộ nhớ" oninput="updatePocketImportPreview()" style="font-family: monospace; font-size: 12px;"></textarea>
+                <textarea class="form-input" id="pocket-import-raw-text" rows="5" placeholder="Ví dụ từ thường:&#10;Marketing - /'mɑ:kɪtɪŋ/ (n)- Ngành tiếp thị, chiến lược thị trường.&#10;Attract - /ə'trækt/ (v) - Hấp dẫn, lôi cuốn, thu hút khách hàng.&#10;Consume - /kən'sju:m/ (v)- Tiêu thụ, tiêu dùng.&#10;Include /ɪnˈkluːd/ - Bao gồm, chứa đựng&#10;Resilience - [rɪˈzɪl.jəns] - Khả năng phục hồi nhanh&#10;&#10;Hoặc nếu tick chọn 'Nhập từ viết tắt':&#10;MHU - Media Head Unit - /ˌem.eɪtʃˈjuː/ - Đầu phát đa phương tiện trên ô tô&#10;ECU - Electronic Control Unit - Hộp điều khiển điện tử" oninput="updatePocketImportPreview()" style="font-family: monospace; font-size: 12px;"></textarea>
             </div>
 
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
@@ -1489,26 +1518,43 @@
 
             // Front
             document.getElementById('fc-front-word').textContent = item.word || '';
-            document.getElementById('fc-front-ipa').textContent = item.phonetic || '/.../';
             document.getElementById('fc-front-tag').textContent = tagText;
+
+            // Với từ viết tắt: chữ viết tắt ở TRÊN (fc-front-word), chữ đầy đủ ở DƯỚI (fc-front-fullform), mặt sau là phiên âm và nghĩa
+            const isAcronym = item.tag === 'Acronym' || !!item.fullform;
+            const frontFullformBox = document.getElementById('fc-front-fullform-box');
+            const frontFullformText = document.getElementById('fc-front-fullform');
+            const frontIpaEl = document.getElementById('fc-front-ipa');
+
+            if (isAcronym && item.fullform) {
+                if (frontFullformBox) frontFullformBox.style.display = 'block';
+                if (frontFullformText) frontFullformText.textContent = item.fullform;
+                if (frontIpaEl) frontIpaEl.style.display = 'none';
+            } else {
+                if (frontFullformBox) frontFullformBox.style.display = 'none';
+                if (frontIpaEl) {
+                    frontIpaEl.style.display = 'block';
+                    frontIpaEl.textContent = item.phonetic || '/.../';
+                }
+            }
+
             const statusFront = document.getElementById('fc-front-status');
             if (statusFront) {
                 statusFront.className = 'card-status-indicator ' + (item.status === 'mastered' ? 'status-mastered' : 'status-learning');
                 statusFront.innerHTML = item.status === 'mastered' ? '<i class="ri-checkbox-circle-fill"></i> Đã nhớ' : '<i class="ri-time-line"></i> Cần ôn';
             }
 
-            // Back
+            // Back: Mặt sau là phiên âm và nghĩa
             document.getElementById('fc-back-tag').textContent = tagText;
 
-            const fullformBox = document.getElementById('fc-back-fullform-box');
-            const fullformText = document.getElementById('fc-back-fullform');
-            if (fullformBox && fullformText) {
-                if (item.fullform) {
-                    fullformBox.style.display = 'block';
-                    fullformText.textContent = item.fullform;
+            const backIpaBox = document.getElementById('fc-back-ipa-box');
+            const backIpaEl = document.getElementById('fc-back-ipa');
+            if (backIpaBox && backIpaEl) {
+                if (item.phonetic) {
+                    backIpaBox.style.display = 'flex';
+                    backIpaEl.textContent = item.phonetic;
                 } else {
-                    fullformBox.style.display = 'none';
-                    fullformText.textContent = '';
+                    backIpaBox.style.display = 'none';
                 }
             }
 
@@ -2123,17 +2169,60 @@
             if (e.target === modalEl) closeAddModal();
         };
 
+        function togglePocketAcronymMode(isAcronym) {
+            const groupAcronym = document.getElementById('group-new-acronym');
+            const labelWord = document.getElementById('label-new-word');
+            const inputWord = document.getElementById('new-word-input');
+            const inputAcronym = document.getElementById('new-acronym-input');
+            const tagSelect = document.getElementById('new-tag-input');
+
+            if (isAcronym) {
+                if (groupAcronym) groupAcronym.style.display = 'block';
+                if (labelWord) labelWord.textContent = 'Dạng đầy đủ tiếng Anh (Full Form) (*)';
+                if (inputWord) inputWord.placeholder = 'Ví dụ: Media Head Unit, Electronic Control Unit...';
+                if (tagSelect) tagSelect.value = 'Acronym';
+                if (inputAcronym) inputAcronym.focus();
+            } else {
+                if (groupAcronym) groupAcronym.style.display = 'none';
+                if (labelWord) labelWord.textContent = 'Từ tiếng Anh (*)';
+                if (inputWord) inputWord.placeholder = 'Ví dụ: Marketing, Include, Attract, Resilience...';
+                if (tagSelect && tagSelect.value === 'Acronym') tagSelect.value = 'TechCommon';
+                if (inputWord) inputWord.focus();
+            }
+        }
+
         function submitNewWord() {
-            const word = document.getElementById('new-word-input').value.trim();
-            const fullform = (document.getElementById('new-fullform-input')?.value || '').trim();
+            const isAcronym = document.getElementById('pocket-is-acronym')?.checked ?? false;
+            let word = '';
+            let fullform = '';
+            if (isAcronym) {
+                word = (document.getElementById('new-acronym-input')?.value || '').trim();
+                fullform = document.getElementById('new-word-input').value.trim();
+                if (!word) {
+                    alert('Vui lòng nhập Từ viết tắt!');
+                    document.getElementById('new-acronym-input')?.focus();
+                    return;
+                }
+            } else {
+                word = document.getElementById('new-word-input').value.trim();
+                fullform = '';
+            }
+
             const meaning = document.getElementById('new-meaning-input').value.trim();
-            const ipa = document.getElementById('new-ipa-input').value.trim();
+            let ipa = document.getElementById('new-ipa-input').value.trim();
             const example = document.getElementById('new-example-input').value.trim();
-            const tag = document.getElementById('new-tag-input').value;
+            let tag = document.getElementById('new-tag-input').value;
 
             if (!word || !meaning) {
                 alert('Vui lòng nhập Từ tiếng Anh và Nghĩa tiếng Việt!');
                 return;
+            }
+
+            if (isAcronym && !ipa) {
+                ipa = getAcronymLetterIPA(word);
+            }
+            if (isAcronym && tag !== 'Acronym') {
+                tag = 'Acronym';
             }
 
             const newItem = {
@@ -2143,7 +2232,7 @@
                 phonetic: ipa || '/.../',
                 meaning: meaning,
                 example: example || '',
-                tag: tag || (fullform ? 'Acronym' : 'TechCommon'),
+                tag: tag || (isAcronym ? 'Acronym' : 'TechCommon'),
                 status: 'learning',
                 user: VOCAB_USER,
                 createdAt: Date.now()
@@ -2155,8 +2244,11 @@
             closeAddModal();
 
             // Clear form
+            const isAcronymEl = document.getElementById('pocket-is-acronym');
+            if (isAcronymEl) isAcronymEl.checked = false;
+            togglePocketAcronymMode(false);
+            if (document.getElementById('new-acronym-input')) document.getElementById('new-acronym-input').value = '';
             document.getElementById('new-word-input').value = '';
-            if (document.getElementById('new-fullform-input')) document.getElementById('new-fullform-input').value = '';
             document.getElementById('new-meaning-input').value = '';
             document.getElementById('new-ipa-input').value = '';
             document.getElementById('new-example-input').value = '';
@@ -2205,78 +2297,85 @@
 
         let _pocketCurrentImportList = [];
 
-        function parseQuizletVocabText(rawText, termSep = 'auto', rowSep = 'newline', defaultTag = 'auto') {
+        function parseQuizletVocabText(rawText, termSep = 'auto', rowSep = 'newline', defaultTag = 'auto', isAcronymMode = false) {
             if (!rawText || !rawText.trim()) return [];
             let rows = (rowSep === 'semicolon') ? rawText.split(';') : rawText.split(/\r?\n/);
             const results = [];
 
             rows.forEach(row => {
-                const line = row.trim();
+                let line = row.trim();
                 if (!line || line.startsWith('//') || line.startsWith('#')) return;
+
+                // 1. Trích xuất phiên âm IPA từ bất kỳ vị trí nào: /.../ hoặc [...]
+                let phonetic = '';
+                const ipaMatch = line.match(/[\/\[]([^\/\]]{2,50})[\/\]]/);
+                if (ipaMatch) {
+                    phonetic = '/' + ipaMatch[1].trim() + '/';
+                    line = line.replace(ipaMatch[0], ' ');
+                }
+
+                // 2. Chuẩn hóa khoảng trắng quanh dấu gạch nối, ví dụ "(n)- Ngành" -> "(n) - Ngành"
+                let normLine = line.replace(/([^\s])[-–—]/g, '$1 - ').replace(/[-–—]([^\s])/g, ' - $1');
 
                 let rawParts = [];
                 if (termSep === 'tab') {
                     rawParts = line.split('\t');
                 } else if (termSep === 'dash') {
-                    rawParts = (/\s+[-–—]\s+/.test(line)) ? line.split(/\s+[-–—]\s+/) : line.split(/\s*[-–—]\s*/);
+                    rawParts = normLine.split(/\s+[-–—]\s+/);
                 } else if (termSep === 'colon') {
-                    rawParts = line.split(/\s*[:]\s*/);
+                    rawParts = normLine.split(/\s*[:]\s*/);
                 } else if (termSep === 'comma') {
-                    rawParts = line.split(/\s*[,]\s*/);
+                    rawParts = normLine.split(/\s*[,]\s*/);
                 } else {
                     if (line.includes('\t')) rawParts = line.split('\t');
-                    else if (/\s+[-–—]\s+/.test(line)) rawParts = line.split(/\s+[-–—]\s+/);
-                    else if (line.includes(':')) rawParts = line.split(/\s*[:]\s*/);
-                    else if (/\s*[-–—]\s*/.test(line)) rawParts = line.split(/\s*[-–—]\s*/);
-                    else if (line.includes(',')) rawParts = line.split(/\s*[,]\s*/);
-                    else rawParts = [line];
+                    else if (/\s+[-–—]\s+/.test(normLine)) rawParts = normLine.split(/\s+[-–—]\s+/);
+                    else if (normLine.includes(':')) rawParts = normLine.split(/\s*[:]\s*/);
+                    else if (/\s*[-–—]\s*/.test(normLine)) rawParts = normLine.split(/\s*[-–—]\s*/);
+                    else if (normLine.includes(',')) rawParts = normLine.split(/\s*[,]\s*/);
+                    else rawParts = [normLine];
                 }
 
                 rawParts = rawParts.map(p => p.trim()).filter(Boolean);
                 if (rawParts.length === 0) return;
 
                 let word = rawParts[0];
-                let phonetic = '';
                 let fullform = '';
                 let meaning = '';
 
-                // 1. Kiểm tra phiên âm kèm trực tiếp trong từ đầu tiên (e.g. "Include /ɪnˈkluːd/" hoặc "Resilience [rɪˈzɪl.jəns]")
-                const inlineIpaMatch = word.match(/[\/\[]([^\/\]]+)[\/\]]/);
-                if (inlineIpaMatch) {
-                    phonetic = `/${inlineIpaMatch[1].trim()}/`;
-                    word = word.replace(/[\/\[][^\/\]]+[\/\]]/, '').trim();
-                }
+                const isUpperAcronym = /^[A-Z0-9]{2,7}$/.test(word) && word === word.toUpperCase();
+                const shouldBeAcronym = isAcronymMode || (isUpperAcronym && rawParts.length >= 3);
 
-                // 2. Duyệt các phần còn lại để phát hiện phiên âm riêng biệt
-                const otherParts = [];
-                for (let i = 1; i < rawParts.length; i++) {
-                    const p = rawParts[i];
-                    if (!phonetic && (/^\/[^\/]+\/$/.test(p) || /^\[[^\]]+\]$/.test(p))) {
-                        phonetic = p.startsWith('[') ? `/${p.slice(1, -1)}/` : p;
+                if (shouldBeAcronym) {
+                    if (rawParts.length >= 3) {
+                        word = rawParts[0];
+                        fullform = rawParts[1];
+                        meaning = rawParts.slice(2).join(' - ');
+                    } else if (rawParts.length === 2) {
+                        word = rawParts[0];
+                        fullform = rawParts[1];
+                        meaning = '';
                     } else {
-                        otherParts.push(p);
+                        word = rawParts[0];
+                    }
+                } else {
+                    if (rawParts.length >= 2) {
+                        word = rawParts[0];
+                        meaning = rawParts.slice(1).join(' - ');
+                    } else {
+                        word = rawParts[0];
+                        meaning = '';
                     }
                 }
 
-                if (otherParts.length >= 2) {
-                    fullform = otherParts[0];
-                    meaning = otherParts.slice(1).join(' - ');
-                } else if (otherParts.length === 1) {
-                    meaning = otherParts[0];
-                }
-
-                // 3. Fallback tự phát âm từng chữ cho từ viết tắt nếu chưa có phiên âm
-                if (!phonetic && /^[A-Z0-9]{2,7}$/.test(word) && word === word.toUpperCase()) {
-                    phonetic = getAcronymLetterIPA(word);
-                }
+                meaning = meaning.replace(/^[\s\-–—]+/, '').trim();
 
                 let tag = defaultTag;
                 if (tag === 'auto') {
-                    if (fullform || (/^[A-Z0-9]{2,8}$/.test(word) && word === word.toUpperCase())) {
-                        tag = 'Acronym';
-                    } else {
-                        tag = 'TechCommon';
-                    }
+                    tag = (shouldBeAcronym || fullform || isUpperAcronym) ? 'Acronym' : 'TechCommon';
+                }
+
+                if (!phonetic && (tag === 'Acronym' || isUpperAcronym)) {
+                    phonetic = getAcronymLetterIPA(word);
                 }
 
                 if (word) {
@@ -2295,14 +2394,24 @@
         }
 
         function pastePocketSampleImport() {
-            const sample = [
-                'Include /ɪnˈkluːd/ - Bao gồm, chứa đựng',
-                'MHU - Media Head Unit - /ˌem.eɪtʃˈjuː/ - Đầu phát đa phương tiện trên ô tô',
-                'ECU - Electronic Control Unit - Hộp điều khiển điện tử',
-                'OTA - Over-The-Air - Cập nhật phần mềm ô tô không dây',
-                'Resilience - [rɪˈzɪl.jəns] - Khả năng phục hồi nhanh khi gặp sự cố',
-                'Microcontroller - Vi điều khiển tích hợp vi xử lý và bộ nhớ'
-            ].join('\n');
+            const isAcronymMode = document.getElementById('pocket-import-is-acronym')?.checked ?? false;
+            let sample = '';
+            if (isAcronymMode) {
+                sample = [
+                    'MHU - Media Head Unit - /ˌem.eɪtʃˈjuː/ - Đầu phát đa phương tiện trên ô tô',
+                    'ECU - Electronic Control Unit - Hộp điều khiển điện tử',
+                    'OTA - Over-The-Air - Cập nhật phần mềm ô tô không dây',
+                    'API - Application Programming Interface - Giao diện lập trình ứng dụng'
+                ].join('\n');
+            } else {
+                sample = [
+                    'Marketing - /\'mɑ:kɪtɪŋ/ (n)- Ngành tiếp thị, chiến lược thị trường.',
+                    'Attract - /ə\'trækt/ (v) - Hấp dẫn, lôi cuốn, thu hút khách hàng.',
+                    'Consume - /kən\'sju:m/ (v)- Tiêu thụ, tiêu dùng.',
+                    'Include /ɪnˈkluːd/ - Bao gồm, chứa đựng',
+                    'Resilience - [rɪˈzɪl.jəns] - Khả năng phục hồi nhanh khi gặp sự cố'
+                ].join('\n');
+            }
             const textInput = document.getElementById('pocket-import-raw-text');
             if (textInput) textInput.value = sample;
             updatePocketImportPreview();
@@ -2312,8 +2421,9 @@
             const raw = document.getElementById('pocket-import-raw-text')?.value || '';
             const termSep = document.getElementById('pocket-import-term-sep')?.value || 'auto';
             const defaultTag = document.getElementById('pocket-import-default-tag')?.value || 'auto';
+            const isAcronymMode = document.getElementById('pocket-import-is-acronym')?.checked ?? false;
 
-            const freshList = parseQuizletVocabText(raw, termSep, 'newline', defaultTag);
+            const freshList = parseQuizletVocabText(raw, termSep, 'newline', defaultTag, isAcronymMode);
 
             if (keepCachedPhonetics && _pocketCurrentImportList && _pocketCurrentImportList.length === freshList.length) {
                 freshList.forEach((item, idx) => {
@@ -2343,6 +2453,8 @@
             if (!previewBox) return;
 
             const list = _pocketCurrentImportList || [];
+            const isAcronymMode = document.getElementById('pocket-import-is-acronym')?.checked ?? false;
+
             if (list.length === 0) {
                 previewBox.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 12px;">Chưa có dữ liệu xem trước</div>';
                 return;
@@ -2353,10 +2465,10 @@
                     <div style="flex: 1; min-width: 0;">
                         <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                             <strong style="color: #f8fafc; font-size: 13px;">${idx + 1}. ${escapeHtml(item.word)}</strong>
+                            ${isAcronymMode && item.fullform ? `<span style="color: #38bdf8; font-size: 11.5px; font-weight: 600;">(${escapeHtml(item.fullform)})</span>` : ''}
                             ${item.phonetic 
-                                ? `<span style="font-family: monospace; color: #34d399; font-size: 11.5px; font-weight: 600; background: rgba(52,211,153,0.12); padding: 1px 5px; border-radius: 4px; border: 1px solid rgba(52,211,153,0.25);">${escapeHtml(item.phonetic)}</span>` 
+                                ? `<span style="font-family: monospace; color: #34d399; font-size: 11px; font-weight: 600; background: rgba(52,211,153,0.12); padding: 1px 5px; border-radius: 4px; border: 1px solid rgba(52,211,153,0.25);">${escapeHtml(item.phonetic)}</span>` 
                                 : `<span style="color: var(--text-muted); font-size: 10.5px; font-style: italic;">(Chưa có IPA)</span>`}
-                            ${item.fullform ? `<span style="color: #38bdf8; font-size: 11.5px; font-weight: 500;">(${escapeHtml(item.fullform)})</span>` : ''}
                         </div>
                         <div style="color: var(--text-secondary); font-size: 11.5px; margin-top: 2px;">${escapeHtml(item.meaning)}</div>
                     </div>
@@ -2431,7 +2543,8 @@
                 const raw = document.getElementById('pocket-import-raw-text')?.value || '';
                 const termSep = document.getElementById('pocket-import-term-sep')?.value || 'auto';
                 const defaultTag = document.getElementById('pocket-import-default-tag')?.value || 'auto';
-                parsed = parseQuizletVocabText(raw, termSep, 'newline', defaultTag);
+                const isAcronymMode = document.getElementById('pocket-import-is-acronym')?.checked ?? false;
+                parsed = parseQuizletVocabText(raw, termSep, 'newline', defaultTag, isAcronymMode);
             }
 
             if (parsed.length === 0) {

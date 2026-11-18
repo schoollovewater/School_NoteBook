@@ -1,7 +1,7 @@
 # 📚 School NoteBook — Hướng Dẫn & Tài Liệu Kỹ Thuật Toàn Diện
 
 > **Sổ tay ghi chép học tập, lập trình & Kho từ vựng thông minh theo phong cách Notion kết hợp Thẻ nhớ 3D Flashcards, Mini Note hỏa tốc & Trợ lý AI Gemini thông minh.**  
-> *Phiên bản hiện tại:* **v4.6.0**  
+> *Phiên bản hiện tại:* **v4.7.0**  
 > *Nền tảng:* Web App & PWA (HTML5, Vanilla CSS, Vanilla JavaScript, Firebase Compat, SortableJS, Service Worker).
 
 ---
@@ -252,7 +252,29 @@ node mininote.js --todo -t "Việc hôm nay" "Học từ vựng\nLàm bài tập
 
 ## 5. Lịch sử phiên bản & Sửa lỗi kỹ thuật quan trọng
 
-### 🚀 Phiên bản v4.6.0 (Hiện tại)
+### 🚀 Phiên bản v4.7.0 (Hiện tại)
+* **Tối ưu hóa Luồng Điền & Hiển thị Chuyên biệt cho Từ Viết Tắt (Acronym Dedicated Flow & Layout)**:
+  - **Phân tách rạch ròi luồng điền Từ thông thường vs. Từ viết tắt**:
+    - **Ô tick `[ ] Là từ viết tắt (Acronym / Abbreviation)`**: Mặc định bỏ chọn cho từ thông thường. Khi tick chọn, ô nhập **"Từ viết tắt"** được kích hoạt và **đẩy lên vị trí đầu tiên**, ô từ chính ở dưới đóng vai trò là **"Dạng đầy đủ tiếng Anh (Full Form)"**, tự động chọn chủ đề `🔤 Từ viết tắt (Acronym)`.
+    - **Giao diện sạch sẽ cho từ vựng thông dụng**: Khi không tick, ẩn hoàn toàn ô Full Form, giúp các từ tiếng Anh thường (ví dụ: `Marketing`, `Attract`, `Consume`, `Include`...) có luồng nhập liệu súc tích, trực quan, không bị phân tâm.
+  - **Nâng cấp Hiển thị Thẻ Flashcard chuyên nghiệp cho Từ viết tắt**:
+    - **Mặt trước (Front Face)**: Chữ viết tắt viết ở **TRÊN** to rõ (ví dụ: **MHU**), Dạng đầy đủ tiếng Anh viết ở **DƯỚI** (*Media Head Unit*) kèm nút nghe phát âm dạng đầy đủ.
+    - **Mặt sau (Back Face)**: Hiển thị nổi bật khối **Phiên âm IPA** (`/ˌem.eɪtʃˈjuː/` kèm nút phát âm), **Nghĩa tiếng Việt** chuyên ngành và câu ví dụ.
+    - **Với từ vựng thông thường**: Mặt trước hiển thị từ chính và phiên âm IPA, mặt sau hiển thị nghĩa và câu ví dụ.
+  - **Cải tiến Bộ Phân Tích & Bảng Xem Trước Nhập Hàng Loạt (Bulk Import)**:
+    - Bổ sung tùy chọn `[ ] Nhập từ viết tắt`: Khi không tick (chế độ từ thông thường), bảng xem trước chỉ hiển thị 5 cột (`#`, `Từ tiếng Anh`, `Phiên âm IPA`, `Nghĩa tiếng Việt`, `Chủ đề`) và **ẩn hoàn toàn cột Full Form**, giải quyết dứt điểm hiện tượng phiên âm bị hiểu nhầm thành Full Form.
+    - Bóc tách phiên âm thông minh mọi trường hợp: nhận diện chính xác kể cả khi phiên âm có từ loại đi kèm như `/'mɑ:kɪtɪŋ/ (n)- Ngành tiếp thị...` hay `/ə'trækt/ (v) - Hấp dẫn...`.
+  - **Lọc riêng Từ viết tắt trên Flashcard & Danh sách**:
+    - Khi chọn bộ lọc chủ đề `🔤 Từ viết tắt (Acronym)`, hệ thống tự động lọc toàn bộ thẻ nhớ Flashcard để người học chỉ ôn luyện riêng danh mục từ viết tắt.
+  - **Đồng bộ số hiệu phiên bản v4.7.0 cho toàn bộ hệ sinh thái**:
+    - Universe Portal (`/`): `v4.7.0`
+    - Sổ tay School (`/school`): `v4.7.0`
+    - Sổ tay Water (`/water`): `v4.7.0`
+    - Mini Note hỏa tốc (`/mini`): `v4.7.0`
+    - School Vocab Pocket (`/school/vocab`): `v4.7.0`
+    - Service Worker Cache: `schooldb-v4.7.0`
+
+### 🚀 Phiên bản v4.6.0
 * **Bổ sung Trích xuất & Tự động tạo Phiên âm IPA chuẩn Quốc tế cho Chế độ Nhập Hàng Loạt (Bulk Import Phonetics & AI IPA)**:
   - Giải quyết trọn vẹn vấn đề thiếu phiên âm khi dán hàng loạt từ vựng (Quizlet / Excel / Text):
     - **Tự động trích xuất phiên âm trực tiếp từ văn bản**:
@@ -361,4 +383,4 @@ node mininote.js --todo -t "Việc hôm nay" "Học từ vựng\nLàm bài tập
   - Cách ly dữ liệu Cloud Firestore và tự động di trú an toàn ghi chú cũ sang School.
 
 ---
-*Tài liệu được cập nhật tự động và lưu trữ trực tiếp trong mã nguồn dự án School NoteBook (Phiên bản v4.6.0).*
+*Tài liệu được cập nhật tự động và lưu trữ trực tiếp trong mã nguồn dự án School NoteBook (Phiên bản v4.7.0).*

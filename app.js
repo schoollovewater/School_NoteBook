@@ -6186,8 +6186,8 @@ function getAcronymLetterIPA(word) {
     return `/ˌ${parts.join('.')}ˈ${last}/`;
 }
 
-// Bộ phân tích văn bản danh sách từ vựng chuẩn Quizlet / Excel / Text (Hỗ trợ Phiên âm IPA)
-function parseQuizletVocabText(rawText, termSep = 'auto', rowSep = 'newline', defaultTag = 'auto') {
+// Bộ phân tích văn bản danh sách từ vựng chuẩn Quizlet / Excel / Text (Hỗ trợ Phiên âm IPA & Chế độ Từ viết tắt riêng biệt)
+function parseQuizletVocabText(rawText, termSep = 'auto', rowSep = 'newline', defaultTag = 'auto', isAcronymMode = false) {
     if (!rawText || !rawText.trim()) return [];
 
     let rows = [];
@@ -6200,33 +6200,45 @@ function parseQuizletVocabText(rawText, termSep = 'auto', rowSep = 'newline', de
     const results = [];
 
     rows.forEach(row => {
-        const line = row.trim();
+        let line = row.trim();
         if (!line) return;
         if (line.startsWith('//') || line.startsWith('#')) return;
+
+        // 1. Trích xuất phiên âm IPA từ bất kỳ vị trí nào trong dòng: /.../ hoặc [...]
+        let phonetic = '';
+        const ipaMatch = line.match(/[\/\[]([^\/\]]{2,50})[\/\]]/);
+        if (ipaMatch) {
+            phonetic = '/' + ipaMatch[1].trim() + '/';
+            // Thay thế đoạn phiên âm bằng khoảng trắng để không ảnh hưởng phân tách các phần còn lại
+            line = line.replace(ipaMatch[0], ' ');
+        }
+
+        // 2. Chuẩn hóa khoảng trắng quanh dấu gạch nối, ví dụ "(n)- Ngành" -> "(n) - Ngành"
+        let normLine = line.replace(/([^\s])[-–—]/g, '$1 - ').replace(/[-–—]([^\s])/g, ' - $1');
 
         let rawParts = [];
         if (termSep === 'tab') {
             rawParts = line.split('\t');
         } else if (termSep === 'dash') {
-            rawParts = (/\s+[-–—]\s+/.test(line)) ? line.split(/\s+[-–—]\s+/) : line.split(/\s*[-–—]\s*/);
+            rawParts = normLine.split(/\s+[-–—]\s+/);
         } else if (termSep === 'colon') {
-            rawParts = line.split(/\s*[:]\s*/);
+            rawParts = normLine.split(/\s*[:]\s*/);
         } else if (termSep === 'comma') {
-            rawParts = line.split(/\s*[,]\s*/);
+            rawParts = normLine.split(/\s*[,]\s*/);
         } else {
             // Tự động nhận diện (Ưu tiên Tab -> Spaced Dash -> Colon -> Unspaced Dash -> Comma)
             if (line.includes('\t')) {
                 rawParts = line.split('\t');
-            } else if (/\s+[-–—]\s+/.test(line)) {
-                rawParts = line.split(/\s+[-–—]\s+/);
-            } else if (line.includes(':')) {
-                rawParts = line.split(/\s*[:]\s*/);
-            } else if (/\s*[-–—]\s*/.test(line)) {
-                rawParts = line.split(/\s*[-–—]\s*/);
-            } else if (line.includes(',')) {
-                rawParts = line.split(/\s*[,]\s*/);
+            } else if (/\s+[-–—]\s+/.test(normLine)) {
+                rawParts = normLine.split(/\s+[-–—]\s+/);
+            } else if (normLine.includes(':')) {
+                rawParts = normLine.split(/\s*[:]\s*/);
+            } else if (/\s*[-–—]\s*/.test(normLine)) {
+                rawParts = normLine.split(/\s*[-–—]\s*/);
+            } else if (normLine.includes(',')) {
+                rawParts = normLine.split(/\s*[,]\s*/);
             } else {
-                rawParts = [line];
+                rawParts = [normLine];
             }
         }
 
@@ -6234,39 +6246,43 @@ function parseQuizletVocabText(rawText, termSep = 'auto', rowSep = 'newline', de
         if (rawParts.length === 0) return;
 
         let word = rawParts[0];
-        let phonetic = '';
         let fullform = '';
         let meaning = '';
 
-        // 1. Kiểm tra phiên âm kèm trực tiếp trong từ đầu tiên (ví dụ: "Resilience /rɪˈzɪl.jəns/" hoặc "Resilience [rɪˈzɪl.jəns]")
-        const inlineIpaMatch = word.match(/[\/\[]([^\/\]]+)[\/\]]/);
-        if (inlineIpaMatch) {
-            phonetic = `/${inlineIpaMatch[1].trim()}/`;
-            word = word.replace(/[\/\[][^\/\]]+[\/\]]/, '').trim();
-        }
+        // Tự động nhận diện từ viết tắt nếu word là 2-7 chữ cái hoa viết liền (ví dụ: MHU, ECU, OTA) VÀ có từ 3 phần trở lên
+        const isUpperAcronym = /^[A-Z0-9]{2,7}$/.test(word) && word === word.toUpperCase();
+        const shouldBeAcronym = isAcronymMode || (isUpperAcronym && rawParts.length >= 3);
 
-        // 2. Duyệt các phần còn lại để phát hiện phiên âm riêng (ví dụ: Word - /rɪˈzɪl.jəns/ - Meaning)
-        const otherParts = [];
-        for (let i = 1; i < rawParts.length; i++) {
-            const p = rawParts[i];
-            if (!phonetic && (/^\/[^\/]+\/$/.test(p) || /^\[[^\]]+\]$/.test(p))) {
-                phonetic = '/' + p.replace(/^[\/\[]|[\/\]]$/g, '').trim() + '/';
+        if (shouldBeAcronym) {
+            // Luồng từ viết tắt: Đẩy từ viết tắt lên trước, full form là từ chính đi kèm
+            if (rawParts.length >= 3) {
+                word = rawParts[0];
+                fullform = rawParts[1];
+                meaning = rawParts.slice(2).join(' - ');
+            } else if (rawParts.length === 2) {
+                word = rawParts[0];
+                fullform = rawParts[1];
+                meaning = '';
             } else {
-                otherParts.push(p);
+                word = rawParts[0];
+            }
+        } else {
+            // Luồng từ vựng thông thường (không bao giờ gán Full Form tránh nhầm lẫn)
+            if (rawParts.length >= 2) {
+                word = rawParts[0];
+                meaning = rawParts.slice(1).join(' - ');
+            } else {
+                word = rawParts[0];
+                meaning = '';
             }
         }
 
-        if (otherParts.length >= 2) {
-            fullform = otherParts[0];
-            meaning = otherParts.slice(1).join(' - ');
-        } else if (otherParts.length === 1) {
-            meaning = otherParts[0];
-        }
+        // Xóa dấu gạch nối thừa ở đầu câu nghĩa nếu có
+        meaning = meaning.replace(/^[\s\-–—]+/, '').trim();
 
         let tag = defaultTag;
-        const isUpperAcronym = /^[A-Z0-9]{2,8}$/.test(word) && word === word.toUpperCase();
         if (tag === 'auto') {
-            if (fullform || isUpperAcronym) {
+            if (shouldBeAcronym || fullform || isUpperAcronym) {
                 tag = 'Acronym';
             } else {
                 tag = 'TechCommon';
@@ -6558,6 +6574,12 @@ const vocab = {
 
         titleEl.innerHTML = '<i class="ri-book-2-line"></i> Thêm từ vựng mới';
         idInput.value = '';
+        const isAcronymCheck = document.getElementById('vocab-is-acronym');
+        if (isAcronymCheck) isAcronymCheck.checked = false;
+        vocab.toggleAcronymMode(false);
+
+        const acronymInput = document.getElementById('vocab-input-acronym');
+        if (acronymInput) acronymInput.value = '';
         wordInput.value = prefillWord;
         if (fullformInput) fullformInput.value = '';
         phoneticInput.value = '';
@@ -6575,6 +6597,28 @@ const vocab = {
         }, 50);
     },
 
+    toggleAcronymMode: (isAcronym) => {
+        const groupAcronym = document.getElementById('vocab-group-acronym');
+        const labelWord = document.getElementById('vocab-label-word');
+        const inputWord = document.getElementById('vocab-input-word');
+        const inputAcronym = document.getElementById('vocab-input-acronym');
+        const tagSelect = document.getElementById('vocab-input-tag');
+
+        if (isAcronym) {
+            if (groupAcronym) groupAcronym.style.display = 'block';
+            if (labelWord) labelWord.innerHTML = 'Dạng đầy đủ tiếng Anh (Full Form) <span class="required" style="color: #ef4444;">*</span>';
+            if (inputWord) inputWord.placeholder = 'Ví dụ: Media Head Unit, Electronic Control Unit...';
+            if (tagSelect) tagSelect.value = 'Acronym';
+            if (inputAcronym) inputAcronym.focus();
+        } else {
+            if (groupAcronym) groupAcronym.style.display = 'none';
+            if (labelWord) labelWord.innerHTML = 'Từ tiếng Anh <span class="required" style="color: #ef4444;">*</span>';
+            if (inputWord) inputWord.placeholder = 'Ví dụ: Marketing, Include, Attract, Resilience...';
+            if (tagSelect && tagSelect.value === 'Acronym') tagSelect.value = 'TechCommon';
+            if (inputWord) inputWord.focus();
+        }
+    },
+
     editWord: (id) => {
         const item = vocab.items.find(i => i.id === id);
         if (!item) return;
@@ -6582,6 +6626,8 @@ const vocab = {
         const modal = document.getElementById('vocab-modal');
         const titleEl = document.getElementById('vocab-modal-title');
         const idInput = document.getElementById('vocab-edit-id');
+        const isAcronymCheck = document.getElementById('vocab-is-acronym');
+        const acronymInput = document.getElementById('vocab-input-acronym');
         const wordInput = document.getElementById('vocab-input-word');
         const fullformInput = document.getElementById('vocab-input-fullform');
         const phoneticInput = document.getElementById('vocab-input-phonetic');
@@ -6591,15 +6637,28 @@ const vocab = {
 
         titleEl.innerHTML = '<i class="ri-edit-line"></i> Chỉnh sửa từ vựng';
         idInput.value = item.id;
-        wordInput.value = item.word;
+
+        const isAcronym = item.tag === 'Acronym' || !!item.fullform;
+        if (isAcronymCheck) isAcronymCheck.checked = isAcronym;
+        vocab.toggleAcronymMode(isAcronym);
+
+        if (isAcronym) {
+            if (acronymInput) acronymInput.value = item.word;
+            wordInput.value = item.fullform || item.word;
+        } else {
+            if (acronymInput) acronymInput.value = '';
+            wordInput.value = item.word;
+        }
+
         if (fullformInput) fullformInput.value = item.fullform || '';
         phoneticInput.value = item.phonetic || '';
         meaningInput.value = item.meaning;
         exampleInput.value = item.example || '';
-        tagInput.value = item.tag || 'TechCommon';
+        tagInput.value = item.tag || (isAcronym ? 'Acronym' : 'TechCommon');
 
         modal.style.display = 'flex';
-        wordInput.focus();
+        if (isAcronym && acronymInput) acronymInput.focus();
+        else wordInput.focus();
     },
 
     closeModal: () => {
@@ -6609,14 +6668,36 @@ const vocab = {
     handleFormSubmit: (e) => {
         e.preventDefault();
         const id = document.getElementById('vocab-edit-id').value;
-        const word = document.getElementById('vocab-input-word').value.trim();
-        const fullform = (document.getElementById('vocab-input-fullform')?.value || '').trim();
-        const phonetic = document.getElementById('vocab-input-phonetic').value.trim();
+        const isAcronym = document.getElementById('vocab-is-acronym')?.checked ?? false;
+        
+        let word = '';
+        let fullform = '';
+        if (isAcronym) {
+            word = (document.getElementById('vocab-input-acronym')?.value || '').trim();
+            fullform = document.getElementById('vocab-input-word').value.trim();
+            if (!word) {
+                showToast('⚠️ Vui lòng nhập từ viết tắt.');
+                document.getElementById('vocab-input-acronym')?.focus();
+                return;
+            }
+        } else {
+            word = document.getElementById('vocab-input-word').value.trim();
+            fullform = '';
+        }
+
+        let phonetic = document.getElementById('vocab-input-phonetic').value.trim();
         const meaning = document.getElementById('vocab-input-meaning').value.trim();
         const example = document.getElementById('vocab-input-example').value.trim();
-        const tag = document.getElementById('vocab-input-tag').value;
+        let tag = document.getElementById('vocab-input-tag').value;
 
         if (!word || !meaning) return;
+
+        if (isAcronym && !phonetic) {
+            phonetic = getAcronymLetterIPA(word);
+        }
+        if (isAcronym && tag !== 'Acronym') {
+            tag = 'Acronym';
+        }
 
         if (id) {
             // Edit existing
@@ -6679,13 +6760,26 @@ const vocab = {
     },
 
     pasteSampleImport: () => {
-        const sample = [
-            'MHU - Media Head Unit - /ˌem.eɪtʃˈjuː/ - Đầu phát đa phương tiện trên ô tô',
-            'ECU - Electronic Control Unit - /ˌiː.siːˈjuː/ - Hộp điều khiển điện tử cơ điện',
-            'Resilience /rɪˈzɪl.jəns/ - Khả năng phục hồi, kiên cường vượt khó',
-            'Microcontroller [ˌmaɪ.kroʊ.kənˈtroʊ.lɚ] - Vi điều khiển tích hợp vi xử lý và bộ nhớ',
-            'Latency - Độ trễ mạng giữa client và server'
-        ].join('\n');
+        const isAcronymMode = document.getElementById('import-is-acronym-mode')?.checked ?? false;
+        let sample = '';
+        if (isAcronymMode) {
+            sample = [
+                'MHU - Media Head Unit - /ˌem.eɪtʃˈjuː/ - Đầu phát đa phương tiện trên ô tô',
+                'ECU - Electronic Control Unit - Hộp điều khiển điện tử cơ điện',
+                'OTA - Over-The-Air - Cập nhật phần mềm ô tô không dây',
+                'API - Application Programming Interface - Giao diện lập trình ứng dụng',
+                'CAN - Controller Area Network - Mạng giao tiếp vi điều khiển trên ô tô'
+            ].join('\n');
+        } else {
+            sample = [
+                'Marketing - /\'mɑ:kɪtɪŋ/ (n)- Ngành tiếp thị, chiến lược thị trường.',
+                'Attract - /ə\'trækt/ (v) - Hấp dẫn, lôi cuốn, thu hút khách hàng.',
+                'Consume - /kən\'sju:m/ (v)- Tiêu thụ, tiêu dùng.',
+                'Include /ɪnˈkluːd/ - Bao gồm, chứa đựng',
+                'Resilience - [rɪˈzɪl.jəns] - Khả năng phục hồi nhanh khi gặp sự cố',
+                'Microcontroller - Vi điều khiển tích hợp vi xử lý và bộ nhớ'
+            ].join('\n');
+        }
         const textInput = document.getElementById('import-raw-text');
         if (textInput) textInput.value = sample;
         vocab.updateImportPreview();
@@ -6742,8 +6836,9 @@ const vocab = {
         const termSep = document.getElementById('import-term-sep')?.value || 'auto';
         const rowSep = document.getElementById('import-row-sep')?.value || 'newline';
         const defaultTag = document.getElementById('import-default-tag')?.value || 'auto';
+        const isAcronymMode = document.getElementById('import-is-acronym-mode')?.checked ?? false;
 
-        const parsed = parseQuizletVocabText(raw, termSep, rowSep, defaultTag);
+        const parsed = parseQuizletVocabText(raw, termSep, rowSep, defaultTag, isAcronymMode);
         vocab._currentImportList = parsed;
 
         const countEl = document.getElementById('import-detected-count');
@@ -6763,6 +6858,8 @@ const vocab = {
         if (!tableBox) return;
 
         const parsed = vocab._currentImportList || [];
+        const isAcronymMode = document.getElementById('import-is-acronym-mode')?.checked ?? false;
+
         if (parsed.length === 0) {
             tableBox.innerHTML = `
                 <div style="text-align: center; padding: 24px; color: var(--text-placeholder); font-size: 13px;">
@@ -6772,39 +6869,74 @@ const vocab = {
             return;
         }
 
-        tableBox.innerHTML = `
-            <table class="import-preview-table">
-                <thead>
-                    <tr>
-                        <th style="width: 32px;">#</th>
-                        <th>Từ / Viết tắt</th>
-                        <th>Phiên âm IPA</th>
-                        <th>Full Form</th>
-                        <th>Nghĩa tiếng Việt</th>
-                        <th>Chủ đề</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${parsed.map((item, idx) => {
-                        const tagInfo = vocab.getTagInfo(item.tag);
-                        return `
+        if (isAcronymMode) {
+            tableBox.innerHTML = `
+                <table class="import-preview-table">
+                    <thead>
                         <tr>
-                            <td style="color: var(--text-muted);">${idx + 1}</td>
-                            <td style="font-weight: 700; color: #f8fafc;">${escapeHtml(item.word)}</td>
-                            <td>
-                                ${item.phonetic 
-                                    ? `<span style="font-family: monospace; color: #34d399; font-weight: 600; background: rgba(52, 211, 153, 0.12); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(52, 211, 153, 0.28); font-size: 12px;">${escapeHtml(item.phonetic)}</span>` 
-                                    : `<span style="color: var(--text-muted); font-size: 11.5px; font-style: italic;">Chưa có</span>`}
-                            </td>
-                            <td style="color: #38bdf8;">${escapeHtml(item.fullform || '-')}</td>
-                            <td>${escapeHtml(item.meaning)}</td>
-                            <td><span class="vocab-tag-badge ${tagInfo.cls}">${tagInfo.icon} ${escapeHtml(tagInfo.label)}</span></td>
+                            <th style="width: 32px;">#</th>
+                            <th>Từ viết tắt (Acronym)</th>
+                            <th>Dạng đầy đủ (Full Form)</th>
+                            <th>Phiên âm IPA</th>
+                            <th>Nghĩa tiếng Việt</th>
+                            <th>Chủ đề</th>
                         </tr>
-                        `;
-                    }).join('')}
-                </tbody>
-            </table>
-        `;
+                    </thead>
+                    <tbody>
+                        ${parsed.map((item, idx) => {
+                            const tagInfo = vocab.getTagInfo(item.tag);
+                            return `
+                            <tr>
+                                <td style="color: var(--text-muted);">${idx + 1}</td>
+                                <td style="font-weight: 800; color: #38bdf8; font-size: 14px;">${escapeHtml(item.word)}</td>
+                                <td style="font-weight: 600; color: #f8fafc;">${escapeHtml(item.fullform || '-')}</td>
+                                <td>
+                                    ${item.phonetic 
+                                        ? `<span style="font-family: monospace; color: #34d399; font-weight: 600; background: rgba(52, 211, 153, 0.12); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(52, 211, 153, 0.28); font-size: 12px;">${escapeHtml(item.phonetic)}</span>` 
+                                        : `<span style="color: var(--text-muted); font-size: 11.5px; font-style: italic;">Chưa có</span>`}
+                                </td>
+                                <td>${escapeHtml(item.meaning)}</td>
+                                <td><span class="vocab-tag-badge ${tagInfo.cls}">${tagInfo.icon} ${escapeHtml(tagInfo.label)}</span></td>
+                            </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
+        } else {
+            // Từ vựng thông thường: KHÔNG hiển thị cột Full Form
+            tableBox.innerHTML = `
+                <table class="import-preview-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 32px;">#</th>
+                            <th>Từ tiếng Anh</th>
+                            <th>Phiên âm IPA</th>
+                            <th>Nghĩa tiếng Việt</th>
+                            <th>Chủ đề</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${parsed.map((item, idx) => {
+                            const tagInfo = vocab.getTagInfo(item.tag);
+                            return `
+                            <tr>
+                                <td style="color: var(--text-muted);">${idx + 1}</td>
+                                <td style="font-weight: 700; color: #f8fafc;">${escapeHtml(item.word)}</td>
+                                <td>
+                                    ${item.phonetic 
+                                        ? `<span style="font-family: monospace; color: #34d399; font-weight: 600; background: rgba(52, 211, 153, 0.12); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(52, 211, 153, 0.28); font-size: 12px;">${escapeHtml(item.phonetic)}</span>` 
+                                        : `<span style="color: var(--text-muted); font-size: 11.5px; font-style: italic;">Chưa có</span>`}
+                                </td>
+                                <td>${escapeHtml(item.meaning)}</td>
+                                <td><span class="vocab-tag-badge ${tagInfo.cls}">${tagInfo.icon} ${escapeHtml(tagInfo.label)}</span></td>
+                            </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
     },
 
     submitBulkImport: async () => {
@@ -6966,7 +7098,11 @@ const vocab = {
 
     // --- FLASHCARD METHODS ---
     initDeck: () => {
-        vocab.flashcardDeck = [...vocab.items];
+        if (vocab.currentTagFilter && vocab.currentTagFilter !== 'all') {
+            vocab.flashcardDeck = vocab.items.filter(i => i.tag === vocab.currentTagFilter || (vocab.currentTagFilter === 'Acronym' && (i.tag === 'Acronym' || i.fullform)));
+        } else {
+            vocab.flashcardDeck = [...vocab.items];
+        }
         vocab.flashcardIndex = 0;
         vocab.renderFlashcard();
     },
@@ -6994,18 +7130,34 @@ const vocab = {
         const tagInfo = vocab.getTagInfo(item.tag);
         document.getElementById('fc-front-tag').textContent = `${tagInfo.icon} ${tagInfo.label}`;
         document.getElementById('fc-front-word').textContent = item.word;
-        document.getElementById('fc-front-phonetic').textContent = item.phonetic || '';
-        document.getElementById('fc-back-tag').textContent = (item.status === 'mastered' ? '✅ Đã thuộc' : '⏳ Cần ôn');
 
-        const fullformBox = document.getElementById('fc-back-fullform-box');
-        const fullformText = document.getElementById('fc-back-fullform');
-        if (fullformBox && fullformText) {
-            if (item.fullform) {
-                fullformBox.style.display = 'block';
-                fullformText.textContent = item.fullform;
+        // Xử lý hiển thị Flashcard theo yêu cầu:
+        // Với từ viết tắt: chữ viết tắt ở TRÊN (fc-front-word), chữ đầy đủ ở DƯỚI (fc-front-fullform), mặt sau là phiên âm và nghĩa
+        const isAcronym = item.tag === 'Acronym' || !!item.fullform;
+        const frontFullformBox = document.getElementById('fc-front-fullform-box');
+        const frontFullformText = document.getElementById('fc-front-fullform');
+        const frontPhoneticRow = document.getElementById('fc-front-phonetic-row');
+
+        if (isAcronym && item.fullform) {
+            if (frontFullformBox) frontFullformBox.style.display = 'block';
+            if (frontFullformText) frontFullformText.textContent = item.fullform;
+            if (frontPhoneticRow) frontPhoneticRow.style.display = 'none';
+        } else {
+            if (frontFullformBox) frontFullformBox.style.display = 'none';
+            if (frontPhoneticRow) frontPhoneticRow.style.display = 'flex';
+            document.getElementById('fc-front-phonetic').textContent = item.phonetic || '';
+        }
+
+        // Mặt sau: Hiển thị Phiên âm IPA và Nghĩa tiếng Việt
+        document.getElementById('fc-back-tag').textContent = (item.status === 'mastered' ? '✅ Đã thuộc' : '⏳ Cần ôn');
+        const backIpaBox = document.getElementById('fc-back-ipa-box');
+        const backPhonetic = document.getElementById('fc-back-phonetic');
+        if (backIpaBox && backPhonetic) {
+            if (item.phonetic) {
+                backIpaBox.style.display = 'flex';
+                backPhonetic.textContent = item.phonetic;
             } else {
-                fullformBox.style.display = 'none';
-                fullformText.textContent = '';
+                backIpaBox.style.display = 'none';
             }
         }
 

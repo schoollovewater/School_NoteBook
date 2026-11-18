@@ -624,15 +624,22 @@ const aiService = {
     async autoFillVocab() {
         if (!this.ensureApiKey()) return;
 
+        const acronymInput = document.getElementById('vocab-input-acronym') || document.getElementById('new-acronym-input');
         const wordInput = document.getElementById('vocab-input-word') || document.getElementById('new-word-input');
-        const fullformInput = document.getElementById('vocab-input-fullform') || document.getElementById('new-fullform-input');
+        const isAcronymCheck = document.getElementById('vocab-is-acronym') || document.getElementById('pocket-is-acronym');
         const phoneticInput = document.getElementById('vocab-input-phonetic') || document.getElementById('new-ipa-input');
         const meaningInput = document.getElementById('vocab-input-meaning') || document.getElementById('new-meaning-input');
         const exampleInput = document.getElementById('vocab-input-example') || document.getElementById('new-example-input');
         const tagInput = document.getElementById('vocab-input-tag') || document.getElementById('new-tag-input');
         const btn = document.getElementById('btn-vocab-ai-fill') || document.getElementById('btn-vocab-ai-fill-pocket');
 
-        const word = wordInput ? wordInput.value.trim() : '';
+        let word = '';
+        if (acronymInput && acronymInput.value.trim()) {
+            word = acronymInput.value.trim();
+        } else if (wordInput && wordInput.value.trim()) {
+            word = wordInput.value.trim();
+        }
+
         if (!word) {
             showToast('⚠️ Vui lòng nhập từ hoặc cụm từ tiếng Anh trước.');
             if (wordInput) wordInput.focus();
@@ -681,7 +688,23 @@ Hãy trả về DUY NHẤT một chuỗi JSON hợp lệ (không kèm giải th�
 
             if (!parsed) throw new Error('Không thể phân tích dữ liệu trả về từ AI.');
 
-            if (fullformInput) fullformInput.value = parsed.fullform || '';
+            if (parsed.fullform) {
+                if (isAcronymCheck) {
+                    isAcronymCheck.checked = true;
+                    if (typeof vocab !== 'undefined' && vocab.toggleAcronymMode) vocab.toggleAcronymMode(true);
+                    else if (typeof togglePocketAcronymMode === 'function') togglePocketAcronymMode(true);
+                }
+                if (acronymInput) acronymInput.value = word;
+                if (wordInput) wordInput.value = parsed.fullform;
+            } else {
+                if (isAcronymCheck) {
+                    isAcronymCheck.checked = false;
+                    if (typeof vocab !== 'undefined' && vocab.toggleAcronymMode) vocab.toggleAcronymMode(false);
+                    else if (typeof togglePocketAcronymMode === 'function') togglePocketAcronymMode(false);
+                }
+                if (wordInput) wordInput.value = word;
+            }
+
             if (phoneticInput && parsed.phonetic) phoneticInput.value = parsed.phonetic;
             if (meaningInput && parsed.meaning) meaningInput.value = parsed.meaning;
             if (exampleInput && parsed.example) exampleInput.value = parsed.example;
