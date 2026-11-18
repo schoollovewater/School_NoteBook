@@ -29,7 +29,7 @@
     <!-- KaTeX CSS for Math Equations (LaTeX) -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
     
-    <link rel="stylesheet" href="styles.css?v=4.3.9">
+    <link rel="stylesheet" href="styles.css?v=4.6.0">
 </head>
 <body>
     <div class="app-background">
@@ -51,7 +51,7 @@
                         <span class="workspace-name" id="current-workspace-name">School NoteBook</span>
                         <div class="workspace-meta">
                             <span class="workspace-plan" id="current-workspace-badge">🏫 SCHOOL</span>
-                            <span class="workspace-version-badge" id="app-version-badge" title="Phiên bản School NoteBook hiện tại">v4.5.0</span>
+                            <span class="workspace-version-badge" id="app-version-badge" title="Phiên bản School NoteBook hiện tại">v4.6.0</span>
                         </div>
                     </div>
                     <i class="ri-expand-up-down-line text-muted"></i>
@@ -796,7 +796,7 @@
                 <div class="version-info-box">
                     <div class="version-info-row">
                         <span>Phiên bản đang chạy:</span>
-                        <strong class="version-number-tag" id="setting-app-version">v4.5.0</strong>
+                        <strong class="version-number-tag" id="setting-app-version">v4.6.0</strong>
                     </div>
                     <div class="version-info-row">
                         <span>Trạng thái:</span>
@@ -1147,24 +1147,30 @@
                             <option value="Other">📝 Khác</option>
                         </select>
                     </div>
-                    <div style="display: flex; align-items: flex-end;">
+                    <div style="display: flex; align-items: flex-end; gap: 6px;">
                         <button type="button" class="btn btn-secondary btn-sm" onclick="vocab.pasteSampleImport()" style="height: 38px; white-space: nowrap; font-size: 12px; font-weight: 600;" title="Dán thử dữ liệu mẫu">
                             <i class="ri-clipboard-line"></i> Dán mẫu thử
+                        </button>
+                        <button type="button" class="btn btn-secondary btn-sm" id="btn-import-ai-ipa" onclick="vocab.generateAIPhoneticsForImport()" style="height: 38px; white-space: nowrap; font-size: 12px; font-weight: 600; color: #60a5fa; border-color: rgba(96, 165, 250, 0.4);" title="Tự động tra và điền phiên âm IPA bằng Gemini AI cho toàn bộ từ trong bảng">
+                            <i class="ri-sparkling-fill"></i> ✨ AI Điền Phiên Âm IPA
                         </button>
                     </div>
                 </div>
 
                 <div class="form-group" style="margin-top: 12px; margin-bottom: 0;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                        <label style="font-size: 12px; font-weight: 600; margin: 0;">Dán danh sách từ (Word - Meaning hoặc Word - FullForm - Meaning):</label>
+                        <label style="font-size: 12px; font-weight: 600; margin: 0;">Dán danh sách từ (Hỗ trợ kèm Phiên âm /ipa/ hoặc [ipa] và FullForm):</label>
                         <span id="import-detected-count" style="color: var(--accent); font-weight: 700; font-size: 12px;">0 thẻ được phát hiện</span>
                     </div>
-                    <textarea id="import-raw-text" rows="7" placeholder="Ví dụ:&#10;MHU - Media Head Unit - Đầu phát đa phương tiện trên ô tô&#10;ECU - Electronic Control Unit - Hộp điều khiển điện tử cơ điện&#10;Microcontroller - Vi điều khiển tích hợp vi xử lý và bộ nhớ&#10;Latency - Độ trễ mạng giữa yêu cầu và phản hồi" oninput="vocab.updateImportPreview()" style="font-family: monospace; font-size: 13px; line-height: 1.5;"></textarea>
+                    <textarea id="import-raw-text" rows="7" placeholder="Ví dụ các định dạng được hỗ trợ:&#10;MHU - Media Head Unit - /ˌem.eɪtʃˈjuː/ - Đầu phát đa phương tiện trên ô tô&#10;ECU - Electronic Control Unit - Hộp điều khiển điện tử cơ điện&#10;Resilience /rɪˈzɪl.jəns/ - Khả năng phục hồi, kiên cường vượt khó&#10;Microcontroller [ˌmaɪ.kroʊ.kənˈtroʊ.lɚ] - Vi điều khiển tích hợp vi xử lý&#10;Latency - Độ trễ mạng giữa client và server (Bấm nút 'AI Điền Phiên Âm' để tự tạo IPA)" oninput="vocab.updateImportPreview()" style="font-family: monospace; font-size: 13px; line-height: 1.5;"></textarea>
                 </div>
 
                 <div class="import-preview-wrapper" style="margin-top: 12px;">
-                    <div style="font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
-                        <i class="ri-eye-line"></i> <span>Xem trước danh sách sẽ nạp:</span>
+                    <div style="font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <i class="ri-eye-line"></i> <span>Xem trước danh sách (Kèm Phiên Âm IPA):</span>
+                        </div>
+                        <span style="font-size: 11px; font-weight: 500; color: #34d399;">💡 Từ viết tắt tự động có IPA từng chữ cái; bấm 'AI Điền Phiên Âm' để tra từ thường</span>
                     </div>
                     <div id="import-preview-table-box" class="import-preview-box">
                         <div style="text-align: center; padding: 24px; color: var(--text-placeholder); font-size: 13px;">
@@ -1174,10 +1180,16 @@
                 </div>
 
                 <div class="import-options-footer" style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border-color); flex-wrap: wrap; gap: 10px;">
-                    <label style="display: flex; align-items: center; gap: 6px; font-size: 12.5px; cursor: pointer; user-select: none;">
-                        <input type="checkbox" id="import-skip-duplicates" checked>
-                        <span>Bỏ qua các từ đã tồn tại trong kho (tránh trùng lặp)</span>
-                    </label>
+                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                        <label style="display: flex; align-items: center; gap: 6px; font-size: 12.5px; cursor: pointer; user-select: none;">
+                            <input type="checkbox" id="import-skip-duplicates" checked>
+                            <span>Bỏ qua các từ đã tồn tại trong kho (tránh trùng lặp)</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #60a5fa; cursor: pointer; user-select: none;">
+                            <input type="checkbox" id="import-auto-ai-ipa" checked>
+                            <span>✨ Tự động tạo phiên âm IPA bằng Gemini AI cho các từ chưa có</span>
+                        </label>
+                    </div>
                     <div style="display: flex; gap: 8px;">
                         <button type="button" class="btn btn-secondary" onclick="vocab.closeImportModal()">Đóng</button>
                         <button type="button" class="btn btn-primary" id="btn-submit-import" onclick="vocab.submitBulkImport()" disabled>
@@ -1305,8 +1317,8 @@
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 
     <script src="firebase-config.js"></script>
-    <script src="shared/note-schema.js?v=4.3.9"></script>
-    <script src="shared/ai-service.js?v=4.3.9"></script>
-    <script src="app.js?v=4.3.9"></script>
+    <script src="shared/note-schema.js?v=4.6.0"></script>
+    <script src="shared/ai-service.js?v=4.6.0"></script>
+    <script src="app.js?v=4.6.0"></script>
 </body>
 </html>

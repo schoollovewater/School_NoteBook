@@ -705,6 +705,38 @@ Hãy trả về DUY NHẤT một chuỗi JSON hợp lệ (không kèm giải th�
         }
     },
 
+    // Tự động tạo phiên âm IPA hàng loạt cho danh sách từ vựng (Bulk Phonetics Generator)
+    async generateBatchPhonetics(wordList) {
+        if (!this.ensureApiKey()) return {};
+        if (!wordList || wordList.length === 0) return {};
+
+        const prompt = `Bạn là chuyên gia từ điển Anh-Việt và ngữ âm học quốc tế IPA.
+Hãy cung cấp phiên âm IPA chuẩn xác cho danh sách các từ/từ viết tắt tiếng Anh sau:
+${JSON.stringify(wordList)}
+
+QUY TẮC:
+- Với từ thông dụng: trả về phiên âm IPA quốc tế chuẩn Anh-Mỹ (ví dụ: "Resilience" -> "/rɪˈzɪl.jəns/", "Include" -> "/ɪnˈkluːd/", "Microcontroller" -> "/ˌmaɪ.kroʊ.kənˈtroʊ.lɚ/").
+- Với từ viết tắt (Acronym như "MHU", "ECU", "OTA", "API"): trả về cách đọc phát âm từng chữ cái (ví dụ: "MHU" -> "/ˌem.eɪtʃˈjuː/", "ECU" -> "/ˌiː.siːˈjuː/", "API" -> "/ˌeɪ.piːˈaɪ/").
+
+Hãy trả về DUY NHẤT một JSON Object dạng key-value: { "từ": "/phiên_âm_ipa/" }. Không kèm văn bản giải thích ngoài JSON.`;
+
+        try {
+            const raw = await this.generateContent(prompt, 'Trả về JSON thuần tuý hợp lệ.', { jsonMode: true, task: 'batch_phonetics' });
+            let parsed = null;
+            try {
+                parsed = JSON.parse(raw);
+            } catch (pe) {
+                const match = raw.match(/\{[\s\S]*\}/);
+                if (match) parsed = JSON.parse(match[0]);
+            }
+            return parsed || {};
+        } catch (err) {
+            console.error('Batch phonetics error:', err);
+            showToast(`⚠️ Không thể tạo phiên âm bằng AI: ${err.message}`);
+            return {};
+        }
+    },
+
     // AI Gia sư chấm bài luyện đặt câu (AI Sentence Tutor)
     openSentenceTutor(vocabId) {
         if (!this.ensureApiKey()) return;

@@ -28,8 +28,8 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
     <script src="firebase-config.js"></script>
-    <script src="shared/note-schema.js?v=4.3.2"></script>
-    <script src="shared/ai-service.js?v=4.4.0"></script>
+    <script src="shared/note-schema.js?v=4.6.0"></script>
+    <script src="shared/ai-service.js?v=4.6.0"></script>
 
     <style>
         :root {
@@ -931,7 +931,7 @@
                     </a>
                     <div class="brand-title">
                         <h1>
-                            School Vocab <span class="brand-badge">v4.5.0</span>
+                            School Vocab <span class="brand-badge">v4.6.0</span>
                         </h1>
                         <span class="brand-sub">Tiếng Anh bỏ túi • Đi đường rảnh tay</span>
                     </div>
@@ -1227,21 +1227,32 @@
             </div>
 
             <div class="form-group">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; flex-wrap: wrap; gap: 4px;">
                     <label class="form-label" style="margin: 0;">Dán danh sách từ (Word - Meaning...):</label>
-                    <button type="button" onclick="pastePocketSampleImport()" style="background: none; border: none; color: #60a5fa; cursor: pointer; font-size: 11.5px; font-weight: 600;">
-                        📋 Dán mẫu thử
-                    </button>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <button type="button" class="btn-pocket-ai-ipa" id="btn-pocket-ai-ipa" onclick="generatePocketAIPhonetics()" title="Dùng AI tra và điền phiên âm IPA chuẩn cho toàn bộ từ chưa có IPA" style="background: rgba(59,130,246,0.18); color: #60a5fa; border: 1px solid rgba(59,130,246,0.4); border-radius: 6px; padding: 3px 8px; font-size: 11px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                            <i class="ri-sparkling-fill"></i> ✨ AI Điền IPA
+                        </button>
+                        <button type="button" onclick="pastePocketSampleImport()" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 11px; font-weight: 500;">
+                            📋 Mẫu thử
+                        </button>
+                    </div>
                 </div>
-                <textarea class="form-input" id="pocket-import-raw-text" rows="5" placeholder="Ví dụ:&#10;MHU - Media Head Unit - Đầu phát đa phương tiện trên ô tô&#10;ECU - Electronic Control Unit - Hộp điều khiển điện tử&#10;Microcontroller - Vi điều khiển tích hợp bộ vi xử lý" oninput="updatePocketImportPreview()" style="font-family: monospace; font-size: 12.5px;"></textarea>
+                <textarea class="form-input" id="pocket-import-raw-text" rows="5" placeholder="Ví dụ:&#10;Include /ɪnˈkluːd/ - Bao gồm, chứa đựng&#10;MHU - Media Head Unit - /ˌem.eɪtʃˈjuː/ - Đầu phát đa phương tiện trên ô tô&#10;ECU - Electronic Control Unit - Hộp điều khiển điện tử&#10;Resilience - [rɪˈzɪl.jəns] - Khả năng phục hồi nhanh&#10;Microcontroller - Vi điều khiển tích hợp bộ nhớ" oninput="updatePocketImportPreview()" style="font-family: monospace; font-size: 12px;"></textarea>
             </div>
 
-            <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
                 <span id="pocket-import-count" style="font-size: 12px; font-weight: 700; color: #38bdf8;">0 thẻ được phát hiện</span>
-                <label style="display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--text-secondary); cursor: pointer;">
-                    <input type="checkbox" id="pocket-import-skip-dup" checked>
-                    <span>Bỏ qua từ trùng</span>
-                </label>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <label style="display: flex; align-items: center; gap: 4px; font-size: 11px; color: #60a5fa; cursor: pointer;" title="Tự động dùng Gemini AI tra cứu phiên âm IPA cho các từ chưa có khi nhập">
+                        <input type="checkbox" id="pocket-import-auto-ai-ipa" checked>
+                        <span>✨ Tự tạo IPA bằng AI</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-secondary); cursor: pointer;">
+                        <input type="checkbox" id="pocket-import-skip-dup" checked>
+                        <span>Bỏ từ trùng</span>
+                    </label>
+                </div>
             </div>
 
             <div id="pocket-import-preview-box" style="max-height: 140px; overflow-y: auto; background: rgba(0,0,0,0.3); border-radius: 8px; border: 1px solid var(--border); padding: 8px; font-size: 12px;">
@@ -2174,6 +2185,26 @@
             };
         }
 
+        // Bản đồ phát âm chữ cái tiếng Anh chuẩn quốc tế IPA
+        const LETTER_IPA_MAP = {
+            'A': 'eɪ', 'B': 'biː', 'C': 'siː', 'D': 'diː', 'E': 'iː', 'F': 'ef', 'G': 'dʒiː',
+            'H': 'eɪtʃ', 'I': 'aɪ', 'J': 'dʒeɪ', 'K': 'keɪ', 'L': 'el', 'M': 'em', 'N': 'en',
+            'O': 'oʊ', 'P': 'piː', 'Q': 'kjuː', 'R': 'ɑːr', 'S': 'es', 'T': 'tiː', 'U': 'juː',
+            'V': 'viː', 'W': 'ˈdʌb.əl.juː', 'X': 'eks', 'Y': 'waɪ', 'Z': 'ziː'
+        };
+
+        function getAcronymLetterIPA(word) {
+            if (!word) return '';
+            const clean = word.replace(/[^A-Za-z]/g, '').toUpperCase();
+            if (!clean || clean.length < 2 || clean.length > 7) return '';
+            const parts = clean.split('').map(ch => LETTER_IPA_MAP[ch] || ch);
+            if (parts.length === 1) return `/${parts[0]}/`;
+            const last = parts.pop();
+            return `/ˌ${parts.join('.')}ˈ${last}/`;
+        }
+
+        let _pocketCurrentImportList = [];
+
         function parseQuizletVocabText(rawText, termSep = 'auto', rowSep = 'newline', defaultTag = 'auto') {
             if (!rawText || !rawText.trim()) return [];
             let rows = (rowSep === 'semicolon') ? rawText.split(';') : rawText.split(/\r?\n/);
@@ -2183,36 +2214,60 @@
                 const line = row.trim();
                 if (!line || line.startsWith('//') || line.startsWith('#')) return;
 
-                let parts = [];
+                let rawParts = [];
                 if (termSep === 'tab') {
-                    parts = line.split('\t');
+                    rawParts = line.split('\t');
                 } else if (termSep === 'dash') {
-                    parts = (/\s+[-–—]\s+/.test(line)) ? line.split(/\s+[-–—]\s+/) : line.split(/\s*[-–—]\s*/);
+                    rawParts = (/\s+[-–—]\s+/.test(line)) ? line.split(/\s+[-–—]\s+/) : line.split(/\s*[-–—]\s*/);
                 } else if (termSep === 'colon') {
-                    parts = line.split(/\s*[:]\s*/);
+                    rawParts = line.split(/\s*[:]\s*/);
                 } else if (termSep === 'comma') {
-                    parts = line.split(/\s*[,]\s*/);
+                    rawParts = line.split(/\s*[,]\s*/);
                 } else {
-                    if (line.includes('\t')) parts = line.split('\t');
-                    else if (/\s+[-–—]\s+/.test(line)) parts = line.split(/\s+[-–—]\s+/);
-                    else if (line.includes(':')) parts = line.split(/\s*[:]\s*/);
-                    else if (/\s*[-–—]\s*/.test(line)) parts = line.split(/\s*[-–—]\s*/);
-                    else if (line.includes(',')) parts = line.split(/\s*[,]\s*/);
-                    else parts = [line];
+                    if (line.includes('\t')) rawParts = line.split('\t');
+                    else if (/\s+[-–—]\s+/.test(line)) rawParts = line.split(/\s+[-–—]\s+/);
+                    else if (line.includes(':')) rawParts = line.split(/\s*[:]\s*/);
+                    else if (/\s*[-–—]\s*/.test(line)) rawParts = line.split(/\s*[-–—]\s*/);
+                    else if (line.includes(',')) rawParts = line.split(/\s*[,]\s*/);
+                    else rawParts = [line];
                 }
 
-                parts = parts.map(p => p.trim()).filter(Boolean);
-                if (parts.length === 0) return;
+                rawParts = rawParts.map(p => p.trim()).filter(Boolean);
+                if (rawParts.length === 0) return;
 
-                const word = parts[0];
+                let word = rawParts[0];
+                let phonetic = '';
                 let fullform = '';
                 let meaning = '';
 
-                if (parts.length >= 3) {
-                    fullform = parts[1];
-                    meaning = parts.slice(2).join(' - ');
-                } else if (parts.length === 2) {
-                    meaning = parts[1];
+                // 1. Kiểm tra phiên âm kèm trực tiếp trong từ đầu tiên (e.g. "Include /ɪnˈkluːd/" hoặc "Resilience [rɪˈzɪl.jəns]")
+                const inlineIpaMatch = word.match(/[\/\[]([^\/\]]+)[\/\]]/);
+                if (inlineIpaMatch) {
+                    phonetic = `/${inlineIpaMatch[1].trim()}/`;
+                    word = word.replace(/[\/\[][^\/\]]+[\/\]]/, '').trim();
+                }
+
+                // 2. Duyệt các phần còn lại để phát hiện phiên âm riêng biệt
+                const otherParts = [];
+                for (let i = 1; i < rawParts.length; i++) {
+                    const p = rawParts[i];
+                    if (!phonetic && (/^\/[^\/]+\/$/.test(p) || /^\[[^\]]+\]$/.test(p))) {
+                        phonetic = p.startsWith('[') ? `/${p.slice(1, -1)}/` : p;
+                    } else {
+                        otherParts.push(p);
+                    }
+                }
+
+                if (otherParts.length >= 2) {
+                    fullform = otherParts[0];
+                    meaning = otherParts.slice(1).join(' - ');
+                } else if (otherParts.length === 1) {
+                    meaning = otherParts[0];
+                }
+
+                // 3. Fallback tự phát âm từng chữ cho từ viết tắt nếu chưa có phiên âm
+                if (!phonetic && /^[A-Z0-9]{2,7}$/.test(word) && word === word.toUpperCase()) {
+                    phonetic = getAcronymLetterIPA(word);
                 }
 
                 let tag = defaultTag;
@@ -2228,8 +2283,8 @@
                     results.push({
                         word,
                         fullform,
+                        phonetic,
                         meaning: meaning || 'Chưa có nghĩa',
-                        phonetic: '',
                         example: '',
                         tag,
                         status: 'learning'
@@ -2241,63 +2296,174 @@
 
         function pastePocketSampleImport() {
             const sample = [
-                'MHU - Media Head Unit - Đầu phát đa phương tiện trên ô tô',
+                'Include /ɪnˈkluːd/ - Bao gồm, chứa đựng',
+                'MHU - Media Head Unit - /ˌem.eɪtʃˈjuː/ - Đầu phát đa phương tiện trên ô tô',
                 'ECU - Electronic Control Unit - Hộp điều khiển điện tử',
                 'OTA - Over-The-Air - Cập nhật phần mềm ô tô không dây',
-                'Microcontroller - Vi điều khiển tích hợp vi xử lý và bộ nhớ',
-                'Latency - Độ trễ mạng giữa client và server'
+                'Resilience - [rɪˈzɪl.jəns] - Khả năng phục hồi nhanh khi gặp sự cố',
+                'Microcontroller - Vi điều khiển tích hợp vi xử lý và bộ nhớ'
             ].join('\n');
             const textInput = document.getElementById('pocket-import-raw-text');
             if (textInput) textInput.value = sample;
             updatePocketImportPreview();
         }
 
-        function updatePocketImportPreview() {
+        function updatePocketImportPreview(keepCachedPhonetics = false) {
             const raw = document.getElementById('pocket-import-raw-text')?.value || '';
             const termSep = document.getElementById('pocket-import-term-sep')?.value || 'auto';
             const defaultTag = document.getElementById('pocket-import-default-tag')?.value || 'auto';
 
-            const parsed = parseQuizletVocabText(raw, termSep, 'newline', defaultTag);
-            const countEl = document.getElementById('pocket-import-count');
-            const submitBtn = document.getElementById('btn-pocket-submit-import');
-            const previewBox = document.getElementById('pocket-import-preview-box');
+            const freshList = parseQuizletVocabText(raw, termSep, 'newline', defaultTag);
 
-            if (countEl) countEl.textContent = `${parsed.length} thẻ được phát hiện`;
-            if (submitBtn) {
-                submitBtn.disabled = parsed.length === 0;
-                submitBtn.innerHTML = `<i class="ri-download-2-line"></i> Nhập ${parsed.length} từ vào Kho`;
+            if (keepCachedPhonetics && _pocketCurrentImportList && _pocketCurrentImportList.length === freshList.length) {
+                freshList.forEach((item, idx) => {
+                    const cached = _pocketCurrentImportList[idx];
+                    if (cached && cached.word.toLowerCase() === item.word.toLowerCase() && cached.phonetic) {
+                        item.phonetic = cached.phonetic;
+                    }
+                });
             }
 
+            _pocketCurrentImportList = freshList;
+
+            const countEl = document.getElementById('pocket-import-count');
+            const submitBtn = document.getElementById('btn-pocket-submit-import');
+
+            if (countEl) countEl.textContent = `${_pocketCurrentImportList.length} thẻ được phát hiện`;
+            if (submitBtn) {
+                submitBtn.disabled = _pocketCurrentImportList.length === 0;
+                submitBtn.innerHTML = `<i class="ri-download-2-line"></i> Nhập ${_pocketCurrentImportList.length} từ vào Kho`;
+            }
+
+            renderPocketImportPreviewList();
+        }
+
+        function renderPocketImportPreviewList() {
+            const previewBox = document.getElementById('pocket-import-preview-box');
             if (!previewBox) return;
-            if (parsed.length === 0) {
+
+            const list = _pocketCurrentImportList || [];
+            if (list.length === 0) {
                 previewBox.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 12px;">Chưa có dữ liệu xem trước</div>';
                 return;
             }
 
-            previewBox.innerHTML = parsed.map((item, idx) => `
-                <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 6px; border-bottom: 1px solid rgba(255,255,255,0.06); gap: 6px;">
-                    <div>
-                        <strong style="color: #f8fafc;">${idx + 1}. ${escapeHtml(item.word)}</strong>
-                        ${item.fullform ? `<span style="color: #38bdf8; font-size: 11px;"> (${escapeHtml(item.fullform)})</span>` : ''}
-                        <div style="color: var(--text-secondary); font-size: 11px;">${escapeHtml(item.meaning)}</div>
+            previewBox.innerHTML = list.map((item, idx) => `
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.06); gap: 6px;">
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                            <strong style="color: #f8fafc; font-size: 13px;">${idx + 1}. ${escapeHtml(item.word)}</strong>
+                            ${item.phonetic 
+                                ? `<span style="font-family: monospace; color: #34d399; font-size: 11.5px; font-weight: 600; background: rgba(52,211,153,0.12); padding: 1px 5px; border-radius: 4px; border: 1px solid rgba(52,211,153,0.25);">${escapeHtml(item.phonetic)}</span>` 
+                                : `<span style="color: var(--text-muted); font-size: 10.5px; font-style: italic;">(Chưa có IPA)</span>`}
+                            ${item.fullform ? `<span style="color: #38bdf8; font-size: 11.5px; font-weight: 500;">(${escapeHtml(item.fullform)})</span>` : ''}
+                        </div>
+                        <div style="color: var(--text-secondary); font-size: 11.5px; margin-top: 2px;">${escapeHtml(item.meaning)}</div>
                     </div>
-                    <span style="font-size: 10px; padding: 2px 5px; border-radius: 4px; background: rgba(59,130,246,0.15); color: #60a5fa; white-space: nowrap;">${item.tag}</span>
+                    <span style="font-size: 10px; padding: 2px 5px; border-radius: 4px; background: rgba(59,130,246,0.15); color: #60a5fa; white-space: nowrap; flex-shrink: 0;">${item.tag}</span>
                 </div>
             `).join('');
         }
 
-        function submitPocketBulkImport() {
-            const raw = document.getElementById('pocket-import-raw-text')?.value || '';
-            const termSep = document.getElementById('pocket-import-term-sep')?.value || 'auto';
-            const defaultTag = document.getElementById('pocket-import-default-tag')?.value || 'auto';
-            const skipDuplicates = document.getElementById('pocket-import-skip-dup')?.checked ?? true;
+        async function generatePocketAIPhonetics() {
+            if (typeof aiService === 'undefined') {
+                showToast('❌ Không tìm thấy AI Service');
+                return;
+            }
+            if (!aiService.hasKey()) {
+                showToast('🔑 Vui lòng cấu hình Gemini API Key trước');
+                if (typeof openSettingsModal === 'function') openSettingsModal();
+                return;
+            }
+            if (!_pocketCurrentImportList || _pocketCurrentImportList.length === 0) {
+                updatePocketImportPreview();
+            }
+            if (!_pocketCurrentImportList || _pocketCurrentImportList.length === 0) {
+                showToast('⚠️ Vui lòng dán danh sách từ trước khi tạo phiên âm');
+                return;
+            }
 
-            const parsed = parseQuizletVocabText(raw, termSep, 'newline', defaultTag);
+            const missingWords = _pocketCurrentImportList
+                .filter(item => !item.phonetic || item.phonetic === '/.../')
+                .map(item => item.word);
+
+            if (missingWords.length === 0) {
+                showToast('✅ Tất cả từ đều đã có phiên âm IPA!');
+                return;
+            }
+
+            const btn = document.getElementById('btn-pocket-ai-ipa');
+            const origHtml = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = `<i class="ri-loader-4-line ri-spin"></i> Đang tạo IPA (${missingWords.length} từ)...`;
+            }
+
+            try {
+                const phoneticsMap = await aiService.generateBatchPhonetics(missingWords);
+                let filledCount = 0;
+                _pocketCurrentImportList.forEach(item => {
+                    if (!item.phonetic || item.phonetic === '/.../') {
+                        const key = Object.keys(phoneticsMap).find(k => k.toLowerCase() === item.word.toLowerCase());
+                        if (key && phoneticsMap[key]) {
+                            item.phonetic = phoneticsMap[key];
+                            filledCount++;
+                        }
+                    }
+                });
+
+                renderPocketImportPreviewList();
+                showToast(`✨ Đã điền phiên âm IPA cho ${filledCount} từ!`);
+            } catch (err) {
+                console.error('generatePocketAIPhonetics error:', err);
+                showToast('❌ Lỗi tạo IPA: ' + (err.message || 'Không thành công'));
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = origHtml;
+                }
+            }
+        }
+
+        async function submitPocketBulkImport() {
+            let parsed = _pocketCurrentImportList;
+            if (!parsed || parsed.length === 0) {
+                const raw = document.getElementById('pocket-import-raw-text')?.value || '';
+                const termSep = document.getElementById('pocket-import-term-sep')?.value || 'auto';
+                const defaultTag = document.getElementById('pocket-import-default-tag')?.value || 'auto';
+                parsed = parseQuizletVocabText(raw, termSep, 'newline', defaultTag);
+            }
+
             if (parsed.length === 0) {
                 showToast('⚠️ Không tìm thấy từ vựng hợp lệ để nhập.');
                 return;
             }
 
+            // Tự động tạo phiên âm IPA bằng AI nếu được chọn và có API key
+            const autoAiIpa = document.getElementById('pocket-import-auto-ai-ipa')?.checked ?? true;
+            if (autoAiIpa && typeof aiService !== 'undefined' && aiService.hasKey()) {
+                const missingWords = parsed.filter(i => !i.phonetic || i.phonetic === '/.../').map(i => i.word);
+                if (missingWords.length > 0) {
+                    const submitBtn = document.getElementById('btn-pocket-submit-import');
+                    if (submitBtn) {
+                        submitBtn.disabled = true;
+                        submitBtn.innerHTML = '<i class="ri-loader-4-line ri-spin"></i> Đang tạo IPA bằng AI...';
+                    }
+                    try {
+                        const pMap = await aiService.generateBatchPhonetics(missingWords);
+                        parsed.forEach(item => {
+                            if (!item.phonetic || item.phonetic === '/.../') {
+                                const foundKey = Object.keys(pMap).find(k => k.toLowerCase() === item.word.toLowerCase());
+                                if (foundKey && pMap[foundKey]) item.phonetic = pMap[foundKey];
+                            }
+                        });
+                    } catch (e) {
+                        console.warn('Auto AI IPA error:', e);
+                    }
+                }
+            }
+
+            const skipDuplicates = document.getElementById('pocket-import-skip-dup')?.checked ?? true;
             let addedCount = 0;
             let skippedCount = 0;
             const existingWords = new Set(vocabItems.map(i => (i.word || '').toLowerCase().trim()));
@@ -2314,7 +2480,7 @@
                     id: 'v_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5),
                     word: cleanWord,
                     fullform: p.fullform || '',
-                    phonetic: p.phonetic || '/.../',
+                    phonetic: p.phonetic || (getAcronymLetterIPA(cleanWord) || '/.../'),
                     meaning: p.meaning || '',
                     example: p.example || '',
                     tag: p.tag || 'TechCommon',

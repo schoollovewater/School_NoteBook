@@ -6168,7 +6168,25 @@ const defaultVocabItems = [
     }
 ];
 
-// Bộ phân tích văn bản danh sách từ vựng chuẩn Quizlet / Excel / Text
+// Bản đồ phát âm chữ cái tiếng Anh chuẩn quốc tế IPA
+const LETTER_IPA_MAP = {
+    'A': 'eɪ', 'B': 'biː', 'C': 'siː', 'D': 'diː', 'E': 'iː', 'F': 'ef', 'G': 'dʒiː',
+    'H': 'eɪtʃ', 'I': 'aɪ', 'J': 'dʒeɪ', 'K': 'keɪ', 'L': 'el', 'M': 'em', 'N': 'en',
+    'O': 'oʊ', 'P': 'piː', 'Q': 'kjuː', 'R': 'ɑːr', 'S': 'es', 'T': 'tiː', 'U': 'juː',
+    'V': 'viː', 'W': 'ˈdʌb.əl.juː', 'X': 'eks', 'Y': 'waɪ', 'Z': 'ziː'
+};
+
+function getAcronymLetterIPA(word) {
+    if (!word) return '';
+    const clean = word.replace(/[^A-Za-z]/g, '').toUpperCase();
+    if (!clean || clean.length < 2 || clean.length > 7) return '';
+    const parts = clean.split('').map(ch => LETTER_IPA_MAP[ch] || ch);
+    if (parts.length === 1) return `/${parts[0]}/`;
+    const last = parts.pop();
+    return `/ˌ${parts.join('.')}ˈ${last}/`;
+}
+
+// Bộ phân tích văn bản danh sách từ vựng chuẩn Quizlet / Excel / Text (Hỗ trợ Phiên âm IPA)
 function parseQuizletVocabText(rawText, termSep = 'auto', rowSep = 'newline', defaultTag = 'auto') {
     if (!rawText || !rawText.trim()) return [];
 
@@ -6186,63 +6204,86 @@ function parseQuizletVocabText(rawText, termSep = 'auto', rowSep = 'newline', de
         if (!line) return;
         if (line.startsWith('//') || line.startsWith('#')) return;
 
-        let parts = [];
+        let rawParts = [];
         if (termSep === 'tab') {
-            parts = line.split('\t');
+            rawParts = line.split('\t');
         } else if (termSep === 'dash') {
-            parts = (/\s+[-–—]\s+/.test(line)) ? line.split(/\s+[-–—]\s+/) : line.split(/\s*[-–—]\s*/);
+            rawParts = (/\s+[-–—]\s+/.test(line)) ? line.split(/\s+[-–—]\s+/) : line.split(/\s*[-–—]\s*/);
         } else if (termSep === 'colon') {
-            parts = line.split(/\s*[:]\s*/);
+            rawParts = line.split(/\s*[:]\s*/);
         } else if (termSep === 'comma') {
-            parts = line.split(/\s*[,]\s*/);
+            rawParts = line.split(/\s*[,]\s*/);
         } else {
             // Tự động nhận diện (Ưu tiên Tab -> Spaced Dash -> Colon -> Unspaced Dash -> Comma)
             if (line.includes('\t')) {
-                parts = line.split('\t');
+                rawParts = line.split('\t');
             } else if (/\s+[-–—]\s+/.test(line)) {
-                parts = line.split(/\s+[-–—]\s+/);
+                rawParts = line.split(/\s+[-–—]\s+/);
             } else if (line.includes(':')) {
-                parts = line.split(/\s*[:]\s*/);
+                rawParts = line.split(/\s*[:]\s*/);
             } else if (/\s*[-–—]\s*/.test(line)) {
-                parts = line.split(/\s*[-–—]\s*/);
+                rawParts = line.split(/\s*[-–—]\s*/);
             } else if (line.includes(',')) {
-                parts = line.split(/\s*[,]\s*/);
+                rawParts = line.split(/\s*[,]\s*/);
             } else {
-                parts = [line];
+                rawParts = [line];
             }
         }
 
-        parts = parts.map(p => p.trim()).filter(Boolean);
-        if (parts.length === 0) return;
+        rawParts = rawParts.map(p => p.trim()).filter(Boolean);
+        if (rawParts.length === 0) return;
 
-        const word = parts[0];
+        let word = rawParts[0];
+        let phonetic = '';
         let fullform = '';
         let meaning = '';
 
-        if (parts.length >= 3) {
-            // Định dạng 3 phần: Word - Fullform - Meaning (ví dụ: MHU - Media Head Unit - Đầu phát đa phương tiện)
-            fullform = parts[1];
-            meaning = parts.slice(2).join(' - ');
-        } else if (parts.length === 2) {
-            // Định dạng 2 phần: Word - Meaning
-            meaning = parts[1];
+        // 1. Kiểm tra phiên âm kèm trực tiếp trong từ đầu tiên (ví dụ: "Resilience /rɪˈzɪl.jəns/" hoặc "Resilience [rɪˈzɪl.jəns]")
+        const inlineIpaMatch = word.match(/[\/\[]([^\/\]]+)[\/\]]/);
+        if (inlineIpaMatch) {
+            phonetic = `/${inlineIpaMatch[1].trim()}/`;
+            word = word.replace(/[\/\[][^\/\]]+[\/\]]/, '').trim();
+        }
+
+        // 2. Duyệt các phần còn lại để phát hiện phiên âm riêng (ví dụ: Word - /rɪˈzɪl.jəns/ - Meaning)
+        const otherParts = [];
+        for (let i = 1; i < rawParts.length; i++) {
+            const p = rawParts[i];
+            if (!phonetic && (/^\/[^\/]+\/$/.test(p) || /^\[[^\]]+\]$/.test(p))) {
+                phonetic = '/' + p.replace(/^[\/\[]|[\/\]]$/g, '').trim() + '/';
+            } else {
+                otherParts.push(p);
+            }
+        }
+
+        if (otherParts.length >= 2) {
+            fullform = otherParts[0];
+            meaning = otherParts.slice(1).join(' - ');
+        } else if (otherParts.length === 1) {
+            meaning = otherParts[0];
         }
 
         let tag = defaultTag;
+        const isUpperAcronym = /^[A-Z0-9]{2,8}$/.test(word) && word === word.toUpperCase();
         if (tag === 'auto') {
-            if (fullform || (/^[A-Z0-9]{2,8}$/.test(word) && word === word.toUpperCase())) {
+            if (fullform || isUpperAcronym) {
                 tag = 'Acronym';
             } else {
                 tag = 'TechCommon';
             }
         }
 
+        // 3. Nếu là từ viết tắt mà chưa có phiên âm, tự động sinh phiên âm chuẩn từng chữ cái
+        if (!phonetic && (tag === 'Acronym' || isUpperAcronym)) {
+            phonetic = getAcronymLetterIPA(word);
+        }
+
         if (word) {
             results.push({
                 word,
-                fullform,
+                phonetic: phonetic || '',
+                fullform: fullform || '',
                 meaning: meaning || 'Chưa có nghĩa',
-                phonetic: '',
                 example: '',
                 tag,
                 status: 'learning'
@@ -6616,11 +6657,14 @@ const vocab = {
     },
 
     // --- BULK IMPORT (QUIZLET STYLE) ---
+    _currentImportList: [],
+
     openImportModal: () => {
         const modal = document.getElementById('vocab-import-modal');
         if (!modal) return;
         const textInput = document.getElementById('import-raw-text');
         if (textInput) textInput.value = '';
+        vocab._currentImportList = [];
         vocab.updateImportPreview();
         modal.style.display = 'flex';
         setTimeout(() => {
@@ -6631,19 +6675,66 @@ const vocab = {
     closeImportModal: () => {
         const modal = document.getElementById('vocab-import-modal');
         if (modal) modal.style.display = 'none';
+        vocab._currentImportList = [];
     },
 
     pasteSampleImport: () => {
         const sample = [
-            'MHU - Media Head Unit - Đầu phát đa phương tiện trên ô tô',
-            'ECU - Electronic Control Unit - Hộp điều khiển điện tử cơ điện',
-            'OTA - Over-The-Air - Cập nhật phần mềm không dây từ xa',
-            'Microcontroller - Vi điều khiển tích hợp vi xử lý và bộ nhớ',
-            'Latency - Độ trễ truyền tải dữ liệu giữa client và server'
+            'MHU - Media Head Unit - /ˌem.eɪtʃˈjuː/ - Đầu phát đa phương tiện trên ô tô',
+            'ECU - Electronic Control Unit - /ˌiː.siːˈjuː/ - Hộp điều khiển điện tử cơ điện',
+            'Resilience /rɪˈzɪl.jəns/ - Khả năng phục hồi, kiên cường vượt khó',
+            'Microcontroller [ˌmaɪ.kroʊ.kənˈtroʊ.lɚ] - Vi điều khiển tích hợp vi xử lý và bộ nhớ',
+            'Latency - Độ trễ mạng giữa client và server'
         ].join('\n');
         const textInput = document.getElementById('import-raw-text');
         if (textInput) textInput.value = sample;
         vocab.updateImportPreview();
+    },
+
+    generateAIPhoneticsForImport: async () => {
+        if (!vocab._currentImportList || vocab._currentImportList.length === 0) {
+            showToast('⚠️ Vui lòng dán danh sách từ vựng trước khi tạo phiên âm.');
+            return;
+        }
+
+        const wordsToLookup = vocab._currentImportList.filter(i => !i.phonetic).map(i => i.word);
+        if (wordsToLookup.length === 0) {
+            showToast('✅ Toàn bộ từ vựng trong danh sách đã có phiên âm IPA!');
+            return;
+        }
+
+        const btn = document.getElementById('btn-import-ai-ipa');
+        const originalBtnHtml = btn ? btn.innerHTML : '';
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="ri-loader-4-line ri-spin"></i> Đang tạo IPA...';
+        }
+
+        try {
+            const phoneticsMap = await aiService.generateBatchPhonetics(wordsToLookup);
+            let updatedCount = 0;
+
+            vocab._currentImportList.forEach(item => {
+                if (!item.phonetic) {
+                    const foundKey = Object.keys(phoneticsMap).find(k => k.toLowerCase() === item.word.toLowerCase());
+                    if (foundKey && phoneticsMap[foundKey]) {
+                        item.phonetic = phoneticsMap[foundKey];
+                        updatedCount++;
+                    }
+                }
+            });
+
+            vocab.renderImportPreviewTable();
+            showToast(`✨ Gemini AI đã tạo phiên âm IPA cho ${updatedCount} từ vựng!`);
+        } catch (err) {
+            console.error('AI Phonetics Error:', err);
+            showToast(`❌ Lỗi tạo phiên âm: ${err.message}`);
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = originalBtnHtml;
+            }
+        }
     },
 
     updateImportPreview: () => {
@@ -6653,9 +6744,10 @@ const vocab = {
         const defaultTag = document.getElementById('import-default-tag')?.value || 'auto';
 
         const parsed = parseQuizletVocabText(raw, termSep, rowSep, defaultTag);
+        vocab._currentImportList = parsed;
+
         const countEl = document.getElementById('import-detected-count');
         const submitBtn = document.getElementById('btn-submit-import');
-        const tableBox = document.getElementById('import-preview-table-box');
 
         if (countEl) countEl.textContent = `${parsed.length} thẻ được phát hiện`;
         if (submitBtn) {
@@ -6663,7 +6755,14 @@ const vocab = {
             submitBtn.innerHTML = `<i class="ri-download-2-line"></i> Nhập ${parsed.length} từ vào kho`;
         }
 
+        vocab.renderImportPreviewTable();
+    },
+
+    renderImportPreviewTable: () => {
+        const tableBox = document.getElementById('import-preview-table-box');
         if (!tableBox) return;
+
+        const parsed = vocab._currentImportList || [];
         if (parsed.length === 0) {
             tableBox.innerHTML = `
                 <div style="text-align: center; padding: 24px; color: var(--text-placeholder); font-size: 13px;">
@@ -6679,6 +6778,7 @@ const vocab = {
                     <tr>
                         <th style="width: 32px;">#</th>
                         <th>Từ / Viết tắt</th>
+                        <th>Phiên âm IPA</th>
                         <th>Full Form</th>
                         <th>Nghĩa tiếng Việt</th>
                         <th>Chủ đề</th>
@@ -6691,6 +6791,11 @@ const vocab = {
                         <tr>
                             <td style="color: var(--text-muted);">${idx + 1}</td>
                             <td style="font-weight: 700; color: #f8fafc;">${escapeHtml(item.word)}</td>
+                            <td>
+                                ${item.phonetic 
+                                    ? `<span style="font-family: monospace; color: #34d399; font-weight: 600; background: rgba(52, 211, 153, 0.12); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(52, 211, 153, 0.28); font-size: 12px;">${escapeHtml(item.phonetic)}</span>` 
+                                    : `<span style="color: var(--text-muted); font-size: 11.5px; font-style: italic;">Chưa có</span>`}
+                            </td>
                             <td style="color: #38bdf8;">${escapeHtml(item.fullform || '-')}</td>
                             <td>${escapeHtml(item.meaning)}</td>
                             <td><span class="vocab-tag-badge ${tagInfo.cls}">${tagInfo.icon} ${escapeHtml(tagInfo.label)}</span></td>
@@ -6702,19 +6807,44 @@ const vocab = {
         `;
     },
 
-    submitBulkImport: () => {
-        const raw = document.getElementById('import-raw-text')?.value || '';
-        const termSep = document.getElementById('import-term-sep')?.value || 'auto';
-        const rowSep = document.getElementById('import-row-sep')?.value || 'newline';
-        const defaultTag = document.getElementById('import-default-tag')?.value || 'auto';
-        const skipDuplicates = document.getElementById('import-skip-duplicates')?.checked ?? true;
+    submitBulkImport: async () => {
+        let parsed = vocab._currentImportList;
+        if (!parsed || parsed.length === 0) {
+            const raw = document.getElementById('import-raw-text')?.value || '';
+            const termSep = document.getElementById('import-term-sep')?.value || 'auto';
+            const rowSep = document.getElementById('import-row-sep')?.value || 'newline';
+            const defaultTag = document.getElementById('import-default-tag')?.value || 'auto';
+            parsed = parseQuizletVocabText(raw, termSep, rowSep, defaultTag);
+        }
 
-        const parsed = parseQuizletVocabText(raw, termSep, rowSep, defaultTag);
         if (parsed.length === 0) {
             showToast('⚠️ Không tìm thấy từ vựng hợp lệ để nhập.');
             return;
         }
 
+        // Tự động tạo phiên âm IPA bằng AI nếu được chọn và có API key
+        const autoAiIpa = document.getElementById('import-auto-ai-ipa')?.checked ?? false;
+        if (autoAiIpa && typeof aiService !== 'undefined' && aiService.hasKey()) {
+            const missingIpaWords = parsed.filter(i => !i.phonetic).map(i => i.word);
+            if (missingIpaWords.length > 0) {
+                const submitBtn = document.getElementById('btn-submit-import');
+                if (submitBtn) {
+                    submitBtn.disabled = true;
+                    submitBtn.innerHTML = '<i class="ri-loader-4-line ri-spin"></i> Đang tạo IPA bằng AI...';
+                }
+                try {
+                    const pMap = await aiService.generateBatchPhonetics(missingIpaWords);
+                    parsed.forEach(item => {
+                        if (!item.phonetic) {
+                            const foundKey = Object.keys(pMap).find(k => k.toLowerCase() === item.word.toLowerCase());
+                            if (foundKey && pMap[foundKey]) item.phonetic = pMap[foundKey];
+                        }
+                    });
+                } catch (e) {}
+            }
+        }
+
+        const skipDuplicates = document.getElementById('import-skip-duplicates')?.checked ?? true;
         let addedCount = 0;
         let skippedCount = 0;
         const existingWords = new Set(vocab.items.map(i => (i.word || '').toLowerCase().trim()));

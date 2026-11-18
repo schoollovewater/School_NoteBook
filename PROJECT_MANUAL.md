@@ -1,7 +1,7 @@
 # 📚 School NoteBook — Hướng Dẫn & Tài Liệu Kỹ Thuật Toàn Diện
 
 > **Sổ tay ghi chép học tập, lập trình & Kho từ vựng thông minh theo phong cách Notion kết hợp Thẻ nhớ 3D Flashcards, Mini Note hỏa tốc & Trợ lý AI Gemini thông minh.**  
-> *Phiên bản hiện tại:* **v4.5.0**  
+> *Phiên bản hiện tại:* **v4.6.0**  
 > *Nền tảng:* Web App & PWA (HTML5, Vanilla CSS, Vanilla JavaScript, Firebase Compat, SortableJS, Service Worker).
 
 ---
@@ -252,7 +252,29 @@ node mininote.js --todo -t "Việc hôm nay" "Học từ vựng\nLàm bài tập
 
 ## 5. Lịch sử phiên bản & Sửa lỗi kỹ thuật quan trọng
 
-### 🚀 Phiên bản v4.5.0 (Hiện tại)
+### 🚀 Phiên bản v4.6.0 (Hiện tại)
+* **Bổ sung Trích xuất & Tự động tạo Phiên âm IPA chuẩn Quốc tế cho Chế độ Nhập Hàng Loạt (Bulk Import Phonetics & AI IPA)**:
+  - Giải quyết trọn vẹn vấn đề thiếu phiên âm khi dán hàng loạt từ vựng (Quizlet / Excel / Text):
+    - **Tự động trích xuất phiên âm trực tiếp từ văn bản**:
+      - Nhận diện định dạng gõ phiên âm kèm từ: `Include /ɪnˈkluːd/ - Bao gồm` hoặc `Resilience [rɪˈzɪl.jəns] - Khả năng phục hồi nhanh`.
+      - Nhận diện phiên âm đặt ở cột / phần riêng: `MHU - Media Head Unit - /ˌem.eɪtʃˈjuː/ - Đầu phát đa phương tiện` hoặc `Word - /ipa/ - Meaning`.
+    - **Offline Letter-by-Letter IPA Generator cho Từ Viết Tắt (Acronyms)**:
+      - Tích hợp bảng phát âm chữ cái chuẩn IPA cho mọi từ viết tắt (2-7 ký tự hoa): `MHU` $\rightarrow$ `/ˌem.eɪtʃˈjuː/`, `ECU` $\rightarrow$ `/ˌiː.siːˈjuː/`, `OTA` $\rightarrow$ `/ˌoʊ.tiːˈeɪ/`, `API` $\rightarrow$ `/ˌeɪ.piːˈaɪ/`, `CAN` $\rightarrow$ `/ˌsiː.eɪˈen/`... mà không phụ thuộc mạng hay AI.
+    - **Nút "✨ AI Điền Phiên Âm IPA" 1-Click (Gemini Batch Phonetics)**:
+      - Tích hợp hàm `generateBatchPhonetics(wordList)` trong `ai-service.js` gọi Gemini AI xử lý hàng loạt theo định dạng JSON chuẩn. Chỉ với 1 click, AI tự tra từ điển và điền phiên âm IPA chuẩn xác cho toàn bộ từ tiếng Anh thường (ví dụ: `Microcontroller`, `Latency`, `Concurrency`...) trên bảng xem trước.
+    - **Cột & Huy hiệu Phiên âm IPA trực quan trong bảng xem trước**:
+      - Bổ sung cột "Phiên âm IPA" riêng biệt trong bảng xem trước trên Desktop (`app.html`), huy hiệu xanh lá monospace nổi bật trên Pocket Mobile (`vocab.html`).
+    - **Tùy chọn tự động tạo IPA bằng AI khi nạp (`[x] Tự tạo IPA bằng AI`)**:
+      - Tùy chọn tự động quét và điền phiên âm IPA cho những từ còn thiếu ngay khi người dùng nhấn nút "Nhập vào Kho".
+  - **Đồng bộ số hiệu phiên bản v4.6.0 cho toàn bộ hệ sinh thái**:
+    - Universe Portal (`/`): `v4.6.0`
+    - Sổ tay School (`/school`): `v4.6.0`
+    - Sổ tay Water (`/water`): `v4.6.0`
+    - Mini Note hỏa tốc (`/mini`): `v4.6.0`
+    - School Vocab Pocket (`/school/vocab`): `v4.6.0`
+    - Service Worker Cache: `schooldb-v4.6.0`
+
+### 🚀 Phiên bản v4.5.0
 * **Bổ sung Tính Năng Nhập Từ Vựng Hàng Loạt (Quizlet / Excel / Word Bulk Import)**:
   - Cho phép người dùng dán toàn bộ danh sách hàng chục, hàng trăm từ vựng cùng lúc vào kho chỉ trong **1 giây**:
     - **Phân tách từ & nghĩa linh hoạt**: Hỗ trợ tự động nhận diện (Auto-detect), dấu gạch nối có khoảng trắng (` - `), phím Tab (`\t` - khi copy từ cột bảng tính Excel/Google Sheets), dấu hai chấm (`:`), hoặc dấu phẩy (`,`).
@@ -339,4 +361,4 @@ node mininote.js --todo -t "Việc hôm nay" "Học từ vựng\nLàm bài tập
   - Cách ly dữ liệu Cloud Firestore và tự động di trú an toàn ghi chú cũ sang School.
 
 ---
-*Tài liệu được cập nhật tự động và lưu trữ trực tiếp trong mã nguồn dự án School NoteBook (Phiên bản v4.5.0).*
+*Tài liệu được cập nhật tự động và lưu trữ trực tiếp trong mã nguồn dự án School NoteBook (Phiên bản v4.6.0).*
