@@ -1,7 +1,7 @@
 # 📚 School NoteBook — Hướng Dẫn & Tài Liệu Kỹ Thuật Toàn Diện
 
 > **Sổ tay ghi chép học tập, lập trình & Kho từ vựng thông minh theo phong cách Notion kết hợp Thẻ nhớ 3D Flashcards, Mini Note hỏa tốc & Trợ lý AI Gemini thông minh.**  
-> *Phiên bản hiện tại:* **v4.3.8**  
+> *Phiên bản hiện tại:* **v4.3.9**  
 > *Nền tảng:* Web App & PWA (HTML5, Vanilla CSS, Vanilla JavaScript, Firebase Compat, SortableJS, Service Worker).
 
 ---
@@ -252,17 +252,25 @@ node mininote.js --todo -t "Việc hôm nay" "Học từ vựng\nLàm bài tập
 
 ## 5. Lịch sử phiên bản & Sửa lỗi kỹ thuật quan trọng
 
-### 🚀 Phiên bản v4.3.8 (Hiện tại)
+### 🚀 Phiên bản v4.3.9 (Hiện tại)
+* **Khắc phục lỗi thanh Trợ lý AI (Gemini AI Sidebar) đè lên trang ghi chú chính**:
+  - Cơ chế **Responsive Side-by-Side**: Khi bật thanh AI trên màn hình máy tính (> 768px), trang chính (`.main-content`) tự động thu lùi sang trái (`margin-right: var(--ai-sidebar-width, 400px)`), co dãn lề đệm phù hợp giúp người dùng vừa đọc/sửa ghi chú vừa trò chuyện với AI cùng lúc mà không bị che khuất bất kỳ nội dung hay nút bấm nào.
+  - Bổ sung thanh kéo phân cách **`.ai-sidebar-resizer`** ở cạnh trái bảng AI, cho phép tùy chỉnh độ rộng linh hoạt từ 320px đến 750px với chuyển động mượt mà 60fps và tự động ghi nhớ kích thước đã chọn vào `localStorage`.
+  - Trên màn hình di động (<= 768px): Bảng AI mở rộng và trang chính tự động lùi sâu trực quan (`scale(0.96) translateX(-15px) opacity(0.5)`), hỗ trợ chạm vào nền hoặc phím `Escape` để đóng nhanh.
+  - Nút AI trên thanh công cụ sáng đèn báo trạng thái đang mở (`body.ai-sidebar-open .topbar-ai-btn`).
+* **Đồng bộ số hiệu phiên bản v4.3.9 cho toàn bộ hệ sinh thái**:
+  - Universe Portal (`/`): `v4.3.9`
+  - Sổ tay School (`/school`): `v4.3.9`
+  - Sổ tay Water (`/water`): `v4.3.9`
+  - Mini Note hỏa tốc (`/mini`): `v4.3.9`
+  - School Vocab Pocket (`/school/vocab`): `v4.3.9`
+
+### 🚀 Phiên bản v4.3.8
 * **Sửa dứt điểm lỗi giao diện đè tem Header & Tabs trên iPhone (Dynamic Island / Notch)**:
   - Gom toàn bộ thanh tiêu đề `.top-bar` và thanh tab điều hướng `.mode-nav` vào thẻ bao bọc chung `.app-header-sticky`.
   - Căn đệm chuẩn xác theo tai thỏ `padding-top: env(safe-area-inset-top, 0px)` ở cấp container cha, triệt tiêu hoàn toàn lỗi tabs đè lên tiêu đề và thương hiệu School Vocab trên mọi dòng máy iPhone/iPad.
   - Bỏ dòng cảnh báo âm thanh `ios-audio-hint` theo yêu cầu người dùng sau khi đã xác nhận âm thanh hoạt động hoàn hảo.
-* **Đồng bộ số hiệu phiên bản v4.3.8 cho toàn bộ hệ sinh thái**:
-  - Universe Portal (`/`): `v4.3.8`
-  - Sổ tay School (`/school`): `v4.3.8`
-  - Sổ tay Water (`/water`): `v4.3.8`
-  - Mini Note hỏa tốc (`/mini`): `v4.3.8`
-  - School Vocab Pocket (`/school/vocab`): `v4.3.8`
+* **Đồng bộ số hiệu phiên bản v4.3.8 cho toàn bộ hệ sinh thái**.
 
 ### 🚀 Phiên bản v4.3.6 - v4.3.7
 * **Khắc phục dứt điểm lỗi âm thanh trên iOS Safari**:
@@ -287,4 +295,4 @@ node mininote.js --todo -t "Việc hôm nay" "Học từ vựng\nLàm bài tập
   - Cách ly dữ liệu Cloud Firestore và tự động di trú an toàn ghi chú cũ sang School.
 
 ---
-*Tài liệu được cập nhật tự động và lưu trữ trực tiếp trong mã nguồn dự án School NoteBook (Phiên bản v4.3.8).*
+*Tài liệu được cập nhật tự động và lưu trữ trực tiếp trong mã nguồn dự án School NoteBook (Phiên bản v4.3.9).*

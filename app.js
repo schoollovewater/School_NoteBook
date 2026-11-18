@@ -650,6 +650,9 @@ function initApp() {
             e.preventDefault();
             if (typeof aiService !== 'undefined') aiService.toggleSidebar();
         }
+        if (e.key === 'Escape' && document.body.classList.contains('ai-sidebar-open')) {
+            if (typeof aiService !== 'undefined') aiService.toggleSidebar(false);
+        }
     });
 
     // Modal Close Logic

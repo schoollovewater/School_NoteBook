@@ -1280,11 +1280,13 @@ Trả về DUY NHẤT một mảng JSON hợp lệ chứa ${count} câu hỏi th
         if (shouldOpen) {
             if (!this.ensureApiKey()) return;
             sidebar.classList.add('open');
+            document.body.classList.add('ai-sidebar-open');
             this.updateSidebarNoteContext();
             const input = document.getElementById('ai-chat-input');
             if (input) setTimeout(() => input.focus(), 150);
         } else {
             sidebar.classList.remove('open');
+            document.body.classList.remove('ai-sidebar-open');
         }
     },
 
@@ -1293,6 +1295,9 @@ Trả về DUY NHẤT một mảng JSON hợp lệ chứa ${count} câu hỏi th
         sidebar.id = 'ai-assistant-sidebar';
         sidebar.className = 'ai-assistant-sidebar';
         sidebar.innerHTML = `
+            <!-- Left Resizer Handle -->
+            <div class="ai-sidebar-resizer" id="ai-sidebar-resizer" title="Kéo để điều chỉnh độ rộng bảng AI"></div>
+
             <div class="ai-sidebar-header">
                 <div class="ai-sidebar-title-group">
                     <div class="ai-sidebar-icon"><i class="ri-sparkling-fill"></i></div>
@@ -1349,6 +1354,7 @@ Trả về DUY NHẤT một mảng JSON hợp lệ chứa ${count} câu hỏi th
             </div>
         `;
         document.body.appendChild(sidebar);
+        this.initAiSidebarResizer();
 
         // Enter key to send
         const input = document.getElementById('ai-chat-input');
@@ -1360,6 +1366,71 @@ Trả về DUY NHẤT một mảng JSON hợp lệ chứa ${count} câu hỏi th
                 }
             });
         }
+
+        // Bấm vào phần nội dung chính trên màn hình nhỏ để tự động đóng thanh AI
+        const mainContent = document.querySelector('.main-content');
+        if (mainContent && !mainContent.__aiListenerAttached) {
+            mainContent.__aiListenerAttached = true;
+            mainContent.addEventListener('click', (e) => {
+                if (window.innerWidth <= 768 && document.body.classList.contains('ai-sidebar-open')) {
+                    if (!e.target.closest('#topbar-ai-btn')) {
+                        aiService.toggleSidebar(false);
+                    }
+                }
+            });
+        }
+    },
+
+    initAiSidebarResizer() {
+        const resizer = document.getElementById('ai-sidebar-resizer');
+        const sidebar = document.getElementById('ai-assistant-sidebar');
+        if (!resizer || !sidebar) return;
+
+        // Khôi phục độ rộng đã lưu nếu có
+        try {
+            const savedWidth = localStorage.getItem('schooldb_ai_sidebar_width');
+            if (savedWidth) {
+                const parsed = parseInt(savedWidth, 10);
+                if (!isNaN(parsed) && parsed >= 320 && parsed <= 800) {
+                    document.documentElement.style.setProperty('--ai-sidebar-width', `${parsed}px`);
+                }
+            }
+        } catch (e) {}
+
+        let isResizing = false;
+        resizer.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            isResizing = true;
+            resizer.classList.add('is-resizing');
+            document.body.classList.add('is-resizing-ai');
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isResizing) return;
+            const newWidth = window.innerWidth - e.clientX;
+            const maxAllowed = Math.min(750, Math.floor(window.innerWidth * 0.65));
+            const clamped = Math.max(320, Math.min(newWidth, maxAllowed));
+            document.documentElement.style.setProperty('--ai-sidebar-width', `${clamped}px`);
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (isResizing) {
+                isResizing = false;
+                resizer.classList.remove('is-resizing');
+                document.body.classList.remove('is-resizing-ai');
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+                try {
+                    const currentWidth = getComputedStyle(document.documentElement).getPropertyValue('--ai-sidebar-width').trim();
+                    const parsed = parseInt(currentWidth, 10);
+                    if (!isNaN(parsed)) {
+                        localStorage.setItem('schooldb_ai_sidebar_width', parsed);
+                    }
+                } catch (e) {}
+            }
+        });
     },
 
     updateSidebarNoteContext() {
