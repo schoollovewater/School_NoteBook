@@ -3,30 +3,36 @@
  * Hỗ trợ offline đầy đủ cho cả Sổ tay chính và Mini Note.
  */
 
-const CACHE_NAME = 'schooldb-v4.7.0';
+const CACHE_NAME = 'schooldb-v4.8.0';
 
 const PRECACHE_URLS = [
-    './',
-    './index.html',
-    './app.html',
-    './mini.html',
-    './vocab.html',
-    './school/index.html',
-    './water/index.html',
-    './school/mini/index.html',
-    './water/mini/index.html',
-    './school/vocab/index.html',
-    './school/eb/index.html',
-    './styles.css?v=4.7.0',
-    './app.js?v=4.7.0',
-    './shared/note-schema.js?v=4.7.0',
-    './shared/ai-service.js?v=4.7.0',
-    './firebase-config.js',
-    './manifest.json',
-    './manifest-mini.json',
-    './manifest-vocab.json',
-    './icons/icon-192.png',
-    './icons/icon-512.png',
+    '/',
+    '/index.html',
+    '/app.html',
+    '/mini.html',
+    '/vocab.html',
+    '/school',
+    '/school/index.html',
+    '/water',
+    '/water/index.html',
+    '/school/mini',
+    '/school/mini/index.html',
+    '/water/mini',
+    '/water/mini/index.html',
+    '/school/vocab',
+    '/school/vocab/index.html',
+    '/school/eb',
+    '/school/eb/index.html',
+    '/styles.css?v=4.8.0',
+    '/app.js?v=4.8.0',
+    '/shared/note-schema.js?v=4.8.0',
+    '/shared/ai-service.js?v=4.8.0',
+    '/firebase-config.js',
+    '/manifest.json',
+    '/manifest-mini.json',
+    '/manifest-vocab.json',
+    '/icons/icon-192.png',
+    '/icons/icon-512.png',
     'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css',
     'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js',
     'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js'
@@ -109,15 +115,15 @@ self.addEventListener('fetch', (event) => {
                 if (request.mode === 'navigate') {
                     const reqUrl = request.url.toLowerCase();
                     if (reqUrl.includes('/school/vocab') || reqUrl.includes('/school/eb') || reqUrl.includes('/vocab')) {
-                        return caches.match('./vocab.html');
+                        return caches.match('/vocab.html').then(res => res || caches.match('./vocab.html'));
                     }
                     if (reqUrl.includes('/school/mini') || reqUrl.includes('/water/mini') || reqUrl.includes('/mini')) {
-                        return caches.match('./mini.html');
+                        return caches.match('/mini.html').then(res => res || caches.match('./mini.html'));
                     }
                     if (reqUrl.includes('/school') || reqUrl.includes('/water')) {
-                        return caches.match('./app.html');
+                        return caches.match('/app.html').then(res => res || caches.match('./app.html'));
                     }
-                    return caches.match('./index.html');
+                    return caches.match('/index.html').then(res => res || caches.match('./index.html'));
                 }
             });
         })

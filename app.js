@@ -2739,6 +2739,7 @@ window.showCoverPicker = showCoverPicker;
 const app = {
     createNewPage,
     manualSync: () => syncAllToCloud(false),
+    installPwa: () => (typeof triggerPwaInstall === 'function' ? triggerPwaInstall() : null),
     showVocab: () => {
         elements.editorContainer.style.display = 'none';
         elements.vocabContainer.style.display = 'block';
@@ -8595,10 +8596,54 @@ function initFlashcardSwipe() {
     }, true);
 }
 
-// --- PWA: SERVICE WORKER ---
+// --- PWA: SERVICE WORKER & INSTALL PROMPT ---
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    const banner = document.getElementById('pwa-install-banner');
+    if (banner) banner.style.display = 'flex';
+    const sidebarItem = document.getElementById('sidebar-pwa-install-item');
+    if (sidebarItem) sidebarItem.style.display = 'block';
+});
+
+function triggerPwaInstall() {
+    if (!deferredPrompt) {
+        showToast('💡 Để cài đặt, hãy mở menu Chrome (ba chấm ⋮) và chọn "Cài đặt ứng dụng" hoặc "Thêm vào Màn hình chính"');
+        return;
+    }
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then((choice) => {
+        if (choice.outcome === 'accepted') {
+            showToast('🎉 Đã cài đặt School NoteBook vào máy!');
+        }
+        deferredPrompt = null;
+        const banner = document.getElementById('pwa-install-banner');
+        if (banner) banner.style.display = 'none';
+        const sidebarItem = document.getElementById('sidebar-pwa-install-item');
+        if (sidebarItem) sidebarItem.style.display = 'none';
+    });
+}
+
+window.addEventListener('appinstalled', () => {
+    deferredPrompt = null;
+    const banner = document.getElementById('pwa-install-banner');
+    if (banner) banner.style.display = 'none';
+    const sidebarItem = document.getElementById('sidebar-pwa-install-item');
+    if (sidebarItem) sidebarItem.style.display = 'none';
+    showToast('✨ Ứng dụng School NoteBook đã được cài đặt thành công!');
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    const installBtn = document.getElementById('btn-pwa-install');
+    if (installBtn) {
+        installBtn.addEventListener('click', triggerPwaInstall);
+    }
+});
+
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js').then((registration) => {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' }).then((registration) => {
             registration.addEventListener('updatefound', () => {
                 const newWorker = registration.installing;
                 if (newWorker) {

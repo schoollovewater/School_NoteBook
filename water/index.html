@@ -12,13 +12,13 @@
     <meta name="description" content="Sổ tay ghi chép học tập kiểu Notion kèm Kho từ vựng và Flashcard 3D, chạy offline và đồng bộ với Mini Note.">
     
     <!-- PWA Manifest & App Icons -->
-    <link rel="manifest" href="manifest.json">
+    <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#0f172a">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="icon" type="image/png" href="icons/icon-192.png">
-    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <link rel="icon" type="image/png" href="/icons/icon-192.png">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
     
     <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Merriweather:ital,wght@0,300;0,400;0,700;1,300&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
@@ -29,7 +29,7 @@
     <!-- KaTeX CSS for Math Equations (LaTeX) -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
     
-    <link rel="stylesheet" href="styles.css?v=4.7.0">
+    <link rel="stylesheet" href="styles.css?v=4.8.0">
 </head>
 <body>
     <div class="app-background">
@@ -51,7 +51,7 @@
                         <span class="workspace-name" id="current-workspace-name">School NoteBook</span>
                         <div class="workspace-meta">
                             <span class="workspace-plan" id="current-workspace-badge">🏫 SCHOOL</span>
-                            <span class="workspace-version-badge" id="app-version-badge" title="Phiên bản School NoteBook hiện tại">v4.7.0</span>
+                            <span class="workspace-version-badge" id="app-version-badge" title="Phiên bản School NoteBook hiện tại">v4.8.0</span>
                         </div>
                     </div>
                     <i class="ri-expand-up-down-line text-muted"></i>
@@ -144,6 +144,12 @@
                                 <span class="page-title">Kho từ vựng</span>
                             </div>
                         </li>
+                        <li class="page-item" id="sidebar-pwa-install-item" onclick="app.installPwa()" style="display: none;">
+                            <div class="page-item-content">
+                                <span class="page-icon">📲</span>
+                                <span class="page-title" style="color: #60a5fa; font-weight: 600;">Cài đặt ứng dụng</span>
+                            </div>
+                        </li>
                     </ul>
                 </div>
             </div>
@@ -192,6 +198,18 @@
                     </button>
                 </div>
             </header>
+
+            <!-- PWA Install Banner -->
+            <div class="install-pwa-banner" id="pwa-install-banner" style="display: none; margin: 10px 16px 0 16px; background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(16, 185, 129, 0.15)); border: 1px solid rgba(59, 130, 246, 0.35); border-radius: 12px; padding: 10px 14px; align-items: center; justify-content: space-between; z-index: 20; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                <div style="font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 16px;">📲</span>
+                    <span>Cài đặt <strong>School NoteBook</strong> vào điện thoại để mở nhanh & offline!</span>
+                </div>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <button type="button" id="btn-pwa-install" style="background: var(--accent, #3b82f6); color: white; border: none; border-radius: 8px; padding: 6px 14px; font-size: 12px; font-weight: 700; cursor: pointer;">Cài Ngay</button>
+                    <button type="button" id="btn-pwa-close" onclick="document.getElementById('pwa-install-banner').style.display='none'" style="background: transparent; border: none; color: var(--text-muted); font-size: 18px; line-height: 1; cursor: pointer; padding: 0 4px;" title="Đóng">&times;</button>
+                </div>
+            </div>
 
             <!-- Editor Area -->
             <div class="editor-scroll-area" id="editor-container">
@@ -807,7 +825,7 @@
                 <div class="version-info-box">
                     <div class="version-info-row">
                         <span>Phiên bản đang chạy:</span>
-                        <strong class="version-number-tag" id="setting-app-version">v4.7.0</strong>
+                        <strong class="version-number-tag" id="setting-app-version">v4.8.0</strong>
                     </div>
                     <div class="version-info-row">
                         <span>Trạng thái:</span>
@@ -1340,8 +1358,8 @@
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 
     <script src="firebase-config.js"></script>
-    <script src="shared/note-schema.js?v=4.7.0"></script>
-    <script src="shared/ai-service.js?v=4.7.0"></script>
-    <script src="app.js?v=4.7.0"></script>
+    <script src="shared/note-schema.js?v=4.8.0"></script>
+    <script src="shared/ai-service.js?v=4.8.0"></script>
+    <script src="app.js?v=4.8.0"></script>
 </body>
 </html>

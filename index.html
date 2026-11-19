@@ -5,11 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>School Universe NoteBook — Cổng Không Gian Làm Việc</title>
     
-    <link rel="manifest" href="manifest.json">
+    <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#0f172a">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <link rel="icon" type="image/png" href="icons/icon-192.png">
+    <link rel="icon" type="image/png" href="/icons/icon-192.png">
     
     <!-- Fonts & Icons -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -427,7 +427,7 @@
             <div class="portal-brand">
                 <img src="icon.jpg" alt="School NoteBook Logo" class="portal-logo-img">
                 <div class="portal-brand-text">
-                    <h1>School Universe NoteBook <span class="portal-badge">v4.7.0</span></h1>
+                    <h1>School Universe NoteBook <span class="portal-badge">v4.8.0</span></h1>
                     <p>Hệ sinh thái Sổ tay ghi chép, Kho từ vựng & AI Assistant</p>
                 </div>
             </div>
@@ -619,7 +619,7 @@
 
         // --- SERVICE WORKER ---
         if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-            navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW error:', err));
+            navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(err => console.warn('SW error:', err));
         }
     </script>
 </body>

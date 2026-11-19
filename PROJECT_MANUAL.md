@@ -1,7 +1,7 @@
 # 📚 School NoteBook — Hướng Dẫn & Tài Liệu Kỹ Thuật Toàn Diện
 
 > **Sổ tay ghi chép học tập, lập trình & Kho từ vựng thông minh theo phong cách Notion kết hợp Thẻ nhớ 3D Flashcards, Mini Note hỏa tốc & Trợ lý AI Gemini thông minh.**  
-> *Phiên bản hiện tại:* **v4.7.0**  
+> *Phiên bản hiện tại:* **v4.8.0**  
 > *Nền tảng:* Web App & PWA (HTML5, Vanilla CSS, Vanilla JavaScript, Firebase Compat, SortableJS, Service Worker).
 
 ---
@@ -252,7 +252,25 @@ node mininote.js --todo -t "Việc hôm nay" "Học từ vựng\nLàm bài tập
 
 ## 5. Lịch sử phiên bản & Sửa lỗi kỹ thuật quan trọng
 
-### 🚀 Phiên bản v4.7.0 (Hiện tại)
+### 🚀 Phiên bản v4.8.0 (Hiện tại)
+* **Tối ưu Hóa Toàn Diện Cài Đặt PWA Độc Lập Cho Cả Sổ Tay NoteBook & School Vocab Trên Điện Thoại (Pixel / Android / iOS)**:
+  - **Sửa Lỗi Đường Dẫn Tuyệt Đối Cho PWA Manifest & Service Worker trên Subroutes**:
+    - Khi truy cập subroutes như `/school` hoặc `/school/vocab`, các liên kết tương đối như `manifest.json`, `icons/icon-192.png`, `sw.js` bị Vercel rewrite thành `/school/manifest.json` và `/school/vocab/sw.js` dẫn tới lỗi 404 khiến trình duyệt Chrome không hiện prompt cài đặt PWA (WebAPK).
+    - Đã chuẩn hóa toàn bộ sang đường dẫn gốc tuyệt đối `/manifest.json`, `/manifest-vocab.json`, `/manifest-mini.json`, `/icons/icon-192.png`, `/icons/icon-512.png` và `navigator.serviceWorker.register('/sw.js', { scope: '/' })`.
+  - **Tích Hợp Banner Cài Đặt & Menu Cài Đặt 1-Chạm Trong Sổ Tay NoteBook (`/school`)**:
+    - Bổ sung banner cài đặt ứng dụng PWA (`pwa-install-banner`) và mục "📲 Cài đặt ứng dụng" trong menu TOOLS của thanh Sidebar.
+    - Xử lý sự kiện `beforeinstallprompt` chuẩn W3C: người dùng chỉ cần nhấn nút "Cài Ngay" là ứng dụng School NoteBook được thêm thẳng ra màn hình chính điện thoại, mở toàn màn hình (standalone) và chạy độc lập như app native.
+  - **Tự Động Cập Nhật Trong Nền (Seamless Background Updates)**:
+    - Khi có bản build mới đẩy lên Vercel, Service Worker tự động phát hiện phiên bản mới (`updatefound`), kích hoạt cập nhật và thông báo toast cho người dùng làm mới trang mà không cần phải gỡ cài đặt hay tải lại APK thủ công.
+  - **Đồng Bộ Số Hiệu Phiên Bản v4.8.0 Cho Toàn Bộ Hệ Sinh Thái**:
+    - Universe Portal (`/`): `v4.8.0`
+    - Sổ tay School (`/school`): `v4.8.0`
+    - Sổ tay Water (`/water`): `v4.8.0`
+    - Mini Note hỏa tốc (`/mini`): `v4.8.0`
+    - School Vocab Pocket (`/school/vocab`): `v4.8.0`
+    - Service Worker Cache: `schooldb-v4.8.0`
+
+### 🚀 Phiên bản v4.7.0
 * **Tối ưu hóa Luồng Điền & Hiển thị Chuyên biệt cho Từ Viết Tắt (Acronym Dedicated Flow & Layout)**:
   - **Phân tách rạch ròi luồng điền Từ thông thường vs. Từ viết tắt**:
     - **Ô tick `[ ] Là từ viết tắt (Acronym / Abbreviation)`**: Mặc định bỏ chọn cho từ thông thường. Khi tick chọn, ô nhập **"Từ viết tắt"** được kích hoạt và **đẩy lên vị trí đầu tiên**, ô từ chính ở dưới đóng vai trò là **"Dạng đầy đủ tiếng Anh (Full Form)"**, tự động chọn chủ đề `🔤 Từ viết tắt (Acronym)`.
@@ -383,4 +401,4 @@ node mininote.js --todo -t "Việc hôm nay" "Học từ vựng\nLàm bài tập
   - Cách ly dữ liệu Cloud Firestore và tự động di trú an toàn ghi chú cũ sang School.
 
 ---
-*Tài liệu được cập nhật tự động và lưu trữ trực tiếp trong mã nguồn dự án School NoteBook (Phiên bản v4.7.0).*
+*Tài liệu được cập nhật tự động và lưu trữ trực tiếp trong mã nguồn dự án School NoteBook (Phiên bản v4.8.0).*

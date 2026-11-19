@@ -2,28 +2,28 @@
   "name": "School NoteBook — Sổ tay học tập & Flashcard",
   "short_name": "School NoteBook",
   "description": "Sổ tay ghi chép học tập kiểu Notion kèm Kho từ vựng và Flashcard 3D.",
-  "id": "/",
-  "start_url": "./index.html",
-  "scope": "./",
+  "id": "/school",
+  "start_url": "/school",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#0f172a",
   "theme_color": "#0f172a",
   "orientation": "any",
   "icons": [
     {
-      "src": "icons/icon-192.png",
+      "src": "/icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "icons/icon-512.png",
+      "src": "/icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "icon.jpg",
+      "src": "/icon.jpg",
       "sizes": "1024x1024",
       "type": "image/jpeg",
       "purpose": "any"
@@ -33,14 +33,14 @@
     {
       "name": "Ghi nhanh (Mini Note)",
       "short_name": "Ghi nhanh",
-      "url": "./mini.html",
-      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+      "url": "/mini",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     },
     {
-      "name": "Kho từ vựng & Flashcard",
-      "short_name": "Flashcard",
-      "url": "./index.html?view=flashcard",
-      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+      "name": "Kho từ vựng (School Vocab)",
+      "short_name": "Vocab",
+      "url": "/school/vocab",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }
